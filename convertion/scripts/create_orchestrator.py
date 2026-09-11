@@ -122,9 +122,10 @@ def main() -> int:
     live = {a.name: a for a in agents_client.list_agents()}
 
     # ---- advisor -----------------------------------------------------
-    kids = [agents_client.files.upload_and_poll(file_path=str(f),
-                                                purpose="assistants").id
-            for f in knowledge]
+    from _azure_helpers import UploadCache, upload_files
+    kids = upload_files(agents_client, knowledge,
+                        UploadCache(BUILD / "upload-cache.json"),
+                        label="combined knowledge")
     kstore = ensure_store(agents_client, KNOWLEDGE_STORE, kids)
     mstore = ensure_store(agents_client, MEMORY_STORE, [])
 

@@ -10,7 +10,8 @@
         "defaultValue": "project = {jira-project-key} AND labels = tprm-finding AND updated >= -1h"
       },
       "iafBaseUrl": { "type": "string", "defaultValue": "https://{iaf-api-host}" },
-      "iafApiToken": { "type": "securestring", "defaultValue": "{iaf-token-from-key-vault}" }
+      "iafApiToken": { "type": "securestring", "defaultValue": "{iaf-token-from-key-vault}" },
+      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "" }
     },
     "triggers": {
       "Hourly_recurrence": {
@@ -41,40 +42,100 @@
         "foreach": "@body('Search_updated_TPRM_finding_tickets')?['issues']",
         "runAfter": { "Search_updated_TPRM_finding_tickets": [ "Succeeded" ] },
         "actions": {
-          "Submit_finding_status_to_IAF": {
+          "Send_approval_request_iaf_submission": {
             "type": "Http",
             "inputs": {
               "method": "POST",
-              "uri": "@{parameters('iafBaseUrl')}/api/v1/findings/submitFinding",
-              "headers": {
-                "Content-Type": "application/json",
-                "Authorization": "Bearer @{parameters('iafApiToken')}"
-              },
+              "uri": "@parameters('approvalWebhookUrl')",
+              "headers": { "Content-Type": "application/json" },
               "body": {
-                "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
-                "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
-                "summary": "@{items('For_each_updated_finding_ticket')?['fields']?['summary']}",
-                "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}",
-                "updatedAt": "@{items('For_each_updated_finding_ticket')?['fields']?['updated']}",
-                "source": "jira-finding-sync"
+                "subject": "IAF finding submission for @{items('For_each_updated_finding_ticket')?['key']} (@{items('For_each_updated_finding_ticket')?['fields']?['summary']})",
+                "targetSystem": "IAF API (@{parameters('iafBaseUrl')})",
+                "draft": {
+                  "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
+                  "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                  "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}"
+                },
+                "correlationId": "@{workflow().run.name}",
+                "callback": "Approve or reject via the callback URL registered by the Wait_for_approval_iaf_submission step of this run."
               }
             },
             "runAfter": {}
           },
-          "Add_Jira_comment_on_sync_failure": {
-            "type": "Http",
+          "Wait_for_approval_iaf_submission": {
+            "type": "HttpWebhook",
             "inputs": {
-              "method": "POST",
-              "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue/@{items('For_each_updated_finding_ticket')?['key']}/comment",
-              "headers": {
-                "Content-Type": "application/json",
-                "Authorization": "@parameters('jiraAuthHeader')"
+              "subscribe": {
+                "method": "POST",
+                "uri": "@parameters('approvalWebhookUrl')",
+                "headers": { "Content-Type": "application/json" },
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}",
+                  "correlationId": "@{workflow().run.name}",
+                  "instruction": "POST {\"decision\":\"approved\"|\"rejected\",\"approver\":\"<upn>\"} to callbackUrl"
+                }
               },
-              "body": {
-                "body": "Automated IAF sync FAILED for this finding at @{utcNow()}. IAF submitFinding returned status @{outputs('Submit_finding_status_to_IAF')?['statusCode']}. The finding status in IAF may be stale — please retry or escalate to the assurance tooling team."
+              "unsubscribe": {}
+            },
+            "limit": { "timeout": "P3D" },
+            "runAfter": { "Send_approval_request_iaf_submission": [ "Succeeded" ] }
+          },
+          "Check_approval_decision_iaf_submission": {
+            "type": "If",
+            "expression": { "and": [ { "equals": [ "@body('Wait_for_approval_iaf_submission')?['decision']", "approved" ] } ] },
+            "runAfter": { "Wait_for_approval_iaf_submission": [ "Succeeded" ] },
+            "actions": {
+              "Submit_finding_status_to_IAF": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('iafBaseUrl')}/api/v1/findings/submitFinding",
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer @{parameters('iafApiToken')}"
+                  },
+                  "body": {
+                    "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
+                    "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                    "summary": "@{items('For_each_updated_finding_ticket')?['fields']?['summary']}",
+                    "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}",
+                    "updatedAt": "@{items('For_each_updated_finding_ticket')?['fields']?['updated']}",
+                    "source": "jira-finding-sync"
+                  }
+                },
+                "runAfter": {}
+              },
+              "Add_Jira_comment_on_sync_failure": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue/@{items('For_each_updated_finding_ticket')?['key']}/comment",
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Authorization": "@parameters('jiraAuthHeader')"
+                  },
+                  "body": {
+                    "body": "Automated IAF sync FAILED for this finding at @{utcNow()}. IAF submitFinding returned status @{outputs('Submit_finding_status_to_IAF')?['statusCode']}. The finding status in IAF may be stale — please retry or escalate to the assurance tooling team."
+                  }
+                },
+                "runAfter": { "Submit_finding_status_to_IAF": [ "Failed", "TimedOut" ] }
               }
             },
-            "runAfter": { "Submit_finding_status_to_IAF": [ "Failed", "TimedOut" ] }
+            "else": {
+              "actions": {
+                "Record_rejection_iaf_submission": {
+                  "type": "Compose",
+                  "inputs": {
+                    "outcome": "rejected_or_expired",
+                    "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                    "decision": "@{body('Wait_for_approval_iaf_submission')?['decision']}",
+                    "approver": "@{body('Wait_for_approval_iaf_submission')?['approver']}",
+                    "note": "Finding status was NOT submitted to the IAF API."
+                  },
+                  "runAfter": {}
+                }
+              }
+            }
           }
         }
       }

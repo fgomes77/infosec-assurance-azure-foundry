@@ -11,7 +11,8 @@
       "cyberForumAgentId": { "type": "string", "defaultValue": "{cyber-forum-agent-id}" },
       "jiraBaseUrl": { "type": "string", "defaultValue": "https://{jira-tenant}.atlassian.net" },
       "jiraAuthHeader": { "type": "securestring", "defaultValue": "Basic {jira-basic-auth-from-key-vault}" },
-      "jiraProjectKey": { "type": "string", "defaultValue": "{jira-project-key}" }
+      "jiraProjectKey": { "type": "string", "defaultValue": "{jira-project-key}" },
+      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "" }
     },
     "triggers": {
       "Defender_incident_webhook": {
@@ -87,37 +88,93 @@
         },
         "runAfter": { "Wait_until_brief_run_completes": [ "Succeeded" ] }
       },
-      "Create_Jira_issue_with_brief": {
-        "type": "Http",
-        "inputs": {
-          "method": "POST",
-          "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue",
-          "headers": {
-            "Content-Type": "application/json",
-            "Authorization": "@parameters('jiraAuthHeader')"
-          },
-          "body": {
-            "fields": {
-              "project": { "key": "@{parameters('jiraProjectKey')}" },
-              "issuetype": { "name": "Task" },
-              "summary": "Incident brief: @{triggerBody()?['title']} (@{triggerBody()?['incidentId']}, severity @{triggerBody()?['severity']})",
-              "description": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
-            }
-          }
-        },
-        "runAfter": { "Get_incident_brief_message": [ "Succeeded" ] }
-      },
       "Respond_200_to_webhook_caller": {
         "type": "Response",
         "kind": "Http",
         "inputs": {
           "statusCode": 200,
           "body": {
-            "status": "brief_created",
-            "jiraIssueKey": "@{body('Create_Jira_issue_with_brief')?['key']}"
+            "status": "brief_pending_approval",
+            "correlationId": "@{workflow().run.name}"
           }
         },
-        "runAfter": { "Create_Jira_issue_with_brief": [ "Succeeded" ] }
+        "runAfter": { "Get_incident_brief_message": [ "Succeeded" ] }
+      },
+      "Send_approval_request_jira_incident_issue": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@parameters('approvalWebhookUrl')",
+          "headers": { "Content-Type": "application/json" },
+          "body": {
+            "subject": "Jira issue creation for incident @{triggerBody()?['incidentId']} (@{triggerBody()?['title']}, severity @{triggerBody()?['severity']})",
+            "targetSystem": "Jira project @{parameters('jiraProjectKey')}",
+            "draft": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}",
+            "correlationId": "@{workflow().run.name}",
+            "callback": "Approve or reject via the callback URL registered by the Wait_for_approval_jira_incident_issue step of this run."
+          }
+        },
+        "runAfter": { "Respond_200_to_webhook_caller": [ "Succeeded" ] }
+      },
+      "Wait_for_approval_jira_incident_issue": {
+        "type": "HttpWebhook",
+        "inputs": {
+          "subscribe": {
+            "method": "POST",
+            "uri": "@parameters('approvalWebhookUrl')",
+            "headers": { "Content-Type": "application/json" },
+            "body": {
+              "callbackUrl": "@{listCallbackUrl()}",
+              "correlationId": "@{workflow().run.name}",
+              "instruction": "POST {\"decision\":\"approved\"|\"rejected\",\"approver\":\"<upn>\"} to callbackUrl"
+            }
+          },
+          "unsubscribe": {}
+        },
+        "limit": { "timeout": "P3D" },
+        "runAfter": { "Send_approval_request_jira_incident_issue": [ "Succeeded" ] }
+      },
+      "Check_approval_decision_jira_incident_issue": {
+        "type": "If",
+        "expression": { "and": [ { "equals": [ "@body('Wait_for_approval_jira_incident_issue')?['decision']", "approved" ] } ] },
+        "runAfter": { "Wait_for_approval_jira_incident_issue": [ "Succeeded" ] },
+        "actions": {
+          "Create_Jira_issue_with_brief": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "@parameters('jiraAuthHeader')"
+              },
+              "body": {
+                "fields": {
+                  "project": { "key": "@{parameters('jiraProjectKey')}" },
+                  "issuetype": { "name": "Task" },
+                  "summary": "Incident brief: @{triggerBody()?['title']} (@{triggerBody()?['incidentId']}, severity @{triggerBody()?['severity']})",
+                  "description": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
+                }
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {
+            "Record_rejection_jira_incident_issue": {
+              "type": "Compose",
+              "inputs": {
+                "outcome": "rejected_or_expired",
+                "incidentId": "@{triggerBody()?['incidentId']}",
+                "decision": "@{body('Wait_for_approval_jira_incident_issue')?['decision']}",
+                "approver": "@{body('Wait_for_approval_jira_incident_issue')?['approver']}",
+                "note": "No Jira issue was created for this incident brief."
+              },
+              "runAfter": {}
+            }
+          }
+        }
       }
     },
     "outputs": {}

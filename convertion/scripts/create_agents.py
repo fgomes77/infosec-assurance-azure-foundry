@@ -41,15 +41,15 @@ def get_client():
                            credential=DefaultAzureCredential())
 
 
+from _azure_helpers import UploadCache, retry, upload_files as _upload
+
+_CACHE = UploadCache(BUILD / "upload-cache.json")
+
+
 def upload_files(agents_client, agent_dir: Path, names: list[str],
                  subdir: str) -> list[str]:
-    ids = []
-    for n in names:
-        f = agent_dir / subdir / n
-        up = agents_client.files.upload_and_poll(file_path=str(f),
-                                                 purpose="assistants")
-        ids.append(up.id)
-    return ids
+    return _upload(agents_client, [agent_dir / subdir / n for n in names],
+                   _CACHE)
 
 
 def ensure_agent(agents_client, spec: dict, existing: dict, dry: bool):
@@ -68,8 +68,9 @@ def ensure_agent(agents_client, spec: dict, existing: dict, dry: bool):
     if spec["knowledge_files"]:
         kids = upload_files(agents_client, agent_dir,
                             spec["knowledge_files"], "knowledge")
-        vs = agents_client.vector_stores.create_and_poll(
-            file_ids=kids, name=f"vs-{spec['name']}")
+        vs = retry(agents_client.vector_stores.create_and_poll,
+                   file_ids=kids, name=f"vs-{spec['name']}",
+                   what=f"vector store vs-{spec['name']}")
         fs = FileSearchTool(vector_store_ids=[vs.id])
         tools += fs.definitions
         tool_resources.update(fs.resources)
@@ -134,16 +135,27 @@ def main() -> int:
         existing = {a.name: a.id for a in agents_client.list_agents()}
 
     created: dict = {}
+    failures: list[str] = []
     routers = [a for a in manifest if a["router_targets"]]
     for spec in manifest:
-        agent = ensure_agent(agents_client, spec, existing, args.dry_run)
+        try:
+            agent = ensure_agent(agents_client, spec, existing, args.dry_run)
+        except Exception as e:  # noqa: BLE001 - isolate per-agent failures
+            failures.append(spec["name"])
+            print(f"FAILED   {spec['name']}: {e}")
+            continue
         if agent is not None:
             created[spec["name"]] = agent
     for spec in routers:
-        wire_router(agents_client, spec, created, args.dry_run)
+        try:
+            wire_router(agents_client, spec, created, args.dry_run)
+        except Exception as e:  # noqa: BLE001
+            failures.append(f"{spec['name']} (router wiring)")
+            print(f"FAILED   {spec['name']} router wiring: {e}")
 
-    print(f"\ndone: {len(manifest)} agents processed")
-    return 0
+    print(f"\ndone: {len(manifest)} agents processed, "
+          f"{len(failures)} failed" + (f": {failures}" if failures else ""))
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

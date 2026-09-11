@@ -13,7 +13,8 @@
       "onetrustApiToken": { "type": "securestring", "defaultValue": "{onetrust-token-from-key-vault}" },
       "sharepointSiteId": { "type": "string", "defaultValue": "{sharepoint-site-id}" },
       "sharepointDrivePath": { "type": "string", "defaultValue": "/TPRM/DPIA-Reports" },
-      "teamsWebhookUrl": { "type": "securestring", "defaultValue": "{teams-incoming-webhook-url}" }
+      "teamsWebhookUrl": { "type": "securestring", "defaultValue": "{teams-incoming-webhook-url}" },
+      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "" }
     },
     "triggers": {
       "Daily_recurrence": {
@@ -95,28 +96,84 @@
             },
             "runAfter": { "Wait_until_dpia_run_completes": [ "Succeeded" ] }
           },
-          "Upload_report_to_SharePoint": {
-            "type": "Http",
-            "inputs": {
-              "method": "PUT",
-              "uri": "https://graph.microsoft.com/v1.0/sites/@{parameters('sharepointSiteId')}/drive/root:@{parameters('sharepointDrivePath')}/DPIA-@{items('For_each_completed_assessment')?['assessmentId']}.md:/content",
-              "headers": { "Content-Type": "text/markdown" },
-              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://graph.microsoft.com" },
-              "body": "@{first(body('Get_dpia_report_message')?['data'])?['content']?[0]?['text']?['value']}"
-            },
-            "runAfter": { "Get_dpia_report_message": [ "Succeeded" ] }
-          },
-          "Post_summary_to_Teams": {
+          "Send_approval_request_dpia_report_upload": {
             "type": "Http",
             "inputs": {
               "method": "POST",
-              "uri": "@parameters('teamsWebhookUrl')",
+              "uri": "@parameters('approvalWebhookUrl')",
               "headers": { "Content-Type": "application/json" },
               "body": {
-                "text": "DPIA report generated for OneTrust assessment @{items('For_each_completed_assessment')?['name']} (@{items('For_each_completed_assessment')?['assessmentId']}). Stored in SharePoint: @{body('Upload_report_to_SharePoint')?['webUrl']}"
+                "subject": "DPIA report upload for OneTrust assessment @{items('For_each_completed_assessment')?['assessmentId']}",
+                "targetSystem": "SharePoint (@{parameters('sharepointDrivePath')})",
+                "draft": "@{first(body('Get_dpia_report_message')?['data'])?['content']?[0]?['text']?['value']}",
+                "correlationId": "@{workflow().run.name}",
+                "callback": "Approve or reject via the callback URL registered by the Wait_for_approval_dpia_report_upload step of this run."
               }
             },
-            "runAfter": { "Upload_report_to_SharePoint": [ "Succeeded" ] }
+            "runAfter": { "Get_dpia_report_message": [ "Succeeded" ] }
+          },
+          "Wait_for_approval_dpia_report_upload": {
+            "type": "HttpWebhook",
+            "inputs": {
+              "subscribe": {
+                "method": "POST",
+                "uri": "@parameters('approvalWebhookUrl')",
+                "headers": { "Content-Type": "application/json" },
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}",
+                  "correlationId": "@{workflow().run.name}",
+                  "instruction": "POST {\"decision\":\"approved\"|\"rejected\",\"approver\":\"<upn>\"} to callbackUrl"
+                }
+              },
+              "unsubscribe": {}
+            },
+            "limit": { "timeout": "P3D" },
+            "runAfter": { "Send_approval_request_dpia_report_upload": [ "Succeeded" ] }
+          },
+          "Check_approval_decision_dpia_report_upload": {
+            "type": "If",
+            "expression": { "and": [ { "equals": [ "@body('Wait_for_approval_dpia_report_upload')?['decision']", "approved" ] } ] },
+            "runAfter": { "Wait_for_approval_dpia_report_upload": [ "Succeeded" ] },
+            "actions": {
+              "Upload_report_to_SharePoint": {
+                "type": "Http",
+                "inputs": {
+                  "method": "PUT",
+                  "uri": "https://graph.microsoft.com/v1.0/sites/@{parameters('sharepointSiteId')}/drive/root:@{parameters('sharepointDrivePath')}/DPIA-@{items('For_each_completed_assessment')?['assessmentId']}.md:/content",
+                  "headers": { "Content-Type": "text/markdown" },
+                  "authentication": { "type": "ManagedServiceIdentity", "audience": "https://graph.microsoft.com" },
+                  "body": "@{first(body('Get_dpia_report_message')?['data'])?['content']?[0]?['text']?['value']}"
+                },
+                "runAfter": {}
+              },
+              "Post_summary_to_Teams": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@parameters('teamsWebhookUrl')",
+                  "headers": { "Content-Type": "application/json" },
+                  "body": {
+                    "text": "DPIA report approved by @{body('Wait_for_approval_dpia_report_upload')?['approver']} and stored for OneTrust assessment @{items('For_each_completed_assessment')?['name']} (@{items('For_each_completed_assessment')?['assessmentId']}). SharePoint: @{body('Upload_report_to_SharePoint')?['webUrl']}"
+                  }
+                },
+                "runAfter": { "Upload_report_to_SharePoint": [ "Succeeded" ] }
+              }
+            },
+            "else": {
+              "actions": {
+                "Record_rejection_dpia_report_upload": {
+                  "type": "Compose",
+                  "inputs": {
+                    "outcome": "rejected_or_expired",
+                    "assessmentId": "@{items('For_each_completed_assessment')?['assessmentId']}",
+                    "decision": "@{body('Wait_for_approval_dpia_report_upload')?['decision']}",
+                    "approver": "@{body('Wait_for_approval_dpia_report_upload')?['approver']}",
+                    "note": "DPIA report was NOT uploaded to SharePoint; no Teams summary sent."
+                  },
+                  "runAfter": {}
+                }
+              }
+            }
           }
         }
       }
