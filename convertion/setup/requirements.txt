@@ -1,0 +1,7 @@
+# Pinned for the create_agents.py / smoke_test.py SDK surface.
+# If Azure has moved the API since, consult the azure-ai-projects migration
+# notes for these majors before bumping.
+azure-ai-projects==1.0.0
+azure-ai-agents==1.1.0
+azure-identity==1.19.0
+python-dotenv==1.0.1

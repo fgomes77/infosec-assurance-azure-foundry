@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "baseName": { "value": "infosecfoundry" },
+    "modelName": { "value": "gpt-4o" },
+    "modelVersion": { "value": "2024-11-20" },
+    "modelCapacity": { "value": 50 }
+  }
+}
