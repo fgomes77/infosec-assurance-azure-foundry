@@ -58,19 +58,19 @@ const children = [
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200 }, children: [new TextRun({ text: "InfoSec Assurance Agent Platform", bold: true, size: 56, color: TEAL })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120 }, children: [new TextRun({ text: "Migration of the Claude AI GRC/TPRM toolset to Azure AI Foundry", size: 28, color: DARK })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 600 }, children: [new TextRun({ text: "Information Security Assurance — TPRM · ISMS · GRC · ICT GRC", size: 22, color: GREY })] }),
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1600 }, children: [new TextRun({ text: "Version 1.0  ·  11 September 2026  ·  Classification: Internal", size: 20, color: GREY })] }),
+  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1600 }, children: [new TextRun({ text: "Version 1.1  ·  11 September 2026  ·  Classification: Internal", size: 20, color: GREY })] }),
   new Paragraph({ children: [new PageBreak()] }),
 
   // ---- Document control ----
   H1("Document Control"),
   table(["Item", "Detail"], [
     ["Title", "Project Dossier — InfoSec Assurance Agent Platform on Azure AI Foundry"],
-    ["Version / Status", "1.0 — Draft for review"],
+    ["Version / Status", "1.1 — Draft for review"],
     ["Date", "11 September 2026"],
     ["Owner", "InfoSec Assurance & Third-Party Risk (F. Gomes)"],
     ["Repository", "github.com/fgomes77/infosec-assurance-azure-foundry"],
     ["Classification", "Internal — contains internal system names; no credentials or personal data"],
-    ["Related artefacts", "convertion/README.md · ARCHITECTURE.md · MAPPING.md · governance/HUMAN_APPROVAL.md"],
+    ["Related artefacts", "convertion/README.md · ARCHITECTURE.md · MAPPING.md · governance/HUMAN_APPROVAL.md · governance/PERSONA-COVERAGE.md"],
   ], [2600, 6760]),
   spacer(),
   H2("Table of Contents"),
@@ -156,7 +156,7 @@ const children = [
   H2("7.1 Components"),
   table(["Component", "Role"], [
     ["infosec-assurance-orchestrator", "Planner-executor entry point (o3-mini + web search); answers, routes, or decomposes across all connected agents; routes deliverable drafts through the verifier"],
-    ["infosec-assurance-advisor", "Reasoning generalist across all persona domains; combined knowledge base (50 de-duplicated source documents) + durable team memory + web search; cites sources"],
+    ["infosec-assurance-advisor", "Reasoning generalist across all persona domains; combined knowledge base (55 sources: every skill's knowledge + the advisor knowledge pack) + durable team memory + web search; cites sources"],
     ["output-verifier", "Independent verification layer; strict PASS/FAIL against deterministic rules; generates nothing"],
     ["18 GRC/TPRM specialists", "DeepSearch OSINT, DPIA, CISO reporting/summary, Form B, cyber forum, DORA, NIS2, EU AI Act, ISO 27001, ISO 42001, TPSRCA engine, PDF analyzer, slide generators, ENX router"],
     ["4 document agents", "docx, pdf, pptx, xlsx production toolkits (code interpreter)"],
@@ -171,6 +171,19 @@ const children = [
     ["convertion/build/ (generated)", "Agent definitions produced by the converter; never edited by hand"],
     ["project-dossier/", "This document, its infographics, and their generator"],
   ], [3200, 6160]),
+
+  spacer(),
+  H2("7.3 Persona coverage and the advisor knowledge pack"),
+  P("The team persona (Principal Security Assurance Consultant & TPRM Lead - professional, precise, evidence-led, English-only) is prepended to every agent's instructions, so identity, tone and language policy are uniform across the platform. Beyond the statement itself, every knowledge domain the persona claims is grounded in the combined vector store, so the advisor retrieves and cites sources rather than answering from model memory alone. Six domains arrive with the converted skills; the remaining four, plus the management-framework expertise, are grounded by a dedicated advisor knowledge pack (agents/advisor-knowledge/, ~860 lines across five authored references, each carrying a provenance header distinguishing it from exported claude.ai content). The full traceability matrix, with verification commands, is governance/PERSONA-COVERAGE.md."),
+  table(["Persona domain", "Knowledge grounding in the combined store"], [
+    ["ISO/IEC 27001:2022 / 27002:2022", "Converted iso27001 skill: Annex A 2022 (93 controls), Annex A 2013, 2013\u21922022 transition mapping"],
+    ["DORA · NIS2 · EU AI Act · ISO/IEC 42001", "Converted regulatory skills: article references, RTS/ITS guide, Art. 21 measures, risk-tier classification, AIMS clauses and controls"],
+    ["ISO/IEC 27005:2022", "Pack: risk-management process, criteria design, worked TPRM supplier scenario, process-step \u2192 ISMS artefact map"],
+    ["NIST CSF 2.0", "Pack: six Functions with exact category identifiers, GV.SC mapped to the TPRM lifecycle, ISO 27001 crosswalk"],
+    ["CIS Controls v8.1", "Pack: 18 controls, IG1\u20133 supplier proportionality, v8.1 governance updates, Annex A mapping"],
+    ["GDPR Art. 28 / SCCs 2021/914", "Pack: Art. 28(3)(a)\u2013(h) contract clauses, four SCC modules, Schrems II TIA, processor-agreement checklist"],
+    ["PMBOK 7 · ITIL 4 · COBIT 2019 · COSO · TOGAF 10 · agile/Lean IT · ISO 20000-1 · cloud/ICT assurance", "Pack: management-frameworks compendium with a framework \u2192 assurance-use cross-walk"],
+  ], [3600, 5760]),
 
   // ---- 8 Pipeline ----
   H1("8. Conversion and Deployment Pipeline"),
@@ -277,6 +290,8 @@ const children = [
   B("convertion/ARCHITECTURE.md — design-pattern mapping and guardrails"),
   B("convertion/MAPPING.md — per-skill conversion table (all 35 skills)"),
   B("convertion/governance/HUMAN_APPROVAL.md — the approval policy and compliance mapping"),
+  B("convertion/governance/PERSONA-COVERAGE.md — persona-to-implementation traceability matrix"),
+  B("convertion/agents/advisor-knowledge/ — the five authored references grounding the remaining persona domains"),
   B("convertion/integrations/README.md and registry.json — integration layer"),
   B("convertion/workflows/README.md — workflow deployment and approval wiring"),
   B("convertion/mcp-server/README.md — MCP access for team members"),
