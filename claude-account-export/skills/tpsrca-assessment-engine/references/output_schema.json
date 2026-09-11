@@ -1,0 +1,547 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TPSRCA Assessment Engine Output",
+  "description": "Complete output schema from all 12 assessment engine agents",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "assessment_id": {"type": "string"},
+        "supplier_name": {"type": "string"},
+        "supplier_url": {"type": "string"},
+        "assessment_date": {"type": "string", "format": "date"},
+        "assessment_version": {"type": "string"},
+        "assessor": {"type": "string"},
+        "classification_tier": {"type": "string"},
+        "assessment_scope": {"type": "string"}
+      }
+    },
+
+    "executive_summary": {
+      "type": "object",
+      "properties": {
+        "composite_score": {"type": "number"},
+        "rating": {"type": "string"},
+        "stars": {"type": "integer"},
+        "approval_status": {"type": "string"},
+        "key_findings": {"type": "array", "items": {"type": "string"}},
+        "critical_risks_count": {"type": "integer"},
+        "high_risks_count": {"type": "integer"},
+        "gaps_count": {"type": "integer"},
+        "priority_actions_count": {"type": "integer"}
+      }
+    },
+
+    "data_confidence": {
+      "type": "object",
+      "description": "Agent 2 output",
+      "properties": {
+        "overall_score": {"type": "number"},
+        "level": {"type": "string"},
+        "components": {
+          "type": "object",
+          "properties": {
+            "source_authority": {"type": "number"},
+            "data_freshness": {"type": "number"},
+            "corroboration": {"type": "number"},
+            "completeness": {"type": "number"}
+          }
+        },
+        "section_scores": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "score": {"type": "number"},
+              "level": {"type": "string"}
+            }
+          }
+        },
+        "low_confidence_items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "field": {"type": "string"},
+              "score": {"type": "number"},
+              "recommendation": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "evidence_validation": {
+      "type": "object",
+      "description": "Agent 3 output",
+      "properties": {
+        "total_sources": {"type": "integer"},
+        "validated_sources": {"type": "integer"},
+        "failed_sources": {"type": "integer"},
+        "average_reliability": {"type": "number"},
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "url": {"type": "string"},
+              "category": {"type": "string"},
+              "reliability_score": {"type": "number"},
+              "accessible": {"type": "boolean"},
+              "last_verified": {"type": "string"},
+              "supports_claims": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "unreliable_claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "claim": {"type": "string"},
+              "reason": {"type": "string"},
+              "action": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "inherent_risks": {
+      "type": "object",
+      "description": "Agent 4 output",
+      "properties": {
+        "total_risks": {"type": "integer"},
+        "total_exposure": {"type": "number"},
+        "distribution": {
+          "type": "object",
+          "properties": {
+            "critical": {"type": "integer"},
+            "high": {"type": "integer"},
+            "medium": {"type": "integer"},
+            "low": {"type": "integer"},
+            "very_low": {"type": "integer"}
+          }
+        },
+        "by_category": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "category": {"type": "string"},
+              "description": {"type": "string"},
+              "likelihood": {"type": "integer"},
+              "impact": {"type": "integer"},
+              "score": {"type": "integer"},
+              "rating": {"type": "string"},
+              "risk_factors": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+
+    "control_effectiveness": {
+      "type": "object",
+      "description": "Agent 5 output",
+      "properties": {
+        "total_controls": {"type": "integer"},
+        "overall_effectiveness": {"type": "number"},
+        "implementation_rate": {"type": "number"},
+        "by_status": {
+          "type": "object",
+          "properties": {
+            "implemented": {"type": "integer"},
+            "partial": {"type": "integer"},
+            "planned": {"type": "integer"},
+            "gap": {"type": "integer"}
+          }
+        },
+        "by_effectiveness": {
+          "type": "object",
+          "properties": {
+            "excellent": {"type": "integer"},
+            "good": {"type": "integer"},
+            "adequate": {"type": "integer"},
+            "weak": {"type": "integer"},
+            "ineffective": {"type": "integer"}
+          }
+        },
+        "by_domain": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "count": {"type": "integer"},
+              "avg_effectiveness": {"type": "number"}
+            }
+          }
+        },
+        "controls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "name": {"type": "string"},
+              "domain": {"type": "string"},
+              "type": {"type": "string"},
+              "design": {"type": "number"},
+              "operating": {"type": "number"},
+              "coverage": {"type": "number"},
+              "status": {"type": "string"},
+              "effectiveness": {"type": "number"},
+              "rating": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "residual_risks": {
+      "type": "object",
+      "description": "Agent 6 output",
+      "properties": {
+        "total_risks": {"type": "integer"},
+        "total_exposure": {"type": "number"},
+        "distribution": {
+          "type": "object",
+          "properties": {
+            "critical": {"type": "integer"},
+            "high": {"type": "integer"},
+            "medium": {"type": "integer"},
+            "low": {"type": "integer"},
+            "very_low": {"type": "integer"}
+          }
+        },
+        "risk_reduction_summary": {
+          "type": "object",
+          "properties": {
+            "average_inherent_score": {"type": "number"},
+            "average_residual_score": {"type": "number"},
+            "average_reduction_percent": {"type": "number"},
+            "total_inherent_exposure": {"type": "number"},
+            "total_residual_exposure": {"type": "number"},
+            "overall_risk_reduction_percent": {"type": "number"}
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "inherent_risk_id": {"type": "string"},
+              "description": {"type": "string"},
+              "category": {"type": "string"},
+              "inherent_likelihood": {"type": "integer"},
+              "inherent_impact": {"type": "integer"},
+              "inherent_score": {"type": "integer"},
+              "inherent_rating": {"type": "string"},
+              "control_effectiveness": {"type": "number"},
+              "residual_likelihood": {"type": "number"},
+              "residual_impact": {"type": "number"},
+              "residual_score": {"type": "number"},
+              "residual_rating": {"type": "string"},
+              "risk_reduction_percent": {"type": "number"},
+              "treatment": {"type": "string"},
+              "controls_applied": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        },
+        "risks_requiring_treatment": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "residual_score": {"type": "number"},
+              "required_action": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "framework_scores": {
+      "type": "object",
+      "description": "Agent 7 output",
+      "properties": {
+        "overall_compliance": {"type": "number"},
+        "frameworks_assessed": {"type": "integer"},
+        "fully_compliant": {"type": "integer"},
+        "frameworks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "overall_score": {"type": "number"},
+              "level": {"type": "string"},
+              "controls_assessed": {"type": "integer"},
+              "controls_compliant": {"type": "integer"},
+              "gaps": {"type": "array", "items": {"type": "string"}},
+              "sub_scores": {"type": "object"}
+            }
+          }
+        }
+      }
+    },
+
+    "composite_score": {
+      "type": "object",
+      "description": "Agent 8 output",
+      "properties": {
+        "overall_score": {"type": "number"},
+        "rating": {"type": "string"},
+        "stars": {"type": "integer"},
+        "approval_status": {"type": "string"},
+        "components": {
+          "type": "object",
+          "properties": {
+            "framework_score": {
+              "type": "object",
+              "properties": {
+                "score": {"type": "number"},
+                "weight": {"type": "number"},
+                "contribution": {"type": "number"}
+              }
+            },
+            "control_effectiveness": {
+              "type": "object",
+              "properties": {
+                "score": {"type": "number"},
+                "weight": {"type": "number"},
+                "contribution": {"type": "number"}
+              }
+            },
+            "residual_risk_score": {
+              "type": "object",
+              "properties": {
+                "score": {"type": "number"},
+                "weight": {"type": "number"},
+                "contribution": {"type": "number"}
+              }
+            },
+            "data_confidence": {
+              "type": "object",
+              "properties": {
+                "score": {"type": "number"},
+                "weight": {"type": "number"},
+                "contribution": {"type": "number"}
+              }
+            }
+          }
+        },
+        "score_breakdown": {
+          "type": "object",
+          "properties": {
+            "strengths": {"type": "array", "items": {"type": "string"}},
+            "weaknesses": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "conditions": {"type": "array", "items": {"type": "string"}},
+        "next_review": {"type": "string", "format": "date"}
+      }
+    },
+
+    "gap_analysis": {
+      "type": "object",
+      "description": "Agent 9 output",
+      "properties": {
+        "total_gaps": {"type": "integer"},
+        "by_priority": {
+          "type": "object",
+          "properties": {
+            "P1": {"type": "integer"},
+            "P2": {"type": "integer"},
+            "P3": {"type": "integer"},
+            "P4": {"type": "integer"},
+            "P5": {"type": "integer"}
+          }
+        },
+        "by_category": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        },
+        "by_framework": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        },
+        "gaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "framework": {"type": "string"},
+              "requirement": {"type": "string"},
+              "current_state": {"type": "string"},
+              "target_state": {"type": "string"},
+              "severity": {"type": "string"},
+              "effort": {"type": "string"},
+              "priority": {"type": "string"},
+              "category": {"type": "string"},
+              "remediation": {"type": "string"},
+              "owner": {"type": "string"},
+              "target_date": {"type": "string"}
+            }
+          }
+        },
+        "gap_closure_plan": {
+          "type": "object",
+          "properties": {
+            "30_day": {"type": "array", "items": {"type": "string"}},
+            "60_day": {"type": "array", "items": {"type": "string"}},
+            "90_day": {"type": "array", "items": {"type": "string"}},
+            "180_day": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
+
+    "trend_analysis": {
+      "type": "object",
+      "description": "Agent 10 output",
+      "properties": {
+        "current_score": {"type": "number"},
+        "previous_score": {"type": "number"},
+        "score_delta": {"type": "number"},
+        "trend": {"type": "string"},
+        "trend_icon": {"type": "string"},
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": {"type": "string"},
+              "score": {"type": "number"}
+            }
+          }
+        },
+        "trajectory": {
+          "type": "object",
+          "properties": {
+            "6_month_projection": {"type": "number"},
+            "12_month_projection": {"type": "number"},
+            "confidence": {"type": "string"}
+          }
+        },
+        "component_trends": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "current": {"type": "number"},
+              "previous": {"type": "number"},
+              "trend": {"type": "string"}
+            }
+          }
+        },
+        "notable_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "area": {"type": "string"},
+              "change": {"type": "string"},
+              "reason": {"type": "string"}
+            }
+          }
+        },
+        "benchmark_comparison": {
+          "type": "object",
+          "properties": {
+            "industry_average": {"type": "number"},
+            "position": {"type": "string"},
+            "percentile": {"type": "integer"}
+          }
+        }
+      }
+    },
+
+    "recommendations": {
+      "type": "object",
+      "description": "Agent 11 output",
+      "properties": {
+        "total": {"type": "integer"},
+        "by_priority": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        },
+        "by_category": {
+          "type": "object",
+          "additionalProperties": {"type": "integer"}
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "title": {"type": "string"},
+              "priority": {"type": "string"},
+              "category": {"type": "string"},
+              "source": {
+                "type": "object",
+                "properties": {
+                  "type": {"type": "string"},
+                  "id": {"type": "string"}
+                }
+              },
+              "description": {"type": "string"},
+              "justification": {
+                "type": "object",
+                "properties": {
+                  "regulatory": {"type": "string"},
+                  "risk_reduction": {"type": "string"},
+                  "compliance_improvement": {"type": "string"}
+                }
+              },
+              "implementation": {
+                "type": "object",
+                "properties": {
+                  "effort": {"type": "string"},
+                  "timeline": {"type": "string"},
+                  "owner": {"type": "string"},
+                  "resources": {"type": "array", "items": {"type": "string"}}
+                }
+              },
+              "success_criteria": {"type": "array", "items": {"type": "string"}},
+              "target_date": {"type": "string"}
+            }
+          }
+        },
+        "priority_actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {"type": "string"},
+              "deadline": {"type": "string"},
+              "owner": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+
+    "calculations_summary": {
+      "type": "object",
+      "description": "Summary of all calculations performed",
+      "properties": {
+        "inherent_risk_formula": {"type": "string"},
+        "residual_risk_formula": {"type": "string"},
+        "control_effectiveness_formula": {"type": "string"},
+        "framework_score_formula": {"type": "string"},
+        "composite_score_formula": {"type": "string"},
+        "data_confidence_formula": {"type": "string"}
+      }
+    }
+  }
+}

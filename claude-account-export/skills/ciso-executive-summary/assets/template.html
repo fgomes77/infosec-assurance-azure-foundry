@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<!-- Reconstructed asset - regenerated on 2026-09-11 from references/html-template-spec.md to replace a file missing from the original skill upload. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{VENDOR_NAME}} — TPRM Executive Summary | Strategic Risk Intelligence Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ═══════════════════════════════════════════════════════════════════
+     Strategic Risk Intelligence Dashboard — Design System
+     Thresholds (mandatory): >12 HIGH red | >4 ≤12 MEDIUM amber | ≤4 LOW teal
+     ═══════════════════════════════════════════════════════════════════ */
+  :root {
+    /* Threshold colours */
+    --high-red: #DC2626;
+    --high-bg: #FEE2E2;
+    --medium-amber: #D97706;
+    --medium-bg: #FEF3C7;
+    --low-teal: #007D71;
+    --low-bg: #E0F5F2;
+
+    /* Brand colours */
+    --teal-900: #003530;
+    --teal-800: #005048;
+    --teal-700: #007D71;
+    --teal-100: #E0F5F2;
+    --teal-50: #F0FAF8;
+
+    /* Perimeter colours */
+    --int-blue: #1D4ED8;
+    --int-blue-light: #DBEAFE;
+    --ext-purple: #7C3AED;
+    --ext-purple-light: #EDE9FE;
+
+    /* Neutral palette */
+    --green-700: #047857;
+    --green-600: #059669;
+    --green-100: #D1FAE5;
+    --slate-900: #0F172A;
+    --slate-700: #334155;
+    --slate-500: #64748B;
+    --slate-300: #CBD5E1;
+    --slate-100: #F1F5F9;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--slate-900);
+    background: #F4F7F6;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-container {
+    max-width: 1340px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  /* ── Cards ─────────────────────────────────────────────────────── */
+  .card {
+    background: #fff;
+    border: 1px solid var(--slate-300);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--teal-900);
+    border-bottom: 2px solid var(--teal-700);
+    padding-bottom: 8px;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--slate-500);
+    margin-bottom: 6px;
+  }
+
+  /* ── 2.1 Report Header ─────────────────────────────────────────── */
+  .report-header {
+    position: relative;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 20px;
+    background: linear-gradient(135deg, var(--teal-900) 0%, var(--teal-700) 100%);
+    color: #fff;
+    padding: 26px 32px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .report-header::after {
+    content: "";
+    position: absolute;
+    right: -60px;
+    top: -60px;
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+  .report-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .report-header .subtitle {
+    font-size: 12px;
+    font-weight: 300;
+    opacity: 0.8;
+    margin-top: 4px;
+  }
+  .header-badges {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    white-space: nowrap;
+  }
+  .badge-risk-high   { background: var(--high-red);      color: #fff; }
+  .badge-risk-medium { background: var(--medium-amber);  color: #fff; }
+  .badge-risk-low    { background: var(--low-teal);      color: #fff; }
+  .badge-dora        { background: #DC2626;              color: #fff; }
+  .badge-critical    { background: #FCA5A5;              color: #7F1D1D; }
+
+  /* ── 2.2 KPI Row ───────────────────────────────────────────────── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 16px;
+  }
+  .kpi-card {
+    background: #fff;
+    border: 1px solid var(--slate-300);
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .kpi-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--slate-500);
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .kpi-sub {
+    font-size: 11px;
+    color: var(--slate-500);
+    margin-top: 4px;
+  }
+  .kpi-high   { color: var(--high-red); }
+  .kpi-medium { color: var(--medium-amber); }
+  .kpi-low    { color: var(--low-teal); }
+  .kpi-green  { color: var(--green-700); }
+  .kpi-red    { color: var(--high-red); }
+  .kpi-amber  { color: var(--medium-amber); }
+
+  /* ── 2.3 Main Grid: Spider + Profile + Domain Bars ─────────────── */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .main-grid-right {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .main-grid .card { margin-bottom: 0; }
+
+  /* Spider chart */
+  .spider-card svg { width: 100%; height: auto; display: block; }
+  .spider-legend {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--slate-500);
+  }
+  .spider-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend-line { display: inline-block; width: 22px; height: 0; border-top: 2px dashed; }
+  .legend-low-boundary  { border-color: var(--low-teal); }
+  .legend-high-boundary { border-color: var(--high-red); }
+
+  /* Supplier profile */
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 8px;
+    column-gap: 24px;
+  }
+  .profile-field { font-size: 12px; }
+  .profile-field .pf-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--slate-500);
+    display: block;
+  }
+  .profile-field .pf-value { font-weight: 600; color: var(--slate-900); }
+  .pf-red   { color: var(--high-red) !important; }
+  .pf-green { color: var(--green-700) !important; }
+
+  /* Domain score bars */
+  .domain-bar-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 90px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+  .domain-bar-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--slate-700);
+  }
+  .domain-bar-track {
+    background: var(--slate-100);
+    border-radius: 6px;
+    height: 24px;
+    overflow: hidden;
+    position: relative;
+  }
+  .domain-bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 8px;
+    min-width: 34px;
+  }
+  .bar-high   { background: linear-gradient(90deg, #EF4444, #DC2626); }
+  .bar-medium { background: linear-gradient(90deg, #FBBF24, #D97706); }
+  .bar-low    { background: linear-gradient(90deg, #00B4A0, #007D71); }
+  .domain-bar-score {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .threshold-legend {
+    font-size: 10px;
+    color: var(--slate-500);
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--slate-100);
+  }
+  .threshold-legend b.t-low    { color: var(--low-teal); }
+  .threshold-legend b.t-medium { color: var(--medium-amber); }
+  .threshold-legend b.t-high   { color: var(--high-red); }
+
+  /* ── Chips & badges (shared) ───────────────────────────────────── */
+  .score-badge {
+    display: inline-block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .score-high   { background: var(--high-red); }
+  .score-medium { background: var(--medium-amber); }
+  .score-low    { background: var(--low-teal); }
+
+  .chip {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+  .chip-treated       { background: var(--green-100); color: var(--green-700); }
+  .chip-in-treatment  { background: var(--medium-bg); color: var(--medium-amber); }
+  .chip-implemented   { background: var(--green-100); color: var(--green-700); }
+  .chip-pending       { background: var(--high-bg);   color: var(--high-red); }
+  .chip-partial       { background: var(--medium-bg); color: var(--medium-amber); }
+  .chip-internal      { background: var(--int-blue-light);   color: var(--int-blue); }
+  .chip-external      { background: var(--ext-purple-light); color: var(--ext-purple); }
+
+  .risk-id {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    color: var(--teal-800);
+  }
+
+  /* ── 2.4 Callouts ──────────────────────────────────────────────── */
+  .callout-teal {
+    background: var(--teal-100);
+    border-left: 4px solid var(--teal-700);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--slate-700);
+  }
+  .callout-amber {
+    background: var(--medium-bg);
+    border-left: 4px solid var(--medium-amber);
+    border-radius: 0 8px 8px 0;
+    padding: 14px 18px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--slate-700);
+    margin-top: 12px;
+  }
+
+  /* ── Tables (2.5 / 2.6 / 2.7) ──────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--slate-500);
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 2px solid var(--teal-700);
+    background: var(--teal-50);
+  }
+  td {
+    font-size: 12px;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--slate-100);
+    vertical-align: top;
+  }
+  tbody tr:hover { background: var(--teal-50); }
+  tr.row-pending     { background: rgba(254,226,226,0.25); }
+  tr.row-implemented { background: rgba(209,250,229,0.2); }
+
+  /* Perimeter matrix */
+  .perimeter-cell {
+    text-align: center;
+    font-weight: 600;
+    font-size: 11px;
+    border-radius: 6px;
+    padding: 8px 6px;
+  }
+  .pm-mitigated    { background: var(--green-100);  color: var(--green-700); }
+  .pm-alert-medium { background: var(--medium-bg);  color: var(--medium-amber); }
+  .pm-alert-high   { background: var(--high-bg);    color: var(--high-red); }
+  .pm-row-label {
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--slate-700);
+    white-space: nowrap;
+  }
+
+  /* ── 2.8 Bottom Grid ───────────────────────────────────────────── */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  .bottom-grid .card { margin-bottom: 0; }
+
+  .finding-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .finding-icon {
+    flex: 0 0 26px;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .fi-red   { background: var(--high-red); }
+  .fi-amber { background: var(--medium-amber); }
+  .fi-green { background: var(--green-600); }
+  .fi-teal  { background: var(--teal-700); }
+
+  .dora-status-box {
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .dora-yes { background: var(--high-bg); color: var(--high-red); border: 1px solid #FCA5A5; }
+  .dora-no  { background: var(--teal-100); color: var(--teal-800); border: 1px solid var(--teal-700); }
+
+  .rec-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .rec-num {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--teal-700);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── 2.9 Footer ────────────────────────────────────────────────── */
+  .report-footer {
+    text-align: center;
+    padding: 14px;
+    font-size: 10px;
+    color: var(--slate-500);
+    border-top: 2px solid var(--teal-700);
+  }
+
+  /* ── 3. Print styles ───────────────────────────────────────────── */
+  @media print {
+    body { background: white; font-size: 11px; }
+    .report-container { padding: 0; max-width: 100%; }
+    .card, .kpi-card { box-shadow: none; border: 1px solid #ddd; }
+    .report-header { border-radius: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="report-container">
+
+  <!-- ═══ SECTION 1: REPORT HEADER ═══ -->
+  <header class="report-header" id="report-header">
+    <div>
+      <h1>{{VENDOR_NAME}} — TPRM Executive Summary</h1>
+      <div class="subtitle">Assessment {{ASSESSMENT_ID}} &nbsp;|&nbsp; Completed {{DATE_COMPLETED}} &nbsp;|&nbsp; {{TEMPLATE_NAME}} &nbsp;|&nbsp; Strategic Risk Intelligence Dashboard</div>
+    </div>
+    <div class="header-badges">
+      <!-- Overall Risk badge: use badge-risk-high / badge-risk-medium / badge-risk-low -->
+      <span class="badge badge-risk-{{OVERALL_RISK_CLASS}}">{{OVERALL_RISK}} RISK</span>
+      <!-- DORA badge: include ONLY if DORA Scope = Yes -->
+      <span class="badge badge-dora">DORA SCOPE</span>
+      <!-- Criticality badge: include ONLY if criticality is Critical; omit if Standard -->
+      <span class="badge badge-critical">{{SERVICE_CRITICALITY}}</span>
+    </div>
+  </header>
+
+  <!-- ═══ SECTION 2: KPI ROW ═══ -->
+  <section class="kpi-row" id="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Overall Risk</div>
+      <div class="kpi-value kpi-{{OVERALL_RISK_CLASS}}">{{OVERALL_RISK}}</div>
+      <div class="kpi-sub">Max residual: {{MAX_RESIDUAL_SCORE}} / 25</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Total Risks</div>
+      <div class="kpi-value">{{TOTAL_RISKS}}</div>
+      <div class="kpi-sub">Operational: {{OPERATIONAL_RISKS}} &nbsp;|&nbsp; Security: {{SECURITY_RISKS}}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Treated / In Treatment</div>
+      <div class="kpi-value"><span class="kpi-green">{{TREATED_COUNT}}</span> / <span class="kpi-amber">{{IN_TREATMENT_COUNT}}</span></div>
+      <div class="kpi-sub">{{TREATED_PERCENT}}% treated</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Euronext Controls</div>
+      <div class="kpi-value"><span class="kpi-green">{{ENX_IMPLEMENTED_COUNT}}</span> / <span class="kpi-red">{{ENX_PENDING_COUNT}}</span></div>
+      <div class="kpi-sub">Implemented / Pending</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Certification</div>
+      <div class="kpi-value kpi-green">{{CERTIFICATION_TYPES}}</div>
+      <div class="kpi-sub">{{CERTIFICATION_STATUS}}</div>
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 3: MAIN GRID — SPIDER + PROFILE + DOMAIN BARS ═══ -->
+  <section class="main-grid" id="main-grid">
+
+    <!-- Left: 5-Domain Spider Chart -->
+    <div class="card spider-card" id="spider-chart">
+      <div class="card-title">5-Domain Residual Risk Profile</div>
+      <!--
+        Spider geometry: viewBox 0 0 400 400, centre (200,195), radius 150px, scale 0–25.
+        Pentagon angles: -90°, -18°, 54°, 126°, 198°.
+        Vertex for score s at domain index i:
+          angle = (i × 72° − 90°) × π/180
+          x = 200 + (s/25) × 150 × cos(angle)
+          y = 195 + (s/25) × 150 × sin(angle)
+        Rings (pentagons) at scores 4, 8, 12, 17, 25 → r = 24, 48, 72, 102, 150.
+        Domain index: 0 Cybersecurity (top), 1 Data Management, 2 IT,
+                      3 Business Continuity, 4 Third-Parties.
+      -->
+      <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="5-domain residual risk spider chart">
+        <!-- Ring 25 (r=150, outer, scale maximum) -->
+        <polygon points="200,45 342.7,148.6 288.2,316.4 111.8,316.4 57.3,148.6"
+                 fill="none" stroke="#CBD5E1" stroke-width="0.5"/>
+        <!-- Ring 17 (r=102) -->
+        <polygon points="200,93 297.0,163.5 260.0,277.5 140.0,277.5 103.0,163.5"
+                 fill="none" stroke="#CBD5E1" stroke-width="0.5"/>
+        <!-- Ring 12 (r=72) — MEDIUM/HIGH boundary -->
+        <polygon points="200,123 268.5,172.8 242.3,253.2 157.7,253.2 131.5,172.8"
+                 fill="none" stroke="#DC2626" stroke-width="1" stroke-dasharray="6,3" opacity="0.35"/>
+        <!-- Ring 8 (r=48) -->
+        <polygon points="200,147 245.7,180.2 228.2,233.8 171.8,233.8 154.3,180.2"
+                 fill="none" stroke="#CBD5E1" stroke-width="0.5"/>
+        <!-- Ring 4 (r=24) — LOW/MEDIUM boundary -->
+        <polygon points="200,171 222.8,187.6 214.1,214.4 185.9,214.4 177.2,187.6"
+                 fill="none" stroke="#007D71" stroke-width="1.2" stroke-dasharray="4,3"/>
+
+        <!-- Axes (centre to outer ring vertices) -->
+        <line x1="200" y1="195" x2="200"   y2="45"    stroke="#CBD5E1" stroke-width="0.5"/>
+        <line x1="200" y1="195" x2="342.7" y2="148.6" stroke="#CBD5E1" stroke-width="0.5"/>
+        <line x1="200" y1="195" x2="288.2" y2="316.4" stroke="#CBD5E1" stroke-width="0.5"/>
+        <line x1="200" y1="195" x2="111.8" y2="316.4" stroke="#CBD5E1" stroke-width="0.5"/>
+        <line x1="200" y1="195" x2="57.3"  y2="148.6" stroke="#CBD5E1" stroke-width="0.5"/>
+
+        <!-- Ring number labels along top axis -->
+        <text x="205" y="174" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#64748B">4</text>
+        <text x="205" y="150" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#64748B">8</text>
+        <text x="205" y="126" font-family="'IBM Plex Mono', monospace" font-size="8" fill="#DC2626">12</text>
+        <text x="205" y="96"  font-family="'IBM Plex Mono', monospace" font-size="8" fill="#64748B">17</text>
+        <text x="205" y="48"  font-family="'IBM Plex Mono', monospace" font-size="8" fill="#64748B">25</text>
+
+        <!-- Data polygon: replace points with computed vertices from actual domain scores -->
+        <polygon points="{{SPIDER_POLYGON_POINTS}}"
+                 fill="rgba(0,125,113,0.22)" stroke="#007D71" stroke-width="2.5"/>
+
+        <!-- Vertex dots: 5px radius, threshold-coloured fill (#DC2626 / #D97706 / #007D71) -->
+        <circle cx="{{DOT_CYBER_X}}" cy="{{DOT_CYBER_Y}}" r="5" fill="{{DOT_CYBER_COLOR}}" stroke="#fff" stroke-width="1.5"/>
+        <circle cx="{{DOT_DATA_X}}"  cy="{{DOT_DATA_Y}}"  r="5" fill="{{DOT_DATA_COLOR}}"  stroke="#fff" stroke-width="1.5"/>
+        <circle cx="{{DOT_IT_X}}"    cy="{{DOT_IT_Y}}"    r="5" fill="{{DOT_IT_COLOR}}"    stroke="#fff" stroke-width="1.5"/>
+        <circle cx="{{DOT_BC_X}}"    cy="{{DOT_BC_Y}}"    r="5" fill="{{DOT_BC_COLOR}}"    stroke="#fff" stroke-width="1.5"/>
+        <circle cx="{{DOT_TP_X}}"    cy="{{DOT_TP_Y}}"    r="5" fill="{{DOT_TP_COLOR}}"    stroke="#fff" stroke-width="1.5"/>
+
+        <!-- Axis labels (outside the polygon) -->
+        <text x="200" y="30"  text-anchor="middle" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="700" fill="#334155">Cybersecurity</text>
+        <text x="352" y="140" text-anchor="start"  font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="700" fill="#334155">Data Mgmt</text>
+        <text x="295" y="335" text-anchor="middle" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="700" fill="#334155">IT</text>
+        <text x="105" y="335" text-anchor="middle" font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="700" fill="#334155">Business Cont.</text>
+        <text x="48"  y="140" text-anchor="end"    font-family="'IBM Plex Sans', sans-serif" font-size="12" font-weight="700" fill="#334155">Third-Parties</text>
+
+        <!-- Score badges: rounded rect (rx=4) with threshold-coloured fill + monospace text -->
+        <g id="spider-score-badges">
+          <rect x="216" y="18"  width="34" height="16" rx="4" fill="{{DOT_CYBER_COLOR}}"/>
+          <text x="233" y="30"  text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" font-weight="700" fill="#fff">{{SCORE_CYBER}}</text>
+          <rect x="352" y="146" width="34" height="16" rx="4" fill="{{DOT_DATA_COLOR}}"/>
+          <text x="369" y="158" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" font-weight="700" fill="#fff">{{SCORE_DATA}}</text>
+          <rect x="278" y="341" width="34" height="16" rx="4" fill="{{DOT_IT_COLOR}}"/>
+          <text x="295" y="353" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" font-weight="700" fill="#fff">{{SCORE_IT}}</text>
+          <rect x="88"  y="341" width="34" height="16" rx="4" fill="{{DOT_BC_COLOR}}"/>
+          <text x="105" y="353" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" font-weight="700" fill="#fff">{{SCORE_BC}}</text>
+          <rect x="14"  y="146" width="34" height="16" rx="4" fill="{{DOT_TP_COLOR}}"/>
+          <text x="31"  y="158" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="10" font-weight="700" fill="#fff">{{SCORE_TP}}</text>
+        </g>
+      </svg>
+      <div class="spider-legend">
+        <span><span class="legend-line legend-low-boundary"></span> LOW / MEDIUM boundary (4)</span>
+        <span><span class="legend-line legend-high-boundary"></span> MEDIUM / HIGH boundary (12)</span>
+      </div>
+    </div>
+
+    <!-- Right: Supplier Profile + Domain Bars -->
+    <div class="main-grid-right">
+
+      <div class="card" id="supplier-profile">
+        <div class="card-title">Supplier Profile</div>
+        <!-- NOTE: DO NOT include ENX L3 Taxonomy in this card. -->
+        <div class="profile-grid">
+          <div class="profile-field"><span class="pf-label">Supplier Name</span><span class="pf-value">{{VENDOR_NAME}}</span></div>
+          <div class="profile-field"><span class="pf-label">Supplier Type</span><span class="pf-value">{{SUPPLIER_TYPE}}</span></div>
+          <div class="profile-field"><span class="pf-label">Organisation</span><span class="pf-value">{{ORGANIZATION}}</span></div>
+          <div class="profile-field"><span class="pf-label">Service Criticality</span><span class="pf-value pf-red">{{SERVICE_CRITICALITY}}</span></div>
+          <div class="profile-field"><span class="pf-label">DORA Scope</span><span class="pf-value pf-red">{{DORA_SCOPE}}</span></div>
+          <div class="profile-field"><span class="pf-label">Critical Supplier</span><span class="pf-value pf-red">{{CRITICAL_SUPPLIER}}</span></div>
+          <div class="profile-field"><span class="pf-label">Certification</span><span class="pf-value pf-green">{{CERTIFICATION_TYPES}} — {{CERTIFICATION_STATUS}}</span></div>
+          <div class="profile-field"><span class="pf-label">Analyst Review</span><span class="pf-value">{{ANALYST_REVIEW}}</span></div>
+          <div class="profile-field"><span class="pf-label">Manager Review</span><span class="pf-value">{{MANAGER_REVIEW}}</span></div>
+        </div>
+      </div>
+
+      <div class="card" id="domain-bars">
+        <div class="card-title">Domain Risk Scores (Max IT Residual per Domain)</div>
+        <!-- One row per domain, sorted by score descending.
+             Fill class: bar-high / bar-medium / bar-low. Width = (score/25) × 100%. -->
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">{{DOMAIN_1_NAME}}</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill bar-{{DOMAIN_1_CLASS}}" style="width: {{DOMAIN_1_PCT}}%;">
+              <span class="domain-bar-score">{{DOMAIN_1_SCORE}}</span>
+            </div>
+          </div>
+          <span class="chip chip-{{DOMAIN_1_STAGE_CLASS}}">{{DOMAIN_1_STAGE}}</span>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">{{DOMAIN_2_NAME}}</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill bar-{{DOMAIN_2_CLASS}}" style="width: {{DOMAIN_2_PCT}}%;">
+              <span class="domain-bar-score">{{DOMAIN_2_SCORE}}</span>
+            </div>
+          </div>
+          <span class="chip chip-{{DOMAIN_2_STAGE_CLASS}}">{{DOMAIN_2_STAGE}}</span>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">{{DOMAIN_3_NAME}}</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill bar-{{DOMAIN_3_CLASS}}" style="width: {{DOMAIN_3_PCT}}%;">
+              <span class="domain-bar-score">{{DOMAIN_3_SCORE}}</span>
+            </div>
+          </div>
+          <span class="chip chip-{{DOMAIN_3_STAGE_CLASS}}">{{DOMAIN_3_STAGE}}</span>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">{{DOMAIN_4_NAME}}</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill bar-{{DOMAIN_4_CLASS}}" style="width: {{DOMAIN_4_PCT}}%;">
+              <span class="domain-bar-score">{{DOMAIN_4_SCORE}}</span>
+            </div>
+          </div>
+          <span class="chip chip-{{DOMAIN_4_STAGE_CLASS}}">{{DOMAIN_4_STAGE}}</span>
+        </div>
+        <div class="domain-bar-row">
+          <div class="domain-bar-label">{{DOMAIN_5_NAME}}</div>
+          <div class="domain-bar-track">
+            <div class="domain-bar-fill bar-{{DOMAIN_5_CLASS}}" style="width: {{DOMAIN_5_PCT}}%;">
+              <span class="domain-bar-score">{{DOMAIN_5_SCORE}}</span>
+            </div>
+          </div>
+          <span class="chip chip-{{DOMAIN_5_STAGE_CLASS}}">{{DOMAIN_5_STAGE}}</span>
+        </div>
+        <div class="threshold-legend">
+          Thresholds: &nbsp;<b class="t-low">≤ 4 LOW</b> &nbsp;|&nbsp; <b class="t-medium">&gt; 4 – ≤ 12 MEDIUM</b> &nbsp;|&nbsp; <b class="t-high">&gt; 12 HIGH</b> &nbsp;&nbsp;(OneTrust 1–25 scale)
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 4: INHERENT RISK RATIONALE ═══ -->
+  <section class="card" id="inherent-risk-rationale">
+    <div class="card-title">Inherent Risk Rationale</div>
+    <div class="callout-teal">
+      {{INHERENT_RISK_RATIONALE}}
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 5: RISKS WITH PENDING CONTROLS ═══ -->
+  <section class="card" id="pending-risks">
+    <div class="card-title">Risks with Pending Controls (In Treatment)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Risk ID</th>
+          <th>Risk Description</th>
+          <th>Residual</th>
+          <th>Target</th>
+          <th>Stage</th>
+          <th>Domain</th>
+          <th>Pending Euronext Control(s)</th>
+        </tr>
+      </thead>
+      <tbody id="pending-risks-body">
+        <!-- One row per risk with stage = In Treatment or controls ≠ Implemented.
+             Residual: <span class="score-badge score-high|score-medium|score-low">N</span>
+             Stage:    <span class="chip chip-in-treatment">In Treatment</span> -->
+        <tr>
+          <td><span class="risk-id">{{RISK_ID}}</span></td>
+          <td>{{RISK_DESCRIPTION}}</td>
+          <td><span class="score-badge score-{{RISK_RESIDUAL_CLASS}}">{{RISK_RESIDUAL_SCORE}}</span></td>
+          <td><span class="score-badge score-low">{{RISK_TARGET_SCORE}}</span></td>
+          <td><span class="chip chip-in-treatment">{{RISK_STAGE}}</span></td>
+          <td>{{RISK_DOMAIN}}</td>
+          <td>{{PENDING_CONTROL_IDS}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ═══ SECTION 6: EURONEXT CONTROLS REGISTER ═══ -->
+  <section class="card" id="euronext-controls-register">
+    <div class="card-title">Euronext Controls Register (Internal Perimeter)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Euronext Control</th>
+          <th>Description</th>
+          <th>Category</th>
+          <th>Perimeter</th>
+          <th>Status</th>
+          <th>Linked Risks</th>
+        </tr>
+      </thead>
+      <tbody id="euronext-controls-body">
+        <!-- ALL Euronext controls deduplicated by Control ID. Sort: Pending first, then Implemented.
+             Pending rows:     class="row-pending"     (red tint)
+             Implemented rows: class="row-implemented" (green tint) -->
+        <tr class="row-pending">
+          <td><span class="risk-id">{{CONTROL_ID}}</span><br>{{CONTROL_NAME}}</td>
+          <td>{{CONTROL_DESCRIPTION}}</td>
+          <td>{{CONTROL_CATEGORY}}</td>
+          <td><span class="chip chip-internal">Internal</span></td>
+          <td><span class="chip chip-pending">Pending</span></td>
+          <td>{{LINKED_RISK_IDS}}</td>
+        </tr>
+        <tr class="row-implemented">
+          <td><span class="risk-id">{{CONTROL_ID}}</span><br>{{CONTROL_NAME}}</td>
+          <td>{{CONTROL_DESCRIPTION}}</td>
+          <td>{{CONTROL_CATEGORY}}</td>
+          <td><span class="chip chip-internal">Internal</span></td>
+          <td><span class="chip chip-implemented">Implemented</span></td>
+          <td>{{LINKED_RISK_IDS}}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ═══ SECTION 7: DUAL-PERIMETER MATRIX ═══ -->
+  <section class="card" id="perimeter-matrix">
+    <div class="card-title">Dual-Perimeter Mitigation Matrix</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Perimeter</th>
+          <th>Cybersecurity</th>
+          <th>Data Management</th>
+          <th>IT</th>
+          <th>Business Continuity</th>
+          <th>Third-Parties</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Cell classes: pm-mitigated ("✔ Mitigated") | pm-alert-medium | pm-alert-high ("⚠ [issue]") -->
+        <tr>
+          <td class="pm-row-label"><span class="chip chip-external">External</span> Vendor</td>
+          <td><div class="perimeter-cell {{EXT_CYBER_CLASS}}">{{EXT_CYBER_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{EXT_DATA_CLASS}}">{{EXT_DATA_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{EXT_IT_CLASS}}">{{EXT_IT_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{EXT_BC_CLASS}}">{{EXT_BC_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{EXT_TP_CLASS}}">{{EXT_TP_TEXT}}</div></td>
+        </tr>
+        <tr>
+          <td class="pm-row-label"><span class="chip chip-internal">Internal</span> Euronext</td>
+          <td><div class="perimeter-cell {{INT_CYBER_CLASS}}">{{INT_CYBER_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{INT_DATA_CLASS}}">{{INT_DATA_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{INT_IT_CLASS}}">{{INT_IT_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{INT_BC_CLASS}}">{{INT_BC_TEXT}}</div></td>
+          <td><div class="perimeter-cell {{INT_TP_CLASS}}">{{INT_TP_TEXT}}</div></td>
+        </tr>
+      </tbody>
+    </table>
+    <!-- Include this callout ONLY when the All-Internal Residual Exposure pattern applies -->
+    <div class="callout-amber" id="perimeter-callout">
+      <b>All-Internal Residual Exposure:</b> {{PERIMETER_CALLOUT_TEXT}}
+    </div>
+  </section>
+
+  <!-- ═══ SECTION 8: BOTTOM GRID — CRITICAL FINDINGS + DORA/ACTIONS ═══ -->
+  <section class="bottom-grid" id="bottom-grid">
+
+    <div class="card" id="critical-findings">
+      <div class="card-title">Critical Findings</div>
+      <!-- 3–4 findings. Icon classes: fi-red / fi-amber / fi-green / fi-teal -->
+      <div class="finding-item">
+        <div class="finding-icon fi-amber">!</div>
+        <div><b>{{FINDING_1_LEAD}}</b> {{FINDING_1_TEXT}}</div>
+      </div>
+      <div class="finding-item">
+        <div class="finding-icon fi-amber">▲</div>
+        <div><b>{{FINDING_2_LEAD}}</b> {{FINDING_2_TEXT}}</div>
+      </div>
+      <div class="finding-item">
+        <div class="finding-icon fi-green">✔</div>
+        <div><b>{{FINDING_3_LEAD}}</b> {{FINDING_3_TEXT}}</div>
+      </div>
+      <div class="finding-item">
+        <div class="finding-icon fi-teal">i</div>
+        <div><b>{{FINDING_4_LEAD}}</b> {{FINDING_4_TEXT}}</div>
+      </div>
+    </div>
+
+    <div class="card" id="dora-actions">
+      <div class="card-title">DORA Status &amp; Recommended Actions</div>
+      <!-- Status box class: dora-yes (red) if DORA Scope = Yes, dora-no (teal) otherwise -->
+      <div class="dora-status-box dora-yes">
+        DORA Scope: {{DORA_SCOPE}} — {{DORA_STATUS_TEXT}}
+      </div>
+      <!-- 4–5 numbered action items -->
+      <div class="rec-item"><div class="rec-num">1</div><div>{{ACTION_1}}</div></div>
+      <div class="rec-item"><div class="rec-num">2</div><div>{{ACTION_2}}</div></div>
+      <div class="rec-item"><div class="rec-num">3</div><div>{{ACTION_3}}</div></div>
+      <div class="rec-item"><div class="rec-num">4</div><div>{{ACTION_4}}</div></div>
+      <div class="rec-item"><div class="rec-num">5</div><div>{{ACTION_5}}</div></div>
+    </div>
+
+  </section>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="report-footer" id="report-footer">
+    EURONEXT NV — Information Security Assurance &nbsp;|&nbsp; TPRM Executive Summary — Strategic Risk Intelligence Dashboard &nbsp;|&nbsp; {{VENDOR_NAME}} &nbsp;|&nbsp; {{MONTH_YEAR}} &nbsp;|&nbsp; CONFIDENTIAL
+  </footer>
+
+</div>
+</body>
+</html>

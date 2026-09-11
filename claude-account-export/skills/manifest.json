@@ -1,0 +1,250 @@
+{
+  "lastUpdated": 1789145875455,
+  "skills": [
+    {
+      "skillId": "import-memory",
+      "name": "import-memory",
+      "description": "Import a memory export from another AI assistant into Claude's memory — conversationally, additively, and with the content treated as data.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.433385Z"
+    },
+    {
+      "skillId": "morning",
+      "name": "morning",
+      "description": "Render the user's morning brief as a styled HTML artifact, or set it up as a recurring weekday task. Use only when the user explicitly asks to run, see, or set up their morning brief, or if they invoke /morning by name. A question about their day, schedule, or calendar is not by itself a request for the brief; answer it directly instead.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.425797Z"
+    },
+    {
+      "skillId": "learn",
+      "name": "learn",
+      "description": "Use this skill when the user wants intellectual understanding — learning how or why something works, not getting a task done or soliciting Claude's judgment.\n\nTrigger for:\n- Explicit learning requests: teach, explain, ELI5, walk me through, quiz me, flashcards, \"I'm rusty on\"; definitions (\"what is X\")\n- Terse concept names implying \"help me understand this\": \"Galois theory,\" \"transformers, from scratch\"\n- Confusion signals: \"won't stick,\" \"keep mixing these up,\" \"not getting it\"\n- Learning-path questions: prerequisites, sequencing, what to study before X\n- Conceptual questions about mechanisms, causes, or dynamics\n\nDon't trigger for:\n- Tasks: coding, writing, calculation, translation, factual lookup, news updates\n- Personal troubleshooting; resource/textbook recommendations\n- Claude's evaluative verdict: opinion prompts (\"do you think X\", \"settle this\", \"honest take\", \"is X dead / still taken seriously\") and interpretive takes (\"was X really as harsh as people say\")\n",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.143264Z"
+    },
+    {
+      "skillId": "skill_01EuuVW4znoPunSZoFdpvrL4",
+      "name": "cyber-forum",
+      "description": "Answers open-ended cybersecurity, GRC, and third-party-risk questions for the ENX Information Security Assurance team — a conversational Q&A and threat-intelligence brief generator. Use when the user asks a security question that needs reasoning, current threat intelligence, regulatory interpretation, or synthesis across internal context and the web (e.g. \"what is the latest on CVE-2026-XXXX\", \"how should we treat this supplier finding\", \"explain DORA Art. 30 for our Register of Information\", \"is this vendor advisory relevant to us\"). Single-agent, execute-on-input: it takes the question directly and answers — no file upload required. Optionally produces a structured written brief on request.",
+      "source": "custom",
+      "updatedAt": "2026-05-26T13:54:54.944906Z"
+    },
+    {
+      "skillId": "skill_01VHVUnbQjMGEzWf8NS5pFuj",
+      "name": "iso27001",
+      "description": "Expert ISO 27001 compliance assistant for security and compliance teams. Use this skill whenever a user asks about ISO 27001 or ISO/IEC 27001, including any of the following: gap analysis, auditing, compliance assessments, control checklists, policy writing,  document generation, Statement of Applicability (SoA), risk assessment, risk registers, risk treatment plans, Annex A controls, ISMS implementation, clause requirements, certification readiness, transitioning from 2013 to 2022, control implementation guidance, incident response policies, access control policies, supplier security, or any information security management system (ISMS) topic. Trigger even if the user doesn't say \"skill\" — any ISO 27001 or ISMS question should use this skill.",
+      "source": "custom",
+      "updatedAt": "2026-05-19T11:48:08.112003Z"
+    },
+    {
+      "skillId": "skill_016MohfK1sC51VJkN65fiaWr",
+      "name": "iso42001",
+      "description": "Expert ISO 42001 AI Management System (AIMS) compliance advisor. Use this skill whenever a user asks about ISO/IEC 42001:2023, AI governance, AI management systems, AI risk assessment, AI system impact assessment, Annex A controls for AI, Statement of Applicability for AI systems, AI policy, responsible AI, AI lifecycle management, AI incident management, AI transparency, AI bias, AI certification readiness, or any topic related to implementing or auditing an AI Management System. Also trigger for questions like \"how do I become ISO 42001 certified?\", \"what controls does ISO 42001 require?\", \"how do I assess AI risk under 42001?\", \"what is an AIMS?\", or any request involving organisational governance of AI systems, responsible AI frameworks, or AI regulatory compliance aligned to an ISO standard.",
+      "source": "custom",
+      "updatedAt": "2026-05-19T11:47:09.880588Z"
+    },
+    {
+      "skillId": "skill_01JCAAJJrhMwDAnaXQbq98NW",
+      "name": "ciso-reporting",
+      "description": "Generates the three Euronext Group CISO Governance Meeting deliverables from a verified OneTrust Infosec Form (v14) assessment — an interactive HTML dashboard, an A3 landscape PDF, and an 8-slide PPTX deck. Use when the user asks for a \"CISO report\", \"CISO reporting\", \"CISO ExecSummary\", \"TPRM governance deck\", \"executive risk summary\", or a management-level write-up of a completed supplier assessment. The pipeline is deterministic: the orchestrator script does classification, threshold scoring, perimeter analysis, and rendering. Claude's only judgement task is producing the verified assessment JSON the script consumes.",
+      "source": "custom",
+      "updatedAt": "2026-05-26T13:54:40.634364Z"
+    },
+    {
+      "skillId": "skill_01KJ2DeoNGYv8B7enPn95E8h",
+      "name": "dora",
+      "description": "Expert DORA (Regulation (EU) 2022/2554 — Digital Operational Resilience Act) compliance advisor for EU financial entities. Use this skill whenever a user asks about DORA compliance, ICT risk management frameworks, ICT incident classification or reporting, threat-led penetration testing (TLPT), ICT third-party risk management, Register of Information, contractual provisions with ICT providers, ICT concentration risk, oversight of critical ICT third-party service providers (CTPPs), or any DORA RTS/ITS obligation. Also trigger for: \"DORA gap analysis\", \"DORA readiness\", \"Art. 6 ICT risk framework\", \"Art. 17 incident reporting\", \"Art. 26 TLPT\", \"Art. 28 third-party policy\", \"Art. 30 contractual provisions\", \"Register of Information CIR 2024/2956\", \"critical TPSP designation\", \"DORA vs NIS2\", \"DORA simplified framework\", or EBA/ESMA/EIOPA digital resilience guidance.",
+      "source": "custom",
+      "updatedAt": "2026-05-19T11:48:56.533741Z"
+    },
+    {
+      "skillId": "skill_01B2gXu96ogRpfs5BeBkHC4v",
+      "name": "nis2",
+      "description": "EU NIS2 Directive (Directive (EU) 2022/2555) compliance advisor for essential and important entities — entity classification, Art. 21 risk management measures, Art. 23 incident reporting timelines (24h/72h/1 month), Art. 20 governance obligations, supply chain security (Art. 26), gap assessments, policy drafting, ISO 27001 alignment, and penalty exposure analysis. Use for NIS2 readiness, transposition questions, ENISA guidelines, supervisory differences between essential and important entities, and cross-border coordination.",
+      "source": "custom",
+      "updatedAt": "2026-05-19T11:45:47.692515Z"
+    },
+    {
+      "skillId": "skill_01EWH3hrxb5ysGmXduMxUAYG",
+      "name": "eu-ai-act",
+      "description": "EU AI Act (Regulation (EU) 2024/1689) compliance advisor — risk classification across all four tiers, all 8 prohibited practices (Art. 5), all 8 Annex III high-risk use case areas, provider and deployer obligations (Arts. 9–17, 26), GPAI model obligations and systemic risk (Arts. 51–55), conformity assessment and CE marking (Arts. 43–48), EU AI database registration, limited-risk transparency (Art. 50), governance (AI Office, AI Board), penalties (Art. 99), phase-in timeline, and cross-framework mapping to ISO 42001, NIST AI RMF, and GDPR. Use for any EU AI regulation, AI system classification, or AI compliance question.",
+      "source": "custom",
+      "updatedAt": "2026-05-19T11:48:33.653134Z"
+    },
+    {
+      "skillId": "skill_015YKqjzdSPiGqnrk9xUPPZR",
+      "name": "whisperx-transcribe-diarize",
+      "description": "Transcribe audio or video files locally on macOS (Apple Silicon M1/M2/M3) with speaker diarization and word-level timestamps using WhisperX, pyannote.audio, and Whisper large-v3. ALWAYS use this skill when the user asks to transcribe audio, transcribe with speakers, identify speakers, ask quem fala quando, request transcrição com diarização, speaker diarization, split audio by speaker, or who said what; when converting .m4a/.mp3/.wav/.mp4/.mov/.flac/.ogg/.opus to text with timestamps; or when uploading an audio/video file and asking for a transcript. Outputs include TXT with timestamped speaker blocks, SRT and VTT subtitles, JSON with word-level timestamps, and optionally per-speaker audio clips. Optimized for PT-BR (Portuguese Brazilian) but supports 99 languages. Handles long files (4h+) via VAD chunking. Runs 100% locally — no upload, no API keys for transcription (HuggingFace token required only for one-time diarization model download).",
+      "source": "custom",
+      "updatedAt": "2026-04-16T21:27:06.245866Z"
+    },
+    {
+      "skillId": "skill_01LAKcTvjxg6vupR9ha4YGyH",
+      "name": "onetrust-form-b",
+      "description": "Assists with completing the OneTrust Non-Critical Form B supplier assessment questionnaire — drafts evidence-led responses for each question, validates them against the allowed answer options, routes them through a mandatory human sign-off gate, and writes the approved answers back into the OneTrust round-trip import xlsx. Use when the user asks to \"answer Form B\", \"complete the OneTrust Form B\", \"fill the Form B\", \"draft Form B responses\", or uploads a OneTrust Form B export (PDF and/or xlsx) and asks for help responding. Bounded-agency workflow: the skill gathers evidence and proposes answers but never finalises them without explicit user approval.",
+      "source": "custom",
+      "updatedAt": "2026-05-26T13:54:49.301677Z"
+    },
+    {
+      "skillId": "skill_01TeYE1S2TGQXcqSdc8RCw8Z",
+      "name": "pdf-full-coverage-analyzer",
+      "description": "Exhaustive, accuracy-grade PDF analysis: process documents of any size in deterministic chunks and guarantee every line is read, every detail preserved, every passage understood in context — for any topic (legal, medical, scientific, technical, financial, regulatory, narrative, transcript). ALWAYS use when the user asks to analyze, review, audit, summarize, or extract from a PDF and any of these holds: (a) the PDF is large or its size unknown; (b) the user says 'all lines', 'every detail', 'nothing missed', 'full coverage', 'exhaustive', 'in parts', 'page by page', 'analyze carefully', 'maintain accuracy', or 'analyze the context'; (c) accuracy and completeness matter more than speed; (d) the document carries real stakes (contracts, regulations, medical records, research, filings, specs, evidence, transcripts). Performs triage → inventory → chunked extraction → context-and-detail analysis → synthesis → coverage verification, with a verifiable audit trail. Trigger on partial requests too.",
+      "source": "custom",
+      "updatedAt": "2026-05-21T18:29:09.216733Z"
+    },
+    {
+      "skillId": "skill_01WnbrUeiBsCjvZEnK7BdXJG",
+      "name": "ciso-executive-summary",
+      "description": "Generates a CISO-grade TPRM Executive Summary HTML report from OneTrust Infosec Form assessment PDFs. ALWAYS use this skill when the user uploads a OneTrust PDF and asks for a CISO report, executive summary, risk dashboard, board report, or vendor risk summary. Also trigger for: \"generate CISO report\", \"create executive summary\", \"analyse this assessment for the CISO\", \"TPRM executive summary\", \"vendor risk report\", \"risk dashboard\", or any mention of OneTrust assessment + CISO/executive/board/summary/report. This skill produces a single-file interactive HTML dashboard using the Strategic Risk Intelligence Dashboard template with corrected TPRM thresholds, 5-domain spider graph, dual-perimeter analysis, and Euronext controls register. Use this skill even for partial requests like \"summarise this PDF\" or \"what's the risk posture of this vendor\" when a OneTrust PDF is attached. Never attempt to generate a CISO executive summary without this skill.",
+      "source": "custom",
+      "updatedAt": "2026-04-07T13:37:20.729188Z"
+    },
+    {
+      "skillId": "skill_01GSrVbZBpD882U1yCYitiYE",
+      "name": "ai-deepsearch-osint-gathering-report",
+      "description": "Executes the AI DeepSearch OSINT Gathering Report — a full OSINT-based third-party security assessment that produces a professional HTML dashboard. ALWAYS use this skill when the user says \"Assess Security of [supplier/domain]\", \"Run DeepSearch on\", \"DeepSearch assessment\", or provides a supplier URL and asks for a security assessment, vendor risk report, TPRM deep dive, or supplier security analysis. The skill orchestrates 11 structured sections (Executive Summary, Service ID, Corporate Metadata, Security Posture, Technical Infrastructure, Vulnerability & Threat Landscape, Incidents & Exposure, AI Governance, Integrations, Controls Validation, Confidence Scoring) and renders a single-file interactive HTML dashboard — dark teal theme (RGB 0,141,127), Verdana font, 9 expandable section buttons, spider graph, and downloadable output. Trigger even for partial requests like \"check the security of X\", \"do a vendor check on X\", or \"what is the security posture of X\".",
+      "source": "custom",
+      "updatedAt": "2026-03-24T16:18:54.278622Z"
+    },
+    {
+      "skillId": "doc-coauthoring",
+      "name": "doc-coauthoring",
+      "description": "Guide users through a structured workflow for co-authoring documentation. Use when user wants to write documentation, proposals, technical specs, decision docs, or similar structured content. This workflow helps users efficiently transfer context, refine content through iteration, and verify the doc works for readers. Trigger when user mentions writing docs, creating proposals, drafting specs, or similar documentation tasks.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:00.978499Z"
+    },
+    {
+      "skillId": "skill_01JiygnQ3bwPZTijMqxVpL6y",
+      "name": "deepsearch-protocol",
+      "description": "Executes the Supplier Security DeepSearch Protocol V17.02.11 — a full OSINT-based third-party security assessment that produces a professional HTML dashboard. ALWAYS use this skill when the user says \"Assess Security of [supplier/domain]\", \"Run DeepSearch on\", \"DeepSearch assessment\", or provides a supplier URL and asks for a security assessment, vendor risk report, TPRM deep dive, or supplier security analysis. The skill orchestrates 11 structured sections (Executive Summary, Service ID, Corporate Metadata, Security Posture, Technical Infrastructure, Vulnerability & Threat Landscape, Incidents & Exposure, AI Governance, Integrations, Controls Validation, Confidence Scoring) and renders a single-file interactive HTML dashboard — dark teal theme (RGB 0,141,127), Verdana font, 9 expandable section buttons, spider graph, and downloadable output. Trigger even for partial requests like \"check the security of X\", \"do a vendor check on X\", or \"what is the security posture of X\".",
+      "source": "custom",
+      "updatedAt": "2026-03-24T16:18:47.004656Z"
+    },
+    {
+      "skillId": "web-artifacts-builder",
+      "name": "web-artifacts-builder",
+      "description": "Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn/ui). Use for complex artifacts requiring state management, routing, or shadcn/ui components - not for simple single-file HTML/JSX artifacts.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.065633Z"
+    },
+    {
+      "skillId": "skill_01NFWJt4DyLjvJpcXFuCVvyk",
+      "name": "enx-tprm-control-center",
+      "description": "Entry point and router for the ENX TPRM toolset. Use ONLY when the user explicitly says \"open ENX menu\", \"ENX control center\", \"ENX menu\", \"TPRM menu\", \"TPRM control center\", or \"start ENX\". Presents a five-option menu — DPIA InfoSec Report, CISO Reporting, Cyber Forum, OneTrust Form B Questions, DeepSearch Report Dashboard — and routes the selection to the correct worker skill. This skill performs NO assessment, report generation, or analysis itself; it only displays the menu, collects the required input for the chosen project, and dispatches. Do NOT trigger this skill for direct, specific requests like \"run DeepSearch on X\" or \"generate a DPIA from this PDF\" — those invoke their worker skills directly.",
+      "source": "custom",
+      "updatedAt": "2026-05-26T13:54:37.240756Z"
+    },
+    {
+      "skillId": "skill-creator",
+      "name": "skill-creator",
+      "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.020951Z"
+    },
+    {
+      "skillId": "skill_01UoxrBxdcuabRp8B6GGWMqm",
+      "name": "tprm-slide-generator",
+      "description": "Full end-to-end TPRM (Third-Party Risk Management) executive summary slide generator. Use this skill whenever a user uploads a OneTrust/Infosec TPRM assessment PDF and asks for a slide, report, executive summary, risk presentation, or board-ready output. Also trigger for: \"generate TPRM slide\", \"create risk summary\", \"analyse this assessment\", \"make a board slide from this PDF\", \"TPRM executive summary\", or any mention of vendor risk assessment + slide/presentation/report. Always use this skill — never attempt to generate a TPRM slide without following this workflow, as brand consistency and data accuracy depend on it.",
+      "source": "custom",
+      "updatedAt": "2026-02-26T16:21:07.792290Z"
+    },
+    {
+      "skillId": "theme-factory",
+      "name": "theme-factory",
+      "description": "Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. There are 10 pre-set themes with colors/fonts that you can apply to any artifact that has been creating, or can generate a new theme on-the-fly.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.135153Z"
+    },
+    {
+      "skillId": "mcp-builder",
+      "name": "mcp-builder",
+      "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.095779Z"
+    },
+    {
+      "skillId": "skill_019bZgEW9357rgyVvobGXsFi",
+      "name": "pptx-executive-summary-ciso",
+      "description": "Full end-to-end TPRM (Third-Party Risk Management) executive summary slide generator. Use this skill whenever a user uploads a OneTrust/Infosec TPRM assessment PDF and asks for a slide, report, executive summary, risk presentation, or board-ready output. Also trigger for: \"generate TPRM slide\", \"create risk summary\", \"analyse this assessment\", \"make a board slide from this PDF\", \"TPRM executive summary\", or any mention of vendor risk assessment + slide/presentation/report. Always use this skill — never attempt to generate a TPRM slide without following this workflow, as brand consistency and data accuracy depend on it.",
+      "source": "custom",
+      "updatedAt": "2026-03-06T14:28:50.193855Z"
+    },
+    {
+      "skillId": "skill_01R27GgdKWnrL5krXooJFptQ",
+      "name": "dpia",
+      "description": "Analyzes OneTrust third-party assessment PDF reports and generates InfoSec TPA Reports in DOCX format for DPO team review. Use this skill when: (1) User uploads an OneTrust vendor/supplier assessment PDF, (2) User requests a DPO report, DPIA report, or InfoSec TPA report from an assessment, (3) User needs to extract risks, controls, and implementation status from third-party assessments, (4) User mentions OneTrust, vendor monitoring, supplier assessment, or third-party risk assessment reports.",
+      "source": "custom",
+      "updatedAt": "2026-01-27T12:21:51.928299Z"
+    },
+    {
+      "skillId": "internal-comms",
+      "name": "internal-comms",
+      "description": "A set of resources to help me write all kinds of internal communications, using the formats that my company likes to use. Claude should use this skill whenever asked to write some sort of internal communications (status reports, leadership updates, 3P updates, company newsletters, FAQs, incident reports, project updates, etc.).",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.086225Z"
+    },
+    {
+      "skillId": "brand-guidelines",
+      "name": "brand-guidelines",
+      "description": "Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design standards apply.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.072050Z"
+    },
+    {
+      "skillId": "skill_01QbFi4h95gfJuqpRa92aEtJ",
+      "name": "tpsrca-assessment-engine",
+      "description": "Comprehensive assessment engine for TPSRCA with 12 specialized agents for risk calculation (inherent/residual), score aggregation, data confidence validation, framework compliance scoring, gap analysis, evidence validation, and recommendation generation. Use this skill to orchestrate full TPSRCA assessments with automated scoring, calculations, and quality assurance. Integrates with tpsrca-supplier-classifier, tpsrca-osint-agents, and tpsrca-html-template for end-to-end assessment automation.",
+      "source": "custom",
+      "updatedAt": "2025-12-11T19:56:06.628892Z"
+    },
+    {
+      "skillId": "slack-gif-creator",
+      "name": "slack-gif-creator",
+      "description": "Knowledge and utilities for creating animated GIFs optimized for Slack. Provides constraints, validation tools, and animation concepts. Use when users request animated GIFs for Slack like \"make me a GIF of X doing Y for Slack.\"",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.113412Z"
+    },
+    {
+      "skillId": "algorithmic-art",
+      "name": "algorithmic-art",
+      "description": "Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create original algorithmic art rather than copying existing artists' work to avoid copyright violations.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.036735Z"
+    },
+    {
+      "skillId": "pdf",
+      "name": "pdf",
+      "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.",
+      "source": "anthropic",
+      "updatedAt": "2026-07-10T19:23:15.432550Z"
+    },
+    {
+      "skillId": "xlsx",
+      "name": "xlsx",
+      "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved.",
+      "source": "anthropic",
+      "updatedAt": "2026-08-29T01:00:31.073935Z"
+    },
+    {
+      "skillId": "pptx",
+      "name": "pptx",
+      "description": "Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations as PowerPoint (.pptx) files; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email, summary, or creating a different type of slide deck); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user asks for a PowerPoint or .pptx file, or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. However, when the user asks for a deck, slides, a slide deck, or a presentation without naming a file format, default to using a dedicated slide-deck artifact type or a separate slides skill if this session offers one; otherwise, use this skill.",
+      "source": "anthropic",
+      "updatedAt": "2026-08-28T02:00:39.535636Z"
+    },
+    {
+      "skillId": "canvas-design",
+      "name": "canvas-design",
+      "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations.",
+      "source": "anthropic-example",
+      "updatedAt": "2026-09-10T23:58:01.079163Z"
+    },
+    {
+      "skillId": "docx",
+      "name": "docx",
+      "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file (to download, email or print), use this skill. However, if they ask for a document, page, report, memo, or notes WITHOUT naming a file format and the session offers a dedicated document or page skill or connector, use that instead. Do NOT use for PDFs, spreadsheets, Google Docs, or coding unrelated to document generation.",
+      "source": "anthropic",
+      "updatedAt": "2026-08-31T20:00:31.499122Z"
+    }
+  ]
+}
