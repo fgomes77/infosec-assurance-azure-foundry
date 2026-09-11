@@ -67,8 +67,13 @@ python3 create_agents.py        # uses PROJECT_ENDPOINT from .env / environment
 #    integrations/README.md
 python3 attach_integrations.py
 
-# 6. Verify
-python3 smoke_test.py --agent dora --prompt "Summarise DORA Art. 30 contractual provisions"
+# 6. Create the flagship layer: assurance advisor (reasoning + combined
+#    knowledge + durable memory) and orchestrator (routes across all agents)
+python3 create_orchestrator.py
+
+# 7. Verify
+python3 smoke_test.py --agent infosec-assurance-orchestrator \
+    --prompt "Summarise DORA Art. 30 contractual provisions"
 ```
 
 ## Integrations, workflows, Copilot
@@ -82,6 +87,18 @@ reasoning tier for analytic agents (see `integrations/README.md` and
 replacing Claude Routines (OneTrust intake, Defender incident briefs,
 scheduled DeepSearch, Jira↔IAF sync), and `integrations/copilot/` documents
 surfacing the agents in Microsoft 365 Copilot.
+
+## Orchestrator, advisor with memory, MCP access
+
+`orchestrator/README.md` describes the flagship layer: the
+`infosec-assurance-orchestrator` (single entry point, reasoning model,
+connected to every agent), the `infosec-assurance-advisor` (reasoning
+generalist across all persona domains, grounded in a combined vector store
+of every skill's knowledge, with durable team memory in
+`vs-assurance-memory` managed by `scripts/memory_store.py`), and the MCP
+server in `mcp-server/` that exposes the whole environment to any MCP
+client (Claude included) via `ask_orchestrator` / `ask_agent` /
+`save_memory` / `search_memory`.
 
 Re-running steps 3–4 is idempotent by agent name: existing agents are updated
 in place (instructions and knowledge refreshed), new skills become new agents.
