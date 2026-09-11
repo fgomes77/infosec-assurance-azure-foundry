@@ -188,15 +188,15 @@ arr(ax, centers[2], 3.40, centers[0], 3.40, color=RED, lw=1.6, ls="--",
 txt(ax, (centers[0] + centers[2]) / 2, 2.68, "FAIL → findings back to producer (max 2 retries)", 8.2, RED)
 arr(ax, centers[3], 3.40, centers[0] - 0.35, 3.35, color=RED, lw=1.6, ls="--",
     connectionstyle="arc3,rad=-0.34")
-txt(ax, (centers[0] + centers[3]) / 2 + 0.6, 1.66, "rejected / edit request → fresh draft, cycle restarts", 8.2, RED)
+txt(ax, 9.0, 2.30, "rejected / edit request →\nfresh draft, cycle restarts", 8.2, RED)
 # verdict chips
 chip(ax, 4.35, 5.62, "PASS → forwarded to approver", True)
 chip(ax, 8.05, 5.62, "approval logged in run history", True)
-rbox(ax, 0.5, 0.75, W - 1.0, 1.05, TEAL_BG, TEAL, 1.2)
-txt(ax, W / 2, 1.51, "Technical backstop — Layer 1", 9.3, TEAL, True)
-txt(ax, W / 2, 1.10,
-    "Agents hold READ-ONLY tools (every non-GET operation stripped; write grants: zero). Submission is physically possible only through the human-approved workflow path.",
-    8.4, INK)
+rbox(ax, 0.5, 0.50, W - 1.0, 1.05, TEAL_BG, TEAL, 1.2)
+txt(ax, W / 2, 1.26, "Technical backstop — Layer 1", 9.3, TEAL, True)
+txt(ax, W / 2, 0.85,
+    "Agents hold READ-ONLY tools (every non-GET operation stripped; write grants: zero).\nSubmission is physically possible only through the human-approved workflow path.",
+    8.2, INK)
 save(f, "03-release-approval-flow.png")
 
 # ═════════════════ 4 · INTEGRATION MAP ══════════════════════════════════════
@@ -280,7 +280,7 @@ footer_bar(ax, 0.5, 0.55, W - 1.0,
 save(f, "05-implementation-roadmap.png")
 
 # ═════════════════ 6 · WORKFLOW SCHEMATICS ══════════════════════════════════
-W, H = 13, 8.8
+W, H = 13, 9.05
 f, ax = fig_ax(W, H)
 header(ax, W, H, "Automated Workflows — Logic Apps with Human-Approval Gates",
        "Four pipelines replace claude.ai Routines · every submission of record suspends until a person approves (3-day expiry)")
@@ -291,7 +291,7 @@ def lane(y, name, trigger, steps_, ec, bg):
     rbox(ax, 0.68, y + 0.30, 1.55, 0.72, ec, "none", r=0.12)
     txt(ax, 1.455, y + 0.66, trigger, 7.6, WHITE, True)
     x = 2.55
-    for t, kind in steps_:
+    for si, (t, kind) in enumerate(steps_):
         w = 1.62 if kind != "gate" else 1.5
         if kind == "gate":
             rbox(ax, x, y + 0.30, w, 0.72, RED_BG, RED, 1.5)
@@ -301,7 +301,7 @@ def lane(y, name, trigger, steps_, ec, bg):
             rbox(ax, x, y + 0.30, w, 0.72, WHITE, ec, 1.3)
             txt(ax, x + w / 2, y + 0.66, t, 7.2, INK)
         nx = x + w + 0.24
-        if nx < W - 0.9:
+        if si < len(steps_) - 1:
             arr(ax, x + w + 0.02, y + 0.66, nx - 0.02, y + 0.66, color=INK, lw=1.5)
         x = nx
 
