@@ -37,6 +37,7 @@ BING_CONNECTION = os.environ.get("BING_CONNECTION_NAME", "bing-grounding")
 
 ADVISOR = "infosec-assurance-advisor"
 ORCHESTRATOR = "infosec-assurance-orchestrator"
+VERIFIER = "output-verifier"
 MEMORY_STORE = "vs-assurance-memory"
 KNOWLEDGE_STORE = "vs-assurance-combined"
 
@@ -58,6 +59,11 @@ environment. For each request, decide and act:
    one coherent answer; state which agent produced which part.
 4. Only answer directly when no specialist adds value; use web search for
    anything time-sensitive and cite sources.
+5. Any deliverable or submission-of-record draft (report, executive
+   summary, finding, ticket, Form B answer set) -> pass it through
+   output_verifier BEFORE presenting it for human approval. On FAIL, send
+   the findings back to the producing agent, get a corrected draft, and
+   re-verify (at most twice; then surface the FAIL to the user).
 
 Never fabricate a specialist's output; if a handoff fails, say so and give
 your best direct answer, clearly labelled as such.
@@ -107,8 +113,11 @@ def main() -> int:
               f"combined knowledge files={len(knowledge)}, "
               f"stores=[{KNOWLEDGE_STORE}, {MEMORY_STORE}], web-search + "
               f"instructions {len(advisor_instructions)} chars")
+        print(f"[dry-run] {VERIFIER}: model={REASONING_MODEL}, "
+              f"deterministic PASS/FAIL rules, no tools, generates nothing")
         print(f"[dry-run] {ORCHESTRATOR}: model={REASONING_MODEL}, "
-              f"web-search, connected to all live agents + {ADVISOR}")
+              f"web-search, connected to all live agents + {ADVISOR} + "
+              f"{VERIFIER}, drafts routed through verifier before approval")
         return 0
 
     if not ENDPOINT:
@@ -148,6 +157,23 @@ def main() -> int:
                if ADVISOR in live else agents_client.create_agent(**kwargs))
     print(f"{'updated' if ADVISOR in live else 'created'}  {ADVISOR} ({advisor.id})")
     live[ADVISOR] = advisor
+
+    # ---- output-verifier (verifier-gated pattern) ---------------------
+    verifier_instructions = (persona() + "\n\n---\n\n" +
+                             (CONV / "agents" / "verifier_instructions.md")
+                             .read_text(encoding="utf-8"))
+    vkwargs = dict(model=REASONING_MODEL, name=VERIFIER,
+                   description="Independent verification layer: checks every "
+                               "deliverable draft against deterministic rules "
+                               "(completeness, threshold consistency, "
+                               "grounding, no placeholders, data "
+                               "minimisation) and returns PASS/FAIL before "
+                               "human approval. Generates nothing.",
+                   instructions=verifier_instructions)
+    verifier = (agents_client.update_agent(live[VERIFIER].id, **vkwargs)
+                if VERIFIER in live else agents_client.create_agent(**vkwargs))
+    print(f"{'updated' if VERIFIER in live else 'created'}  {VERIFIER} ({verifier.id})")
+    live[VERIFIER] = verifier
 
     # ---- orchestrator ------------------------------------------------
     otools = []

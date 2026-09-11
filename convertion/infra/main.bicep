@@ -105,6 +105,39 @@ resource bingConnection 'Microsoft.CognitiveServices/accounts/connections@2025-0
   }
 }
 
+// ---------------------------------------- observability (traces/metrics)
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: '${baseName}-logs'
+  location: location
+  properties: {
+    sku: { name: 'PerGB2018' }
+    retentionInDays: 90 // align to ISMS log-retention policy
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: '${baseName}-appi'
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalytics.id
+  }
+}
+
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/connections@2025-04-01-preview' = {
+  parent: foundry
+  name: 'app-insights'
+  properties: {
+    category: 'AppInsights'
+    target: appInsights.id
+    authType: 'ApiKey'
+    isSharedToAll: true
+    credentials: { key: appInsights.properties.ConnectionString }
+    metadata: { ApiType: 'Azure', ResourceId: appInsights.id }
+  }
+}
+
 // ------------------------------------------------- deliverables storage
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: toLower(replace('${baseName}sa', '-', ''))
