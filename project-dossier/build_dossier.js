@@ -36,16 +36,17 @@ const BB = (lead, rest) => new Paragraph({ numbering: { reference: "bullets", le
 
 function table(headers, rows, widths) {
   const total = widths.reduce((a, b) => a + b, 0);
-  const cell = (t, head, w) => new TableCell({
+  const cell = (t, head, w, band) => new TableCell({
     width: { size: w, type: WidthType.DXA },
-    shading: head ? { type: ShadingType.CLEAR, fill: TEAL } : undefined,
+    shading: head ? { type: ShadingType.CLEAR, fill: TEAL }
+                  : band ? { type: ShadingType.CLEAR, fill: LIGHT } : undefined,
     margins: { top: 60, bottom: 60, left: 100, right: 100 },
     children: [new Paragraph({ children: [new TextRun({ text: t, bold: head, color: head ? "FFFFFF" : undefined, size: 19 })] })],
   });
   return new Table({
     width: { size: total, type: WidthType.DXA }, columnWidths: widths,
-    rows: [new TableRow({ tableHeader: true, children: headers.map((h, i) => cell(h, true, widths[i])) }),
-      ...rows.map((r) => new TableRow({ children: r.map((c, i) => cell(c, false, widths[i])) }))],
+    rows: [new TableRow({ tableHeader: true, children: headers.map((h, i) => cell(h, true, widths[i], false)) }),
+      ...rows.map((r, ri) => new TableRow({ children: r.map((c, i) => cell(c, false, widths[i], ri % 2 === 1)) }))],
   });
 }
 const spacer = () => new Paragraph({ spacing: { after: 200 }, children: [] });
@@ -181,6 +182,7 @@ const children = [
   // ---- 9 Workflows ----
   H1("9. Workflows"),
   P("Four Logic Apps workflows replace the claude.ai Routines. Every submission of record inside them suspends on a human-approval webhook (3-day expiry): the draft goes to the approver, the workflow waits for an approved/rejected callback, and rejections are recorded without submitting."),
+  ...image(IMG("06-workflow-schematics.png"), "Figure 4 \u2014 The four automated workflows with their human-approval gates"),
   table(["Workflow", "Trigger", "Path (approval gates in bold)"], [
     ["onetrust-assessment-intake", "Daily", "Fetch completed OneTrust assessments → dpia agent report → APPROVAL → SharePoint upload → Teams summary"],
     ["defender-incident-brief", "Defender/Sentinel webhook", "cyber-forum brief (immediate 200 to caller) → APPROVAL → Jira issue"],
