@@ -1,0 +1,127 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "apiVersion": { "type": "string", "defaultValue": "{foundry-api-version}" },
+      "dpiaAgentId": { "type": "string", "defaultValue": "{dpia-agent-id}" },
+      "onetrustBaseUrl": { "type": "string", "defaultValue": "https://{onetrust-tenant}.onetrust.com" },
+      "onetrustApiToken": { "type": "securestring", "defaultValue": "{onetrust-token-from-key-vault}" },
+      "sharepointSiteId": { "type": "string", "defaultValue": "{sharepoint-site-id}" },
+      "sharepointDrivePath": { "type": "string", "defaultValue": "/TPRM/DPIA-Reports" },
+      "teamsWebhookUrl": { "type": "securestring", "defaultValue": "{teams-incoming-webhook-url}" }
+    },
+    "triggers": {
+      "Daily_recurrence": {
+        "type": "Recurrence",
+        "recurrence": { "frequency": "Day", "interval": 1, "schedule": { "hours": [ "6" ] } }
+      }
+    },
+    "actions": {
+      "Get_completed_assessments_since_last_run": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('onetrustBaseUrl')}/api/assessment/v2/assessments",
+          "queries": {
+            "status": "Completed",
+            "completedFrom": "@{addDays(utcNow(), -1)}"
+          },
+          "headers": { "Authorization": "Bearer @{parameters('onetrustApiToken')}" }
+        },
+        "runAfter": {}
+      },
+      "For_each_completed_assessment": {
+        "type": "Foreach",
+        "foreach": "@body('Get_completed_assessments_since_last_run')?['content']",
+        "runAfter": { "Get_completed_assessments_since_last_run": [ "Succeeded" ] },
+        "actions": {
+          "Run_dpia_agent_on_assessment": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+              "queries": { "api-version": "@parameters('apiVersion')" },
+              "headers": { "Content-Type": "application/json" },
+              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" },
+              "body": {
+                "assistant_id": "@parameters('dpiaAgentId')",
+                "thread": {
+                  "messages": [
+                    {
+                      "role": "user",
+                      "content": "Generate the InfoSec TPA (DPIA) report for OneTrust assessment @{items('For_each_completed_assessment')?['assessmentId']} (@{items('For_each_completed_assessment')?['name']}). Return the full report content."
+                    }
+                  ]
+                }
+              }
+            },
+            "runAfter": {}
+          },
+          "Wait_until_dpia_run_completes": {
+            "type": "Until",
+            "expression": "@not(equals(body('Poll_dpia_run_status')?['status'], 'in_progress'))",
+            "limit": { "count": 60, "timeout": "PT30M" },
+            "runAfter": { "Run_dpia_agent_on_assessment": [ "Succeeded" ] },
+            "actions": {
+              "Delay_before_poll": {
+                "type": "Wait",
+                "inputs": { "interval": { "count": 20, "unit": "Second" } },
+                "runAfter": {}
+              },
+              "Poll_dpia_run_status": {
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_dpia_agent_on_assessment')?['thread_id']}/runs/@{body('Run_dpia_agent_on_assessment')?['id']}",
+                  "queries": { "api-version": "@parameters('apiVersion')" },
+                  "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+                },
+                "runAfter": { "Delay_before_poll": [ "Succeeded" ] }
+              }
+            }
+          },
+          "Get_dpia_report_message": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_dpia_agent_on_assessment')?['thread_id']}/messages",
+              "queries": { "api-version": "@parameters('apiVersion')", "order": "desc", "limit": "1" },
+              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+            },
+            "runAfter": { "Wait_until_dpia_run_completes": [ "Succeeded" ] }
+          },
+          "Upload_report_to_SharePoint": {
+            "type": "Http",
+            "inputs": {
+              "method": "PUT",
+              "uri": "https://graph.microsoft.com/v1.0/sites/@{parameters('sharepointSiteId')}/drive/root:@{parameters('sharepointDrivePath')}/DPIA-@{items('For_each_completed_assessment')?['assessmentId']}.md:/content",
+              "headers": { "Content-Type": "text/markdown" },
+              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://graph.microsoft.com" },
+              "body": "@{first(body('Get_dpia_report_message')?['data'])?['content']?[0]?['text']?['value']}"
+            },
+            "runAfter": { "Get_dpia_report_message": [ "Succeeded" ] }
+          },
+          "Post_summary_to_Teams": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('teamsWebhookUrl')",
+              "headers": { "Content-Type": "application/json" },
+              "body": {
+                "text": "DPIA report generated for OneTrust assessment @{items('For_each_completed_assessment')?['name']} (@{items('For_each_completed_assessment')?['assessmentId']}). Stored in SharePoint: @{body('Upload_report_to_SharePoint')?['webUrl']}"
+              }
+            },
+            "runAfter": { "Upload_report_to_SharePoint": [ "Succeeded" ] }
+          }
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

@@ -1,0 +1,139 @@
+# Purpose: Microsoft Graph security API — Defender XDR incidents, alerts,
+#   advanced hunting, and Secure Score, used by the cyber-forum agent for
+#   threat briefs and by GRC agents for internal-posture evidence.
+# Auth: Entra ID OAuth 2.0 client-credentials.
+#   Token endpoint: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+#   Scope: https://graph.microsoft.com/.default
+#   App registration needs admin-consented application permissions:
+#   SecurityIncident.Read.All, SecurityAlert.Read.All,
+#   ThreatHunting.Read.All, SecurityEvents.Read.All.
+# Credentials: register an app in Entra ID (App registrations), store client
+#   id/secret in Azure Key Vault; never embed real secrets in this file.
+openapi: 3.0.3
+info:
+  title: Microsoft Graph Security (Defender XDR subset)
+  description: >-
+    Minimal Microsoft Graph security surface for incidents, alerts, advanced
+    hunting, and Secure Score.
+  version: "1.0"
+servers:
+  - url: https://graph.microsoft.com/v1.0
+security:
+  - oauth2ClientCredentials: []
+paths:
+  /security/incidents:
+    get:
+      operationId: listIncidents
+      summary: List Defender XDR incidents
+      description: >-
+        List security incidents from Defender XDR, filterable with OData,
+        e.g. $filter=status eq 'active' and severity eq 'high', $top=25.
+        Use to build the incident section of a cyber-forum threat brief or
+        to evidence incident-handling activity.
+      parameters:
+        - name: $filter
+          in: query
+          schema: { type: string }
+          description: OData filter, e.g. status eq 'active'.
+        - name: $top
+          in: query
+          schema: { type: integer, default: 25 }
+        - name: $orderby
+          in: query
+          schema: { type: string }
+          description: e.g. createdDateTime desc.
+      responses:
+        "200":
+          description: Collection of incidents.
+  /security/incidents/{id}:
+    get:
+      operationId: getIncident
+      summary: Get one incident
+      description: >-
+        Retrieve a single incident by id, including classification,
+        determination, and (with $expand=alerts) its constituent alerts.
+        Use to drill into an incident referenced in a brief.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: $expand
+          in: query
+          schema: { type: string }
+          description: e.g. alerts.
+      responses:
+        "200":
+          description: The incident.
+  /security/alerts_v2:
+    get:
+      operationId: listAlerts
+      summary: List security alerts (alerts_v2)
+      description: >-
+        List individual security alerts across Defender workloads. Supports
+        OData $filter/$top like listIncidents. Use when alert-level detail
+        (technique, evidence entities) is needed rather than the incident
+        rollup.
+      parameters:
+        - name: $filter
+          in: query
+          schema: { type: string }
+        - name: $top
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200":
+          description: Collection of alerts.
+  /security/runHuntingQuery:
+    post:
+      operationId: runHuntingQuery
+      summary: Run an advanced hunting (KQL) query
+      description: >-
+        Execute a KQL query against the Defender XDR advanced-hunting tables
+        (DeviceEvents, EmailEvents, IdentityLogonEvents, ...). Use for
+        targeted threat-hunting evidence, e.g. checking exposure to a CVE or
+        IOC set mentioned in a threat brief. Keep queries time-bounded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [Query]
+              properties:
+                Query:
+                  type: string
+                  description: The KQL query text.
+                Timespan:
+                  type: string
+                  description: ISO 8601 duration, e.g. P7D for last 7 days.
+      responses:
+        "200":
+          description: Query results (schema + rows).
+  /security/secureScores:
+    get:
+      operationId: listSecureScores
+      summary: List Microsoft Secure Scores
+      description: >-
+        List daily tenant Secure Score snapshots (current score, max score,
+        control breakdown). Use $top=1 for the latest. Evidence of internal
+        security posture for CISO reporting and benchmarking.
+      parameters:
+        - name: $top
+          in: query
+          schema: { type: integer, default: 1 }
+      responses:
+        "200":
+          description: Collection of secureScore snapshots.
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      description: >-
+        Entra ID client-credentials; request scope
+        https://graph.microsoft.com/.default.
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: Use app's admin-consented Graph permissions.

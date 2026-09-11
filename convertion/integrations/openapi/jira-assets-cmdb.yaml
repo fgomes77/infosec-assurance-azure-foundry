@@ -1,0 +1,108 @@
+# Purpose: Jira Service Management Assets (formerly Insight) REST API —
+#   CMDB queries for the GRC/TPRM agents: CI/supplier/service records via
+#   AQL, used for the DORA Register of Information and ICT concentration-risk
+#   analysis.
+# Auth: HTTP Basic (Atlassian account email + API token) or OAuth 2.0 bearer.
+#   API token: https://id.atlassian.com/manage-profile/security/api-tokens
+#   The {workspaceId} is discovered via
+#   GET https://{your-domain}.atlassian.net/rest/servicedeskapi/assets/workspace
+# Credentials: store in Azure Key Vault; never embed real secrets here.
+openapi: 3.0.3
+info:
+  title: JSM Assets CMDB (GRC/TPRM subset)
+  description: >-
+    Minimal JSM Assets (Insight) surface for reading configuration items,
+    supplier records, and service dependencies from the CMDB.
+  version: "1.0"
+servers:
+  - url: https://api.atlassian.com/jsm/assets/workspace/{workspaceId}
+    variables:
+      workspaceId:
+        default: your-workspace-id
+        description: JSM Assets workspace id (tenant-specific).
+security:
+  - basicAuth: []
+  - bearerAuth: []
+paths:
+  /v1/object/aql:
+    post:
+      operationId: aqlSearchObjects
+      summary: Search CMDB objects with AQL
+      description: >-
+        Query Assets objects with an AQL (Assets Query Language) expression,
+        e.g. objectType = "Supplier" AND "Criticality" = "Critical", or
+        objectType = "Service" AND "Provider" = "AcmeCloud". Primary tool for
+        building the DORA Register of Information and for concentration-risk
+        analysis (which services depend on which ICT third-party providers).
+        Results are paginated.
+      parameters:
+        - name: startAt
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: maxResults
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: includeAttributes
+          in: query
+          schema: { type: boolean, default: true }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qlQuery]
+              properties:
+                qlQuery:
+                  type: string
+                  description: The AQL query string.
+      responses:
+        "200":
+          description: Matching objects with their attributes.
+  /v1/object/{id}:
+    get:
+      operationId: getObject
+      summary: Get one CMDB object
+      description: >-
+        Retrieve a single Assets object (a CI, supplier, or service record)
+        by its numeric id, including all attributes such as owner,
+        criticality, contract references, and linked objects. Use after an
+        AQL search to pull the full record for a specific supplier or CI.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: The object id (numeric) or key.
+      responses:
+        "200":
+          description: The object with attributes.
+  /v1/objectschema/list:
+    get:
+      operationId: listObjectSchemas
+      summary: List object schemas
+      description: >-
+        List the Assets object schemas available in the workspace (e.g.
+        "IT Assets", "Suppliers", "Services"). Call first when the schema or
+        object-type landscape is unknown, to discover what can be queried
+        with AQL.
+      parameters:
+        - name: startAt
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: maxResults
+          in: query
+          schema: { type: integer, default: 50 }
+      responses:
+        "200":
+          description: Paginated list of object schemas.
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Atlassian account email as username, API token as password.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: OAuth 2.0 access token (Atlassian 3LO) with Assets scopes.

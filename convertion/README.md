@@ -61,9 +61,27 @@ python3 convert_skills.py       # writes ../build/agents/ + manifest.json
 # 4. Create the agents in Foundry (uploads knowledge, attaches tools)
 python3 create_agents.py        # uses PROJECT_ENDPOINT from .env / environment
 
-# 5. Verify
+# 5. Attach integrations + model tiers (Jira, OneTrust, Defender, SharePoint,
+#    SecurityScorecard, IAF API, ENX gateway MCP, Bing web search, o3-mini
+#    reasoning) — after creating the conn-* Foundry connections; see
+#    integrations/README.md
+python3 attach_integrations.py
+
+# 6. Verify
 python3 smoke_test.py --agent dora --prompt "Summarise DORA Art. 30 contractual provisions"
 ```
+
+## Integrations, workflows, Copilot
+
+The `integrations/` folder wires the agents into the Euronext toolchain —
+Jira Cloud, Jira Assets (CMDB), OneTrust, SecurityScorecard, Microsoft
+Defender (Graph security), SharePoint (Graph), the internal IAF API, the ENX
+gateway MCP server, Grounding-with-Bing web search, and an `o3-mini`
+reasoning tier for analytic agents (see `integrations/README.md` and
+`integrations/registry.json`). `workflows/` holds Logic Apps definitions
+replacing Claude Routines (OneTrust intake, Defender incident briefs,
+scheduled DeepSearch, Jira↔IAF sync), and `integrations/copilot/` documents
+surfacing the agents in Microsoft 365 Copilot.
 
 Re-running steps 3–4 is idempotent by agent name: existing agents are updated
 in place (instructions and knowledge refreshed), new skills become new agents.

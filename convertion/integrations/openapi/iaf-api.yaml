@@ -1,0 +1,153 @@
+# ============================================================================
+# TEMPLATE — Euronext InfoSec Assurance Framework (IAF) internal API
+#
+# The paths, parameters, and schemas below are PLAUSIBLE PLACEHOLDERS.
+# Align every operation to the real internal IAF API specification before
+# attaching this file to any Foundry agent — do not use as-is in production.
+#
+# Purpose: internal assurance data — supplier assessments, findings, the
+#   control catalogue, and supplier risk profiles — for the GRC/TPRM agents.
+# Auth: OAuth 2.0 client-credentials against the internal identity provider
+#   (placeholder tokenUrl below), OR an API key header (X-API-Key) where the
+#   internal gateway issues static keys. Confirm which model the real
+#   gateway enforces.
+# Credentials: request from the IAF platform team; store in Azure Key Vault.
+#   Never embed real secrets in this file.
+# ============================================================================
+openapi: 3.0.3
+info:
+  title: IAF Internal API (TEMPLATE)
+  description: >-
+    TEMPLATE spec for the internal InfoSec Assurance Framework API. Align
+    paths and schemas to the real internal spec before use.
+  version: "0.1-template"
+servers:
+  - url: https://{iaf-host}/api/v1
+    variables:
+      iaf-host:
+        default: iaf.internal.example
+        description: Internal IAF API hostname (environment-specific).
+security:
+  - oauth2ClientCredentials: []
+  - apiKeyAuth: []
+paths:
+  /assessments:
+    get:
+      operationId: listSupplierAssessments
+      summary: List supplier assessments
+      description: >-
+        List supplier security assessments with paging and filters (supplier
+        id, status, assessment type). Use to locate a supplier's current or
+        historical assurance assessments before drilling into one.
+      parameters:
+        - name: supplierId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string }
+          description: e.g. draft, in_review, completed.
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated assessment summaries.
+  /assessments/{id}:
+    get:
+      operationId: getAssessment
+      summary: Get one assessment
+      description: >-
+        Retrieve full detail of one assessment: scope, control responses,
+        scores, findings, and approval state. Primary input for report and
+        summary generation.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Assessment detail.
+  /findings:
+    post:
+      operationId: submitFinding
+      summary: Submit a new finding
+      description: >-
+        Record a new security finding against a supplier or assessment
+        (title, description, severity, affected control, recommended
+        remediation, due date). Use when an agent's analysis surfaces a gap
+        that must enter the assurance workflow.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [supplierId, title, severity]
+              properties:
+                supplierId: { type: string }
+                assessmentId: { type: string }
+                title: { type: string }
+                description: { type: string }
+                severity:
+                  type: string
+                  enum: [low, medium, high, critical]
+                controlId: { type: string }
+                remediation: { type: string }
+                dueDate: { type: string, format: date }
+      responses:
+        "201":
+          description: Created finding.
+  /controls:
+    get:
+      operationId: getControlCatalogue
+      summary: Get the control catalogue
+      description: >-
+        Retrieve the IAF control catalogue (control ids, statements, domain,
+        framework mappings such as ISO 27001 / DORA / NIS2). Use to map
+        findings and questionnaire answers to canonical internal controls.
+      parameters:
+        - name: domain
+          in: query
+          schema: { type: string }
+          description: Optional filter by control domain.
+      responses:
+        "200":
+          description: Control catalogue entries.
+  /suppliers/{id}/risk-profile:
+    get:
+      operationId: getSupplierRiskProfile
+      summary: Get a supplier's risk profile
+      description: >-
+        Retrieve the consolidated risk profile for one supplier: inherent
+        and residual risk ratings, criticality tier, open findings count,
+        last assessment date, and concentration flags. Headline internal
+        evidence for TPRM reporting and DORA Register of Information.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Supplier risk profile.
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      description: PLACEHOLDER — replace tokenUrl with the real internal IdP endpoint.
+      flows:
+        clientCredentials:
+          tokenUrl: https://{iaf-host}/oauth/token
+          scopes:
+            iaf.read: Read assessments, controls, risk profiles.
+            iaf.write: Submit findings.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Alternative static key issued by the internal gateway.

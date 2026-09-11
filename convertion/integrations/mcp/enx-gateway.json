@@ -1,0 +1,14 @@
+{
+  "_comment": "ENX Gateway MCP — template for attaching the Euronext internal gateway MCP server as a tool on an Azure AI Foundry agent. Fill server_url with the tenant's gateway MCP endpoint and replace allowed_tools with the actual tool names from the gateway's own tool listing (query the server's tools/list, then allowlist ONLY the tools the agent needs — least privilege). The bearer token must be stored in Azure Key Vault and injected at deploy time (e.g. by create_agents.py reading a Key Vault secret via managed identity, or an azd/pipeline variable) — NEVER commit a real token to this repository. Placeholders in {braces} are tenant-specific values.",
+  "type": "mcp",
+  "server_label": "enx_gateway",
+  "server_url": "https://{enx-gateway-host}/mcp",
+  "allowed_tools": [
+    "{tool-name-1, e.g. search_supplier_register}",
+    "{tool-name-2, e.g. get_assessment_status}",
+    "{tool-name-3, e.g. submit_finding}"
+  ],
+  "headers": {
+    "Authorization": "Bearer {token-from-key-vault}"
+  }
+}

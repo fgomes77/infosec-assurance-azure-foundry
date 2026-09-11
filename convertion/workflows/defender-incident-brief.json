@@ -1,0 +1,126 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "apiVersion": { "type": "string", "defaultValue": "{foundry-api-version}" },
+      "cyberForumAgentId": { "type": "string", "defaultValue": "{cyber-forum-agent-id}" },
+      "jiraBaseUrl": { "type": "string", "defaultValue": "https://{jira-tenant}.atlassian.net" },
+      "jiraAuthHeader": { "type": "securestring", "defaultValue": "Basic {jira-basic-auth-from-key-vault}" },
+      "jiraProjectKey": { "type": "string", "defaultValue": "{jira-project-key}" }
+    },
+    "triggers": {
+      "Defender_incident_webhook": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "incidentId": { "type": "string" },
+              "title": { "type": "string" },
+              "severity": { "type": "string" },
+              "alerts": { "type": "array" }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Run_cyber_forum_agent_on_incident": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+          "queries": { "api-version": "@parameters('apiVersion')" },
+          "headers": { "Content-Type": "application/json" },
+          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" },
+          "body": {
+            "assistant_id": "@parameters('cyberForumAgentId')",
+            "thread": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Produce a concise incident brief (impact, likely TTPs, affected third parties if any, recommended next actions) for this Defender/Sentinel incident JSON: @{string(triggerBody())}"
+                }
+              ]
+            }
+          }
+        },
+        "runAfter": {}
+      },
+      "Wait_until_brief_run_completes": {
+        "type": "Until",
+        "expression": "@not(equals(body('Poll_brief_run_status')?['status'], 'in_progress'))",
+        "limit": { "count": 30, "timeout": "PT10M" },
+        "runAfter": { "Run_cyber_forum_agent_on_incident": [ "Succeeded" ] },
+        "actions": {
+          "Delay_before_poll": {
+            "type": "Wait",
+            "inputs": { "interval": { "count": 10, "unit": "Second" } },
+            "runAfter": {}
+          },
+          "Poll_brief_run_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_cyber_forum_agent_on_incident')?['thread_id']}/runs/@{body('Run_cyber_forum_agent_on_incident')?['id']}",
+              "queries": { "api-version": "@parameters('apiVersion')" },
+              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+            },
+            "runAfter": { "Delay_before_poll": [ "Succeeded" ] }
+          }
+        }
+      },
+      "Get_incident_brief_message": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_cyber_forum_agent_on_incident')?['thread_id']}/messages",
+          "queries": { "api-version": "@parameters('apiVersion')", "order": "desc", "limit": "1" },
+          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+        },
+        "runAfter": { "Wait_until_brief_run_completes": [ "Succeeded" ] }
+      },
+      "Create_Jira_issue_with_brief": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "@parameters('jiraAuthHeader')"
+          },
+          "body": {
+            "fields": {
+              "project": { "key": "@{parameters('jiraProjectKey')}" },
+              "issuetype": { "name": "Task" },
+              "summary": "Incident brief: @{triggerBody()?['title']} (@{triggerBody()?['incidentId']}, severity @{triggerBody()?['severity']})",
+              "description": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
+            }
+          }
+        },
+        "runAfter": { "Get_incident_brief_message": [ "Succeeded" ] }
+      },
+      "Respond_200_to_webhook_caller": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "status": "brief_created",
+            "jiraIssueKey": "@{body('Create_Jira_issue_with_brief')?['key']}"
+          }
+        },
+        "runAfter": { "Create_Jira_issue_with_brief": [ "Succeeded" ] }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

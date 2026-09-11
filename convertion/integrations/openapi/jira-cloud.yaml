@@ -1,0 +1,152 @@
+# Purpose: Atlassian Jira Cloud REST API v3 — trimmed to the operations the
+#   GRC/TPRM agents need to raise and track remediation tickets and TPRM
+#   finding tickets (search, read, create, comment, transition).
+# Auth: HTTP Basic (Atlassian account email + API token) OR OAuth 2.0 (3LO).
+#   Create an API token at https://id.atlassian.com/manage-profile/security/api-tokens
+#   For OAuth 2.0, register an app at https://developer.atlassian.com/console.
+# Credentials: store in Azure Key Vault; reference from the Foundry agent's
+#   OpenAPI tool connection. Never embed real secrets in this file.
+openapi: 3.0.3
+info:
+  title: Jira Cloud (GRC/TPRM subset)
+  description: >-
+    Minimal Jira Cloud v3 surface for raising and tracking remediation and
+    third-party-risk finding tickets from Foundry agents.
+  version: "3.0"
+servers:
+  - url: https://{your-domain}.atlassian.net
+    variables:
+      your-domain:
+        default: your-domain
+        description: Atlassian Cloud site name (tenant-specific).
+security:
+  - basicAuth: []
+  - oauth2: [read:jira-work, write:jira-work]
+paths:
+  /rest/api/3/search/jql:
+    post:
+      operationId: searchIssuesJql
+      summary: Search issues with JQL
+      description: >-
+        Search Jira issues using a JQL query. Use to find open remediation or
+        TPRM finding tickets, e.g. project = TPRM AND status != Done AND
+        labels = supplier-finding. Returns paginated issue summaries.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jql]
+              properties:
+                jql: { type: string, description: JQL query string. }
+                maxResults: { type: integer, default: 50 }
+                fields:
+                  type: array
+                  items: { type: string }
+                  description: Fields to return, e.g. summary, status, assignee, duedate.
+                nextPageToken: { type: string, description: Pagination token from a previous page. }
+      responses:
+        "200":
+          description: Matching issues.
+  /rest/api/3/issue/{issueIdOrKey}:
+    get:
+      operationId: getIssue
+      summary: Get a single issue
+      description: >-
+        Retrieve full details of one issue (status, assignee, description,
+        comments, due date) by key, e.g. TPRM-123. Use when a finding ticket
+        needs to be summarised or its remediation status verified.
+      parameters:
+        - { name: issueIdOrKey, in: path, required: true, schema: { type: string } }
+        - { name: fields, in: query, schema: { type: string }, description: Comma-separated fields to return. }
+      responses:
+        "200":
+          description: The issue.
+  /rest/api/3/issue:
+    post:
+      operationId: createIssue
+      summary: Create an issue
+      description: >-
+        Create a new Jira issue — typically a remediation task or TPRM
+        finding ticket. Provide project key, issue type, summary, and a
+        description in Atlassian Document Format (ADF).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fields]
+              properties:
+                fields:
+                  type: object
+                  description: >-
+                    Issue fields: project {key}, issuetype {name}, summary,
+                    description (ADF), labels, priority, duedate, assignee.
+      responses:
+        "201":
+          description: Created issue (id, key, self).
+  /rest/api/3/issue/{issueIdOrKey}/comment:
+    post:
+      operationId: addComment
+      summary: Add a comment to an issue
+      description: >-
+        Add a comment (Atlassian Document Format body) to an existing issue,
+        e.g. to record assessment evidence, supplier responses, or status
+        updates on a remediation ticket.
+      parameters:
+        - { name: issueIdOrKey, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: object, description: Comment body in Atlassian Document Format. }
+      responses:
+        "201":
+          description: Created comment.
+  /rest/api/3/issue/{issueIdOrKey}/transitions:
+    post:
+      operationId: transitionIssue
+      summary: Transition an issue's workflow status
+      description: >-
+        Move an issue through its workflow (e.g. To Do -> In Progress ->
+        Done) by transition id. GET the same path first if the valid
+        transition ids are unknown. Use to close out remediated findings.
+      parameters:
+        - { name: issueIdOrKey, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transition]
+              properties:
+                transition:
+                  type: object
+                  properties:
+                    id: { type: string }
+      responses:
+        "204":
+          description: Transition applied.
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Atlassian account email as username, API token as password.
+    oauth2:
+      type: oauth2
+      description: Atlassian OAuth 2.0 (3LO).
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.atlassian.com/authorize
+          tokenUrl: https://auth.atlassian.com/oauth/token
+          scopes:
+            read:jira-work: Read issues and searches.
+            write:jira-work: Create and update issues, comments, transitions.

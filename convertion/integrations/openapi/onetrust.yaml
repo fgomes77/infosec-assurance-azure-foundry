@@ -1,0 +1,123 @@
+# Purpose: OneTrust API — assessments and vendor inventory, trimmed to what
+#   the dpia, ciso-reporting, and onetrust-form-b agents need: list/read/
+#   export supplier assessments and enumerate vendor inventory records.
+# Auth: OAuth 2.0 client-credentials. Create client credentials in OneTrust
+#   under Settings > Credentials (client id + secret, scope-limited to
+#   Assessments and Inventory read). Token endpoint:
+#   https://{your-tenant}.onetrust.com/api/access/v1/oauth/token
+# Credentials: store client id/secret in Azure Key Vault; never embed real
+#   secrets in this file.
+openapi: 3.0.3
+info:
+  title: OneTrust (GRC/TPRM subset)
+  description: >-
+    Minimal OneTrust surface for reading third-party assessments and vendor
+    inventory to feed DPIA, CISO reporting, and Form B workflows.
+  version: "2.0"
+servers:
+  - url: https://{your-tenant}.onetrust.com
+    variables:
+      your-tenant:
+        default: your-tenant
+        description: OneTrust tenant hostname prefix (tenant-specific).
+security:
+  - oauth2ClientCredentials: []
+paths:
+  /api/assessment/v2/assessments:
+    get:
+      operationId: listAssessments
+      summary: List assessments
+      description: >-
+        List assessments with paging and filters. Use to find a supplier's
+        Infosec Form assessments (e.g. by name, status, or template) before
+        fetching details or exporting the PDF for the dpia / ciso-reporting
+        agents.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+          description: Zero-based page index.
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+          description: Page size (max 200).
+        - name: name
+          in: query
+          schema: { type: string }
+          description: Filter by assessment name (contains match).
+        - name: status
+          in: query
+          schema: { type: string }
+          description: Filter by status, e.g. NOT_STARTED, IN_PROGRESS, UNDER_REVIEW, COMPLETED.
+        - name: templateName
+          in: query
+          schema: { type: string }
+          description: Filter by template, e.g. an Infosec Form or Form B template name.
+      responses:
+        "200":
+          description: Paginated list of assessment summaries.
+  /api/assessment/v2/assessments/{assessmentId}:
+    get:
+      operationId: getAssessment
+      summary: Get one assessment
+      description: >-
+        Retrieve full detail for one assessment by id: sections, questions,
+        responses, risk flags, and approval state. Use when the agent needs
+        the actual answers rather than the exported PDF.
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Assessment detail with questions and responses.
+  /api/assessment/v2/assessments/{assessmentId}/export:
+    get:
+      operationId: exportAssessmentPdf
+      summary: Export an assessment as PDF
+      description: >-
+        Export the assessment report as a PDF document — the standard input
+        artifact for the dpia, ciso-reporting, and pptx executive-summary
+        agents. The response is a binary PDF stream.
+      parameters:
+        - name: assessmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: PDF export of the assessment.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+  /api/inventory/v2/inventories/vendors:
+    get:
+      operationId: listInventoryVendors
+      summary: List vendor inventory records
+      description: >-
+        List vendor (third-party) inventory records with paging. Use to map
+        assessments to vendors, pull vendor attributes (criticality, owner,
+        location) for the Register of Information, and enumerate the supplier
+        population for TPRM reporting.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: Paginated vendor inventory records.
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      description: OneTrust OAuth 2.0 client-credentials grant.
+      flows:
+        clientCredentials:
+          tokenUrl: /api/access/v1/oauth/token
+          scopes: {}

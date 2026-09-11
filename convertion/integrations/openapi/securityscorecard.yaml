@@ -1,0 +1,99 @@
+# Purpose: SecurityScorecard API — external security-ratings evidence for
+#   DeepSearch/TPRM supplier assessments: overall score, factor breakdown,
+#   score history, and portfolio enumeration.
+# Auth: API key sent as header "Authorization: Token {key}". Generate a key
+#   in the SecurityScorecard platform under My Settings > API. Read-only
+#   scope is sufficient.
+# Credentials: store the key in Azure Key Vault; never embed real secrets
+#   in this file.
+openapi: 3.0.3
+info:
+  title: SecurityScorecard (TPRM subset)
+  description: >-
+    Minimal SecurityScorecard surface for pulling external security ratings
+    as evidence in DeepSearch and TPRM assessments.
+  version: "1.0"
+servers:
+  - url: https://api.securityscorecard.io
+security:
+  - apiKeyAuth: []
+paths:
+  /companies/{domain}:
+    get:
+      operationId: getCompanySummary
+      summary: Get a company's current score summary
+      description: >-
+        Retrieve the current overall security rating (letter grade and 0-100
+        score), industry, and size for a company identified by its primary
+        domain, e.g. acme.com. Use as the headline external-rating evidence
+        in a DeepSearch or TPRM assessment.
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string }
+          description: Primary domain of the company, e.g. acme.com.
+      responses:
+        "200":
+          description: Company summary with overall score and grade.
+  /companies/{domain}/factors:
+    get:
+      operationId: getCompanyFactors
+      summary: Get a company's factor-level scores
+      description: >-
+        Retrieve the per-factor breakdown (network security, DNS health,
+        patching cadence, endpoint security, IP reputation, application
+        security, cubit score, hacker chatter, information leak, social
+        engineering) with grades and issue counts. Use to identify which
+        control domains drive a poor rating and to cross-check questionnaire
+        answers against outside-in evidence.
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Factor scores with grades and issue summary counts.
+  /companies/{domain}/history/score:
+    get:
+      operationId: getCompanyHistory
+      summary: Get a company's score history
+      description: >-
+        Retrieve the historical daily overall scores over a date range. Use
+        to show trend (improving/degrading posture) in assessment dashboards
+        and CISO reports.
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema: { type: string }
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+          description: Start date (YYYY-MM-DD).
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+          description: End date (YYYY-MM-DD).
+      responses:
+        "200":
+          description: Time series of overall scores.
+  /portfolios:
+    get:
+      operationId: getPortfolios
+      summary: List portfolios
+      description: >-
+        List the portfolios (monitored vendor groups) available to the
+        account. Use to enumerate which supplier populations are under
+        continuous monitoring before drilling into individual companies.
+      responses:
+        "200":
+          description: List of portfolios with ids and names.
+components:
+  securitySchemes:
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'Format: "Token {key}" — the literal word Token, a space, then the API key.'

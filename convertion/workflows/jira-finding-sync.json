@@ -1,0 +1,85 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "jiraBaseUrl": { "type": "string", "defaultValue": "https://{jira-tenant}.atlassian.net" },
+      "jiraAuthHeader": { "type": "securestring", "defaultValue": "Basic {jira-basic-auth-from-key-vault}" },
+      "jiraJql": {
+        "type": "string",
+        "defaultValue": "project = {jira-project-key} AND labels = tprm-finding AND updated >= -1h"
+      },
+      "iafBaseUrl": { "type": "string", "defaultValue": "https://{iaf-api-host}" },
+      "iafApiToken": { "type": "securestring", "defaultValue": "{iaf-token-from-key-vault}" }
+    },
+    "triggers": {
+      "Hourly_recurrence": {
+        "type": "Recurrence",
+        "recurrence": { "frequency": "Hour", "interval": 1 }
+      }
+    },
+    "actions": {
+      "Search_updated_TPRM_finding_tickets": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/search",
+          "headers": {
+            "Content-Type": "application/json",
+            "Authorization": "@parameters('jiraAuthHeader')"
+          },
+          "body": {
+            "jql": "@{parameters('jiraJql')}",
+            "maxResults": 100,
+            "fields": [ "summary", "status", "labels", "customfield_finding_reference", "updated" ]
+          }
+        },
+        "runAfter": {}
+      },
+      "For_each_updated_finding_ticket": {
+        "type": "Foreach",
+        "foreach": "@body('Search_updated_TPRM_finding_tickets')?['issues']",
+        "runAfter": { "Search_updated_TPRM_finding_tickets": [ "Succeeded" ] },
+        "actions": {
+          "Submit_finding_status_to_IAF": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('iafBaseUrl')}/api/v1/findings/submitFinding",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer @{parameters('iafApiToken')}"
+              },
+              "body": {
+                "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
+                "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                "summary": "@{items('For_each_updated_finding_ticket')?['fields']?['summary']}",
+                "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}",
+                "updatedAt": "@{items('For_each_updated_finding_ticket')?['fields']?['updated']}",
+                "source": "jira-finding-sync"
+              }
+            },
+            "runAfter": {}
+          },
+          "Add_Jira_comment_on_sync_failure": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue/@{items('For_each_updated_finding_ticket')?['key']}/comment",
+              "headers": {
+                "Content-Type": "application/json",
+                "Authorization": "@parameters('jiraAuthHeader')"
+              },
+              "body": {
+                "body": "Automated IAF sync FAILED for this finding at @{utcNow()}. IAF submitFinding returned status @{outputs('Submit_finding_status_to_IAF')?['statusCode']}. The finding status in IAF may be stale — please retry or escalate to the assurance tooling team."
+              }
+            },
+            "runAfter": { "Submit_finding_status_to_IAF": [ "Failed", "TimedOut" ] }
+          }
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

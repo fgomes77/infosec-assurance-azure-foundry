@@ -20,6 +20,15 @@ param modelVersion string = '2024-11-20'
 @description('Model deployment capacity (thousands of tokens-per-minute)')
 param modelCapacity int = 50
 
+@description('Reasoning model for analytic agents (regulatory interpretation, OSINT synthesis)')
+param reasoningModelName string = 'o3-mini'
+
+@description('Reasoning model version (empty = provider default)')
+param reasoningModelVersion string = ''
+
+@description('Provision Grounding with Bing Search for agent web research')
+param enableWebSearch bool = true
+
 // ---------------------------------------------------------------- Foundry
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   name: '${baseName}-aif'
@@ -61,6 +70,41 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
   }
 }
 
+resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+  parent: foundry
+  name: reasoningModelName
+  dependsOn: [modelDeployment] // deployments must be created serially
+  sku: { name: 'GlobalStandard', capacity: modelCapacity }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: reasoningModelName
+      version: empty(reasoningModelVersion) ? null : reasoningModelVersion
+    }
+  }
+}
+
+// ------------------------------------------ web search (Bing grounding)
+resource bing 'Microsoft.Bing/accounts@2020-06-10' = if (enableWebSearch) {
+  name: '${baseName}-bing'
+  location: 'global'
+  kind: 'Bing.Grounding'
+  sku: { name: 'G1' }
+}
+
+resource bingConnection 'Microsoft.CognitiveServices/accounts/connections@2025-04-01-preview' = if (enableWebSearch) {
+  parent: foundry
+  name: 'bing-grounding'
+  properties: {
+    category: 'GroundingWithBingSearch'
+    target: 'https://api.bing.microsoft.com/'
+    authType: 'ApiKey'
+    isSharedToAll: true
+    credentials: { key: enableWebSearch ? bing!.listKeys().key1 : '' }
+    metadata: { ApiType: 'Azure', ResourceId: enableWebSearch ? bing!.id : '' }
+  }
+}
+
 // ------------------------------------------------- deliverables storage
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: toLower(replace('${baseName}sa', '-', ''))
@@ -83,4 +127,6 @@ output projectEndpoint string = 'https://${foundry.properties.customSubDomainNam
 output foundryAccountName string = foundry.name
 output projectName string = project.name
 output modelDeploymentName string = modelDeployment.name
+output reasoningModelDeploymentName string = reasoningDeployment.name
+output bingConnectionName string = enableWebSearch ? 'bing-grounding' : ''
 output storageAccountName string = storage.name

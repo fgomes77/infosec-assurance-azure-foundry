@@ -1,0 +1,38 @@
+{
+  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file.",
+  "connections": {
+    "jira-cloud":        { "type": "openapi", "spec": "integrations/openapi/jira-cloud.yaml",        "foundry_connection": "conn-jira-cloud" },
+    "jira-assets-cmdb":  { "type": "openapi", "spec": "integrations/openapi/jira-assets-cmdb.yaml",  "foundry_connection": "conn-jira-assets" },
+    "onetrust":          { "type": "openapi", "spec": "integrations/openapi/onetrust.yaml",          "foundry_connection": "conn-onetrust" },
+    "securityscorecard": { "type": "openapi", "spec": "integrations/openapi/securityscorecard.yaml", "foundry_connection": "conn-securityscorecard" },
+    "defender-graph":    { "type": "openapi", "spec": "integrations/openapi/defender-graph.yaml",    "foundry_connection": "conn-defender-graph" },
+    "sharepoint-graph":  { "type": "openapi", "spec": "integrations/openapi/sharepoint-graph.yaml",  "foundry_connection": "conn-sharepoint-graph" },
+    "iaf-api":           { "type": "openapi", "spec": "integrations/openapi/iaf-api.yaml",           "foundry_connection": "conn-iaf-api" },
+    "enx-gateway-mcp":   { "type": "mcp",     "config": "integrations/mcp/enx-gateway.json" },
+    "web-search":        { "type": "bing_grounding", "foundry_connection": "bing-grounding" }
+  },
+  "agents": {
+    "deepsearch-protocol":                  { "tools": ["web-search", "securityscorecard", "iaf-api", "enx-gateway-mcp"], "model_tier": "reasoning" },
+    "ai-deepsearch-osint-gathering-report": { "tools": ["web-search", "securityscorecard"], "model_tier": "reasoning" },
+    "cyber-forum":                          { "tools": ["web-search", "defender-graph", "jira-cloud", "enx-gateway-mcp"], "model_tier": "reasoning" },
+    "dpia":                                 { "tools": ["onetrust", "sharepoint-graph", "iaf-api"], "model_tier": "chat" },
+    "onetrust-form-b":                      { "tools": ["onetrust", "sharepoint-graph"], "model_tier": "chat" },
+    "ciso-reporting":                       { "tools": ["onetrust", "sharepoint-graph", "jira-cloud"], "model_tier": "chat" },
+    "ciso-executive-summary":               { "tools": ["onetrust", "sharepoint-graph"], "model_tier": "chat" },
+    "enx-tprm-control-center":              { "tools": ["enx-gateway-mcp"], "model_tier": "chat" },
+    "dora":                                 { "tools": ["web-search", "jira-assets-cmdb", "iaf-api"], "model_tier": "reasoning" },
+    "nis2":                                 { "tools": ["web-search"], "model_tier": "reasoning" },
+    "eu-ai-act":                            { "tools": ["web-search"], "model_tier": "reasoning" },
+    "iso27001":                             { "tools": ["web-search", "sharepoint-graph"], "model_tier": "reasoning" },
+    "iso42001":                             { "tools": ["web-search", "sharepoint-graph"], "model_tier": "reasoning" },
+    "tpsrca-assessment-engine":             { "tools": ["securityscorecard", "iaf-api", "jira-assets-cmdb"], "model_tier": "reasoning" },
+    "tprm-slide-generator":                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
+    "pptx-executive-summary-ciso":          { "tools": ["sharepoint-graph"], "model_tier": "chat" },
+    "pdf-full-coverage-analyzer":           { "tools": [], "model_tier": "reasoning" },
+    "whisperx-transcribe-diarize":          { "tools": [], "model_tier": "chat" },
+    "docx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
+    "pdf":                                  { "tools": ["sharepoint-graph"], "model_tier": "chat" },
+    "pptx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
+    "xlsx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" }
+  }
+}

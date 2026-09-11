@@ -1,0 +1,145 @@
+# Purpose: Microsoft Graph SharePoint/OneDrive files API — read the evidence
+#   repository (assessment PDFs, contracts, policies) and publish generated
+#   deliverables (HTML dashboards, DOCX reports, PPTX decks) back to
+#   SharePoint document libraries.
+# Auth: Entra ID OAuth 2.0 client-credentials (same app pattern as the
+#   defender-graph spec). Token endpoint:
+#   https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+#   Scope: https://graph.microsoft.com/.default
+#   App permissions (admin-consented): Sites.Read.All (read) and
+#   Sites.ReadWrite.All or Sites.Selected (publish).
+# Credentials: Entra app registration; client id/secret in Azure Key Vault.
+#   Never embed real secrets in this file.
+openapi: 3.0.3
+info:
+  title: Microsoft Graph SharePoint Files (subset)
+  description: >-
+    Minimal Graph surface for locating SharePoint sites, browsing and
+    downloading evidence files, uploading generated deliverables, and
+    searching content.
+  version: "1.0"
+servers:
+  - url: https://graph.microsoft.com/v1.0
+security:
+  - oauth2ClientCredentials: []
+paths:
+  /sites:
+    get:
+      operationId: searchSites
+      summary: Search SharePoint sites
+      description: >-
+        Find SharePoint sites by keyword (e.g. search=Infosec Assurance) to
+        obtain the siteId used by the other operations. Call first when the
+        target site is known only by name.
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema: { type: string }
+          description: Keyword(s) to match against site names.
+      responses:
+        "200":
+          description: Matching sites with ids and webUrls.
+  /sites/{siteId}/drive/root/children:
+    get:
+      operationId: listDriveItems
+      summary: List files in a site's default document library root
+      description: >-
+        List folders and files at the root of the site's default drive.
+        Navigate the evidence repository structure (e.g. per-supplier
+        folders) and collect driveId/itemId values for download or upload.
+      parameters:
+        - { name: siteId, in: path, required: true, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        "200":
+          description: Collection of driveItems (id, name, folder/file facet, size).
+  /drives/{driveId}/items/{itemId}/content:
+    get:
+      operationId: downloadFile
+      summary: Download a file's content
+      description: >-
+        Download the binary content of a file (e.g. a OneTrust assessment
+        PDF, a supplier contract, a policy document) by driveId and itemId.
+        Feed the bytes to the document-analysis agents.
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: File content stream.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /drives/{driveId}/items/{parentId}:/{filename}:/content:
+    put:
+      operationId: uploadFile
+      summary: Upload (or overwrite) a file
+      description: >-
+        Upload a generated deliverable (HTML dashboard, DOCX report, PPTX
+        deck) into the folder identified by parentId, creating or replacing
+        {filename}. Simple upload — suitable up to ~250 MB; the generated
+        deliverables are far below that.
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: parentId, in: path, required: true, schema: { type: string }, description: itemId of the destination folder. }
+        - { name: filename, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: Created or replaced driveItem.
+  /search/query:
+    post:
+      operationId: searchContent
+      summary: Search file content across SharePoint
+      description: >-
+        Full-text search across SharePoint/OneDrive content (entityTypes
+        driveItem) — e.g. find prior assessments, certificates, or evidence
+        mentioning a supplier name, before downloading the hits.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requests]
+              properties:
+                requests:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      entityTypes:
+                        type: array
+                        items: { type: string }
+                        example: [driveItem]
+                      query:
+                        type: object
+                        properties:
+                          queryString: { type: string }
+                      size:
+                        type: integer
+                        default: 25
+      responses:
+        "200":
+          description: Search hits with resource metadata.
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      description: >-
+        Entra ID client-credentials; request scope
+        https://graph.microsoft.com/.default.
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: Use app's admin-consented Graph permissions.
