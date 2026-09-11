@@ -79,7 +79,11 @@ def persona() -> str:
 
 
 def gather_knowledge_files() -> list[Path]:
-    files = sorted(BUILD.glob("agents/*/knowledge/*"))
+    # every converted skill's knowledge + the advisor knowledge pack, which
+    # grounds the persona domains the skill export does not cover (ISO 27005,
+    # NIST CSF 2.0, CIS v8.1, GDPR Art. 28/SCCs, management frameworks)
+    files = sorted(BUILD.glob("agents/*/knowledge/*")) + \
+        sorted((CONV / "agents" / "advisor-knowledge").glob("*.md"))
     # de-duplicate identical twins (e.g. the two slide-generator skills)
     seen, out = set(), []
     for f in files:
