@@ -1,5 +1,5 @@
 {
-  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file.",
+  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows.",
   "connections": {
     "jira-cloud":        { "type": "openapi", "spec": "integrations/openapi/jira-cloud.yaml",        "foundry_connection": "conn-jira-cloud" },
     "jira-assets-cmdb":  { "type": "openapi", "spec": "integrations/openapi/jira-assets-cmdb.yaml",  "foundry_connection": "conn-jira-assets" },

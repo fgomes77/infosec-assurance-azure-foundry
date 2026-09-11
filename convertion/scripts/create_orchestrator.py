@@ -63,6 +63,9 @@ Never fabricate a specialist's output; if a handoff fails, say so and give
 your best direct answer, clearly labelled as such.
 """
 
+# Same mandatory gate the converter appends to every specialist agent.
+from convert_skills import APPROVAL_GATE  # noqa: E402
+
 
 def persona() -> str:
     text = (CONV / "agents" / "persona_system_prompt.md").read_text(encoding="utf-8")
@@ -97,7 +100,7 @@ def main() -> int:
     knowledge = gather_knowledge_files()
     advisor_instructions = (persona() + "\n\n---\n\n" +
                             (CONV / "agents" / "advisor_instructions.md")
-                            .read_text(encoding="utf-8"))
+                            .read_text(encoding="utf-8") + APPROVAL_GATE)
 
     if args.dry_run:
         print(f"[dry-run] {ADVISOR}: model={REASONING_MODEL}, "
@@ -162,7 +165,8 @@ def main() -> int:
     okwargs = dict(model=REASONING_MODEL, name=ORCHESTRATOR,
                    description="Entry point: routes and decomposes InfoSec "
                                "Assurance requests across all agents.",
-                   instructions=persona() + "\n\n---\n\n" + ORCHESTRATOR_INSTRUCTIONS,
+                   instructions=(persona() + "\n\n---\n\n"
+                                 + ORCHESTRATOR_INSTRUCTIONS + APPROVAL_GATE),
                    tools=otools)
     if ORCHESTRATOR in live:
         agents_client.update_agent(live[ORCHESTRATOR].id, **okwargs)

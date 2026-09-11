@@ -40,12 +40,24 @@ REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o3-mini")
 REGISTRY = json.loads((CONV / "integrations" / "registry.json").read_text())
 
 
-def load_openapi_spec(rel: str) -> dict:
+def load_openapi_spec(rel: str, read_only: bool) -> dict:
+    """Load a spec; unless write access was explicitly granted, strip every
+    non-GET operation so the agent is technically incapable of submitting
+    (see governance/HUMAN_APPROVAL.md, Layer 1)."""
     import yaml
-    return yaml.safe_load((CONV / rel).read_text(encoding="utf-8"))
+    spec = yaml.safe_load((CONV / rel).read_text(encoding="utf-8"))
+    if read_only:
+        for path, ops in list(spec.get("paths", {}).items()):
+            for verb in list(ops):
+                if verb.lower() not in ("get", "parameters"):
+                    del ops[verb]
+            if not any(v.lower() == "get" for v in ops):
+                del spec["paths"][path]
+    return spec
 
 
-def build_tools(agent_tools: list[str], dry: bool) -> list:
+def build_tools(agent_tools: list[str], write_connections: list[str],
+                dry: bool) -> list:
     """Return Foundry tool definitions for the named registry connections."""
     if dry:
         return []
@@ -57,13 +69,16 @@ def build_tools(agent_tools: list[str], dry: bool) -> list:
     for key in agent_tools:
         conn = REGISTRY["connections"][key]
         if conn["type"] == "openapi":
+            read_only = key not in write_connections
             auth = OpenApiConnectionAuthDetails(
                 security_scheme=OpenApiConnectionSecurityScheme(
                     connection_id=conn["foundry_connection"]))
             defs += OpenApiTool(
                 name=key.replace("-", "_"),
-                description=f"{key} integration (see {conn['spec']})",
-                spec=load_openapi_spec(conn["spec"]),
+                description=(f"{key} integration"
+                             + (" [read-only]" if read_only else "")
+                             + f" (see {conn['spec']})"),
+                spec=load_openapi_spec(conn["spec"], read_only),
                 auth=auth,
             ).definitions
         elif conn["type"] == "bing_grounding":
@@ -90,8 +105,14 @@ def main() -> int:
     if args.dry_run:
         for name, cfg in wanted.items():
             model = REASONING_MODEL if cfg["model_tier"] == "reasoning" else CHAT_MODEL
-            print(f"[dry-run] {name}: +{cfg['tools'] or ['(none)']} model={model}")
-        print(f"\n{len(wanted)} agents would be updated")
+            writes = cfg.get("write_connections", [])
+            labelled = [t + ("" if t in writes
+                             or REGISTRY["connections"][t]["type"] != "openapi"
+                             else " [read-only]") for t in cfg["tools"]]
+            print(f"[dry-run] {name}: +{labelled or ['(none)']} model={model}")
+        print(f"\n{len(wanted)} agents would be updated "
+              f"(writes granted: "
+              f"{sum(bool(c.get('write_connections')) for c in wanted.values())})")
         return 0
 
     if not ENDPOINT:
@@ -117,7 +138,9 @@ def main() -> int:
                     if isinstance(t, dict) else "")) not in integration_names]
         model = REASONING_MODEL if cfg["model_tier"] == "reasoning" else CHAT_MODEL
         agents_client.update_agent(
-            agent.id, model=model, tools=kept + build_tools(cfg["tools"], False))
+            agent.id, model=model,
+            tools=kept + build_tools(cfg["tools"],
+                                     cfg.get("write_connections", []), False))
         print(f"updated  {name}: +{cfg['tools']} model={model}")
 
     print(f"\ndone: {len(wanted)} agents processed")
