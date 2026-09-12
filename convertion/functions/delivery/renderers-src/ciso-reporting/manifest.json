@@ -1,0 +1,11 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{outdir}"],
+  "formats": ["pptx", "pdf", "html", "png"],
+  "outputs": "dir",
+  "timeout": 900,
+  "stdout_must_contain": "PASS - zero unsubstituted tokens",
+  "schema": "ciso_reporting_assessment.schema.json",
+  "source": "wrapper around the byte-verified claude-account-export/skills/ciso-reporting/scripts/generate_reports_v2.py + assets/Group_CISO_Report_Template_v3_1.pptx (staged as ciso-reporting-scripts.zip, unpacked in place). Playwright/Chromium in this container renders the spider PNG and the A3 PDF that code_interpreter skips."
+}

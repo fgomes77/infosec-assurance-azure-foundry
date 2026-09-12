@@ -37,7 +37,10 @@ SOURCES = {
     "ciso-reporting": ["build/agents/ciso-reporting/code-tree"],
     "ciso-global": ["functions/delivery/renderers-src/ciso-global"],
     "evidence-summary": ["functions/delivery/renderers-src/evidence-summary"],
-    "xlsx-generic": ["build/agents/xlsx/code-tree"],
+    "xlsx-generic": ["functions/delivery/renderers-src/xlsx-generic",
+                     "build/agents/xlsx/code-tree"],
+    "docx-generic": ["functions/delivery/renderers-src/docx-generic"],
+    "pptx-generic": ["functions/delivery/renderers-src/pptx-generic"],
 }
 SHIMS = {
     ".js": "#!/usr/bin/env node\n// staged shim: entry lives in scripts/ (verified layout)\n"

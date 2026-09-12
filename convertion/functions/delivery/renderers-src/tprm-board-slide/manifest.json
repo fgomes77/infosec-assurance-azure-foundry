@@ -1,0 +1,10 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}"],
+  "formats": ["pptx"],
+  "outputs": "single",
+  "timeout": 600,
+  "schema": "tprm_board_slide.schema.json",
+  "source": "wrapper around the byte-verified tprm-slide-generator / pptx-executive-summary-ciso scripts (generate_radar.py + generate_slide.js + assets/template_constants.js, staged as *-scripts.zip and unpacked in place so the ../assets require resolves). Node 20 + pptxgenjs from package.json."
+}

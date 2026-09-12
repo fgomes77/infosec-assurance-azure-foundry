@@ -1,0 +1,10 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}", "{input}"],
+  "formats": ["xlsx"],
+  "outputs": "single",
+  "schema": "form_b_answers.schema.json",
+  "input": "the user's original OneTrust Form B round-trip export xlsx (render body: inputFileId | inputDriveId+inputItemId | inputContentBase64)",
+  "source": "wrapper around the byte-verified claude-account-export/skills/onetrust-form-b/scripts/fill_form_b.py (staged as onetrust-form-b-scripts.zip). Fails on any VALIDATION WARNING / unmatched id. OneTrust write-back stays manual in the OT UI (read-only enterprise access)."
+}

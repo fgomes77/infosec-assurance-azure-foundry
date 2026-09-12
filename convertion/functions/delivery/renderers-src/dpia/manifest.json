@@ -1,0 +1,9 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}"],
+  "formats": ["docx"],
+  "outputs": "single",
+  "schema": "dpia_report.schema.json",
+  "source": "python-docx port of the byte-verified claude-account-export/skills/dpia/scripts/generate_report.js (Node docx package, supplier data hard-coded) - layout reproduced 1:1, data-driven via templates/dpia_report.schema.json. The original .js is kept in the staged dpia-scripts.zip for golden comparison (evaluation/)."
+}

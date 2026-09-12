@@ -1,0 +1,9 @@
+{
+  "runtime": "node",
+  "entry": "render_mermaid.js",
+  "argv": ["{data}", "{out}"],
+  "formats": ["svg", "png"],
+  "outputs": "single",
+  "timeout": 300,
+  "source": "mermaid-cli (headless Chromium from the Dockerfile). data.json: {\"mermaid\": \"flowchart TD ...\", \"theme\": \"neutral\"?, \"background\": \"white\"?}. Replaces the Whimsical / draw.io / Mermaid Chart connectors of claude.ai for diagram rendering inside the EU boundary."
+}
