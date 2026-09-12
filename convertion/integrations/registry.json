@@ -1,5 +1,5 @@
 {
-  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows.",
+  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows. READ-ONLY RULE OF RECORD: attach_integrations.py keeps GET operations plus any operation carrying the OpenAPI vendor extension 'x-enx-read-only: true' (idempotent query POSTs: Jira JQL search, Jira Assets AQL, Defender advanced hunting, SharePoint /search/query); every other non-GET verb is stripped. MCP tools are allow-listed by name and must carry readOnlyHint=true in the gateway's tools/list (see mcp/enx-gateway.json). Connection provisioning (IaC/script) and least-privilege scopes: connections/ and README.md. Consumer connectors of the previous environment (Gmail, Google Drive, GitHub, Firecrawl, Slack, ...) and their ENX replacements/exclusions: CONNECTOR_DECISIONS.md.",
   "connections": {
     "jira-cloud": {
       "type": "openapi",
@@ -53,6 +53,36 @@
       "type": "openapi",
       "spec": "integrations/openapi/entra-iam-graph.yaml",
       "foundry_connection": "conn-entra-iam"
+    },
+    "osint-proxy": {
+      "type": "openapi",
+      "spec": "integrations/openapi/osint-proxy.yaml",
+      "foundry_connection": "conn-osint-proxy",
+      "_comment": "Sanitised public-page fetch (delivery Function endpoint GET /api/fetch_public_page): public-host allow-list, outbound DLP on the URL, size cap, HTML->text. Replaces claude.ai web_fetch/Firecrawl page reads for OSINT (DeepSearch streams 2A-2G, tpsrca evidence validator URL accessibility). Not a generic HTTP tool - governance/DATA_PROTECTION_GUARDRAILS.md section 1."
+    },
+    "exchange-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/exchange-graph.yaml",
+      "foundry_connection": "conn-exchange-graph",
+      "_comment": "Gmail connector replacement: read-only Graph mail surface on the ONE assurance shared mailbox (Exchange application access policy). Sending happens only inside approval-gated workflows."
+    },
+    "teams-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/teams-graph.yaml",
+      "foundry_connection": "conn-teams-graph",
+      "_comment": "Slack connector replacement: read-only Teams chats/channels (delegated, on-behalf-of the calling user)."
+    },
+    "m365-personal-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/m365-personal-graph.yaml",
+      "foundry_connection": "conn-m365-personal",
+      "_comment": "Gmail/Google Calendar (personal) replacement for the example skills: /me calendar + mail, delegated OBO only, never app-only."
+    },
+    "azure-devops": {
+      "type": "openapi",
+      "spec": "integrations/openapi/azure-devops.yaml",
+      "foundry_connection": "conn-azure-devops",
+      "_comment": "GitHub connector replacement: read-only Azure DevOps / GitHub Enterprise Git surface (repos, items, PRs, pipeline runs, code search). No agent can create/merge PRs or push - by design (CONNECTOR_DECISIONS.md)."
     }
   },
   "model_tiers": {
@@ -67,14 +97,19 @@
         "web-search",
         "securityscorecard",
         "iaf-api",
-        "enx-gateway-mcp"
+        "enx-gateway-mcp",
+        "osint-proxy",
+        "jira-assets-cmdb",
+        "defender-graph"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "_comment": "Tools aligned with workflows/pipelines.json 'deepsearch-report' notes (SecurityScorecard, IAF, ENX gateway, Defender Graph, Jira Assets CMDB - all read-only) plus osint-proxy for PHASE 2 page reads (Trust Center, privacy/DPA, subprocessor lists, IAF CertSearch)."
     },
     "ai-deepsearch-osint-gathering-report": {
       "tools": [
         "web-search",
-        "securityscorecard"
+        "securityscorecard",
+        "osint-proxy"
       ],
       "model_tier": "reasoning"
     },
@@ -90,7 +125,9 @@
         "securityscorecard",
         "iaf-api",
         "enx-gateway-mcp",
-        "web-search"
+        "web-search",
+        "osint-proxy",
+        "azure-devops"
       ],
       "model_tier": "reasoning"
     },
@@ -125,20 +162,9 @@
       "model_tier": "chat"
     },
     "enx-tprm-control-center": {
-      "tools": [
-        "confluence-cloud",
-        "jira-cloud",
-        "jira-assets-cmdb",
-        "sharepoint-graph",
-        "onetrust",
-        "defender-graph",
-        "entra-iam-graph",
-        "securityscorecard",
-        "iaf-api",
-        "enx-gateway-mcp",
-        "web-search"
-      ],
-      "model_tier": "reasoning"
+      "tools": [],
+      "model_tier": "light",
+      "_comment": "Router only ('must stay cheap'): no enterprise tools, light tier, no advisory addendum. It dispatches to the worker agents via connected-agent tools created by create_orchestrator.py / create_agents.py; the workers carry the tools."
     },
     "dora": {
       "tools": [
@@ -232,9 +258,11 @@
         "securityscorecard",
         "iaf-api",
         "enx-gateway-mcp",
-        "web-search"
+        "web-search",
+        "osint-proxy"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "_comment": "Agent 3 Evidence Validator: URL accessibility/content checks via osint-proxy (HEAD/GET on public URLs). When the tool is unavailable or the host is not allow-listed, Accessibility = 'not verified' (score 0.5) and the URL is listed under validated_sources with status 'unverified' - never silently defaulted."
     },
     "tprm-slide-generator": {
       "tools": [
@@ -260,19 +288,19 @@
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "light"
     },
     "pdf": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "light"
     },
     "pptx": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "light"
     },
     "xlsx": {
       "tools": [
@@ -290,7 +318,8 @@
     },
     "tpa-evidence-analyzer": {
       "tools": [
-        "sharepoint-graph"
+        "sharepoint-graph",
+        "exchange-graph"
       ],
       "model_tier": "reasoning"
     },
@@ -304,7 +333,8 @@
     },
     "template-manager": {
       "tools": [
-        "sharepoint-graph"
+        "sharepoint-graph",
+        "azure-devops"
       ],
       "model_tier": "chat"
     },
@@ -320,14 +350,57 @@
         "securityscorecard",
         "iaf-api",
         "enx-gateway-mcp",
-        "web-search"
+        "web-search",
+        "osint-proxy",
+        "exchange-graph",
+        "azure-devops"
       ],
       "model_tier": "reasoning",
       "_comment": "Requirement i: full enterprise read surface, READ-ONLY (non-GET stripped; no write_connections). Web search only after query sanitisation per governance/DATA_PROTECTION_GUARDRAILS.md."
+    },
+    "doc-coauthoring": {
+      "tools": [
+        "sharepoint-graph",
+        "confluence-cloud"
+      ],
+      "model_tier": "chat",
+      "example": true
+    },
+    "internal-comms": {
+      "tools": [
+        "teams-graph",
+        "m365-personal-graph",
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat",
+      "example": true,
+      "_comment": "Slack/Gmail/Google Calendar context gathering -> Teams + Outlook via delegated OBO reads."
+    },
+    "learn": {
+      "tools": [
+        "web-search"
+      ],
+      "model_tier": "chat",
+      "example": true
+    },
+    "mcp-builder": {
+      "tools": [],
+      "model_tier": "reasoning",
+      "example": true,
+      "_comment": "Knowledge-only: authors MCP servers as code; no enterprise tools."
+    },
+    "morning": {
+      "tools": [
+        "m365-personal-graph",
+        "teams-graph"
+      ],
+      "model_tier": "light",
+      "example": true,
+      "_comment": "Routine replaced by workflows/morning-brief.json (Logic App gathers calendar/mail/chats and calls the agent); the agent itself only formats. Delegated OBO when invoked interactively."
     }
   },
   "advisory_read_only_toolset": {
-    "_comment": "Requirement g/h/i: EVERY information-providing (advisory/knowledge) system carries the full Euronext read surface - Confluence, Jira, CMDB, SharePoint, OneTrust, Defender (security monitoring), Entra IAM, SecurityScorecard (risk monitoring), IAF (governance/compliance/AET findings), ENX gateway MCP, sanitised web search. All READ-ONLY: non-GET stripped, no write_connections. apply_advisory_profile.py additionally appends agents/advisory_addendum.md (Word/Excel/PowerPoint/HTML file generation) and ensures code_interpreter.",
+    "_comment": "Requirement g/h/i: EVERY information-providing (advisory/knowledge) system carries the full Euronext read surface - Confluence, Jira, CMDB, SharePoint, OneTrust, Defender (security monitoring), Entra IAM, SecurityScorecard (risk monitoring), IAF (governance/compliance/AET findings), ENX gateway MCP, sanitised web search. All READ-ONLY: non-GET stripped, no write_connections. apply_advisory_profile.py additionally appends agents/advisory_addendum.md (Word/Excel/PowerPoint/HTML file generation) and ensures code_interpreter. enx-tprm-control-center is deliberately NOT in this list: it is a router (light tier, no tools).",
     "tools": [
       "confluence-cloud",
       "jira-cloud",
@@ -339,7 +412,8 @@
       "securityscorecard",
       "iaf-api",
       "enx-gateway-mcp",
-      "web-search"
+      "web-search",
+      "osint-proxy"
     ],
     "agents": [
       "iso27001",
@@ -349,8 +423,20 @@
       "eu-ai-act",
       "cyber-forum",
       "tpsrca-assessment-engine",
-      "enx-tprm-control-center",
       "infosec-assurance-advisor"
+    ]
+  },
+  "example_agents": {
+    "_comment": "Agents converted only with convert_skills.py --include-examples. attach_integrations.py must FAIL (not skip) for any live agent that has no registry entry unless it is named in unmanaged_ok.",
+    "agents": [
+      "doc-coauthoring",
+      "internal-comms",
+      "learn",
+      "mcp-builder",
+      "morning"
+    ],
+    "unmanaged_ok": [
+      "output-verifier"
     ]
   }
 }

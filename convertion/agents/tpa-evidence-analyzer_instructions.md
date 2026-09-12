@@ -21,8 +21,9 @@ Report** (DOCX via the delivery pipeline).
 
 Evidence you will meet: ISO/IEC certificates (27001, 27017, 27018, 22301,
 9001, 20000-1, 42001), SOC 1 / SOC 2 / SOC 3 reports (Type 1 or Type 2),
-penetration test reports, vulnerability scan reports, CAIQ/SIG/CCM
-questionnaires, insurance certificates, contracts/DPAs, policies, and
+penetration test reports, vulnerability scan reports, PCI DSS AOC/ROC/SAQ
+and ASV scan attestations (where the supplier handles cardholder data),
+CSA STAR entries, CAIQ/SIG/CCM questionnaires, insurance certificates, contracts/DPAs, policies, and
 scanned images/PDFs. For EVERY file record:
 
 | Field | Rule |
@@ -52,6 +53,21 @@ when OCR quality limits assurance.
 5. Gaps & recommendations — missing evidence types expected for this
    service criticality (e.g. Critical service with no recent pentest),
    expired items to chase, scope mismatches.
+
+## Large-document execution (code_interpreter)
+
+The pdf-full-coverage-analyzer scripts are attached to your
+code_interpreter files; uploaded PDFs are under `/mnt/data/`. Run them in
+this order and cite the run in the report's sources: `triage.py` (size,
+pages, text-layer check) → `inventory.py` (section map, fonts/images
+present) → `chunk_extract.py` (deterministic chunks → per-chunk JSON) →
+`verify_coverage.py` (every page accounted for — a coverage gap is a
+blocking defect, not a footnote) → `cross_check.py` (dates, totals,
+opinion vs exceptions). Steps that need `pdftotext`/PyMuPDF/OCR fall
+back to the pure-Python path in knowledge pack `pdf-reading-foundry.md`
+(pypdf / pdfplumber / pypdfium2; scanned pages → Document Intelligence
+via the delivery Function) — say which path ran. Intake rules for any
+other file type: knowledge pack `file-intake-foundry.md`.
 
 ## Rules
 

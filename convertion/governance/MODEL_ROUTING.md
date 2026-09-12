@@ -7,18 +7,43 @@ Azure catalogue evolves — the TIER structure is the contract):
 
 | Tier | Default deployment | Cost profile | Assigned to |
 |---|---|---|---|
-| `light` | `gpt-4o-mini` | ~15–30× cheaper than reasoning | Deterministic transformation against fixed templates and schemas: `docx`, `pdf`, `pptx`, `xlsx` document agents, routing hand-offs, folder/file bookkeeping |
-| `chat` | `gpt-4o` | mid | Standard report generation where the template + verified extraction rules carry the quality: `dpia`, `ciso-reporting`, `ciso-executive-summary`, `tprm-slide-generator`, `onetrust-form-b`, `template-manager`, `enx-tprm-control-center` |
-| `reasoning` | `o3-mini` | high per token, but fewer iterations on analytic work | Judgement-heavy analysis: `deepsearch-protocol`, `cyber-forum`, `ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`, `pentest-report-analyzer`, `tpsrca-assessment-engine`, framework advisors, `infosec-assurance-advisor`, orchestrator |
+| `light` | `gpt-4o-mini` | ~15–30× cheaper than reasoning | Deterministic transformation against fixed templates and schemas, routing, bookkeeping: `docx`, `pdf`, `pptx`, `xlsx`, `enx-tprm-control-center` (router, no tools), `morning` |
+| `chat` | `gpt-4o` | mid | Standard report generation where the template + verified extraction rules carry the quality: `dpia`, `ciso-reporting`, `ciso-executive-summary`, `tprm-slide-generator`, `pptx-executive-summary-ciso`, `onetrust-form-b`, `template-manager`, `whisperx-transcribe-diarize`, `doc-coauthoring`, `internal-comms`, `learn` |
+| `reasoning` | `o3-mini` | high per token, but fewer iterations on analytic work | Judgement-heavy analysis: `deepsearch-protocol`, `ai-deepsearch-osint-gathering-report`, `cyber-forum`, `ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`, `pentest-report-analyzer`, `pdf-full-coverage-analyzer`, `tpsrca-assessment-engine`, `mcp-builder`, framework advisors (`iso27001`, `iso42001`, `dora`, `nis2`, `eu-ai-act`), `infosec-assurance-advisor`, orchestrator, `output-verifier` |
 
 Assignment of record: the `model_tier` field per agent in
-`integrations/registry.json`, applied by `attach_integrations.py`.
+`integrations/registry.json`, applied by `attach_integrations.py`. The
+table above was regenerated from the registry (2026-09-12); a
+`verify_kit`/`verify_conversion` drift check comparing this table with
+the registry is a shared delta — until it exists, edit both together.
+
+### Vision / image inputs
+
+`o3-mini` (reasoning) accepts no image input; `gpt-4o` / `gpt-4o-mini`
+do. Requirement d2 lists images and scanned PDFs as evidence, so the rule
+is: **image inputs never reach a reasoning agent directly.** A pre-step
+transcribes them to text — scanned PDFs via Document Intelligence
+(`/api/extract_pdf` in the delivery Function), images via a
+`/api/describe_image` endpoint that runs the `chat` deployment with a
+fixed, non-generative "transcribe exactly; do not interpret" prompt
+(shared delta in `report-delivery-pipeline.json` / `function_app.py`) —
+and the reasoning agent consumes the resulting text, which is stored with
+the audit artefacts (`DATA_PROTECTION_GUARDRAILS.md` §4). Accuracy floor:
+transcription output is verbatim evidence, so it is subject to the
+verifier's grounding rule like any other source.
+
+| Tier | Vision input | Use for images |
+|---|---|---|
+| `light` | yes | cheap OCR-style transcription of simple scans |
+| `chat` | yes | `describe_image` transcription of complex evidence (certificates, dashboards) |
+| `reasoning` | no | consumes transcribed text only |
 
 **Advisory pin (requirements g/h/i):** every information-providing system
 — the framework advisors (iso27001, iso42001, dora, nis2, eu-ai-act),
-cyber-forum, tpsrca-assessment-engine, enx-tprm-control-center and
-infosec-assurance-advisor — is PINNED to the `reasoning` tier (the
-registry's `advisory_read_only_toolset` lists them). These agents answer
+cyber-forum, tpsrca-assessment-engine and infosec-assurance-advisor —
+is PINNED to the `reasoning` tier (the registry's
+`advisory_read_only_toolset` lists them; `enx-tprm-control-center` is
+deliberately NOT in the list — it is a `light` router with no tools). These agents answer
 users directly, so quality of reasoning is the product; the monthly
 tier-tuning review below may move other agents down, never these. They
 also carry code_interpreter for Word/Excel/PowerPoint/HTML file

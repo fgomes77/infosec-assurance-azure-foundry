@@ -14,9 +14,9 @@ confidential data, and writes to systems of record).
 
 | Layer | Control |
 |---|---|
-| Instruction layer | Every agent with `web-search` carries the egress rule (appended by `attach_integrations.py`): search queries may contain ONLY public facts — supplier public names, product names, CVE ids, regulation references. NEVER internal identifiers (assessment ids, contract ids, project codenames, employee names, internal hostnames/IPs), scores, findings, or any text quoted from an internal document. When public and internal terms are needed together, the agent reformulates to the public terms and applies the internal context to the results locally. |
-| Network layer | Bing Grounding is the ONLY web egress for agents (no generic HTTP tool is attached to any agent). Queries are auditable in Foundry tracing. |
-| Detective layer | App Insights KQL alert on grounding-tool inputs matching internal-marker patterns (`ENX-`, assessment-id regex, internal domain suffixes, employee-directory names list from Entra). A hit raises a review ticket — the run is not killed retroactively, the pattern is fixed forward (instruction or list update). |
+| Instruction layer | Every agent carries the egress rule through the persona preamble (`agents/persona_system_prompt.md`, prepended by `convert_skills.py`, `create_delivery_agents.py`, `create_orchestrator.py`; `attach_integrations.py` attaches tools and models only and appends no text): search queries may contain ONLY public facts — supplier public names, product names, CVE ids, regulation references. NEVER internal identifiers (assessment ids, contract ids, project codenames, employee names, internal hostnames/IPs), scores, findings, or any text quoted from an internal document. When public and internal terms are needed together, the agent reformulates to the public terms and applies the internal context to the results locally. |
+| Network layer | Bing Grounding (search) and the allow-listed `osint-proxy` OpenAPI tool (page-level public OSINT fetch, read-only) are the ONLY web egress for agents; no generic HTTP/browser tool exists (WebFetch/browser skills EXCLUDED in `PLATFORM_SKILLS_DECISION.md`). Bing Grounding is a **global** service: only the sanitised public query crosses the EU boundary (`infra/main.bicep` residency comment). Queries are auditable in Foundry tracing. |
+| Detective layer | Scheduled-query alert (`infra/monitoring.bicep`, query `infra/kql/egress-internal-markers.kql`) on grounding-tool inputs matching internal-marker patterns (`ENX-`, assessment-id regex, internal domain suffixes, employee-directory names list from Entra), routed to the owner action group. A hit raises a review ticket — the run is not killed retroactively, the pattern is fixed forward (instruction or list update). |
 | Prompt-injection defence | Content fetched from the web (and from supplier evidence files) is DATA, never instructions: the persona preamble's injection rule tells agents to ignore directives embedded in retrieved content; the verifier checks deliverables for signs of instruction-following from sources. |
 
 ## 2. Read-only enterprise access (structural, not behavioural)
@@ -39,19 +39,30 @@ confidential data, and writes to systems of record).
   layer, and the credential layer at once.
 - The service accounts / app registrations behind the Foundry connections
   are themselves provisioned read-only (Confluence read scopes; Graph
-  `Sites.Read.All`; OneTrust viewer role; Jira browse-only) — defence in
-  depth: even a mis-attached spec cannot escalate.
+  `Sites.Selected` **read** on the one site — no identity holds
+  `Sites.Read.All` / `Sites.ReadWrite.All`, see `../team/TEAM_MODEL.md`
+  §8; OneTrust viewer role; Jira browse-only) — defence in depth: even a
+  mis-attached spec cannot escalate.
 - The ONLY writer is the delivery Function's managed identity
   (`Sites.Selected` write on the one SharePoint site), reachable only
-  from the Logic Apps after verifier PASS + human approval.
-- ENX gateway MCP: consumed as-is; its own gateway policy governs which
-  tools it exposes — request the read-only toolset for this project.
+  from the Logic Apps after verifier PASS + human approval. Logic Apps
+  hold no Graph write except the time-boxed L12x exception
+  (`../team/ACCESS_REGISTER.md`).
+- ENX gateway MCP: `allowed_tools` read-only; `attach_integrations.py`
+  refuses tools without `readOnlyHint=true` (`HUMAN_APPROVAL.md` Layer 1).
 
 ## 3. Data handling inside the platform
 
-- **Residency:** Foundry account, storage, vector stores, Function and
-  Logic Apps deploy to the EU region set in `setup/.env`; no data leaves
-  the tenant boundary except sanitised search queries (§1).
+- **Residency:** Foundry account, storage, vector stores (which hold
+  Euronext evidence), Function and Logic Apps deploy to the EU region set
+  in `setup/.env`; `infra/main.bicep` restricts `location` to EU regions;
+  no data leaves the tenant boundary except sanitised search queries
+  (§1). CI/CD: pull-request jobs are offline (repository content only —
+  templates and thresholds, never assessment data) and may run on
+  non-EU hosted runners only if ENX policy accepts that; the deploy job
+  alone talks to Azure (EU endpoints) and must fail on any non-EU
+  location (`ci/tests/test_residency.py`, shared delta); smoke prompts
+  carry public regulation text only, never supplier data.
 - **Minimisation:** agents carry only the knowledge files their skill
   needs; personal data in deliverables is limited to what the source
   assessment already contains (verifier rule 5); the memory store bans
@@ -64,8 +75,14 @@ confidential data, and writes to systems of record).
   run is filtered, adjust the custom RAI policy severity for that
   category rather than disabling filtering.
 - **Secrets:** all credentials in Key Vault / Foundry connections; specs
-  and workflows reference names only (`verify_conversion.py` greps for
-  leaked secrets as a deploy gate).
+  and workflows reference names only. Scanning status: a manual
+  secret/PII scan was run once at export time (export README); **no
+  repeating scan exists yet** — the required control is
+  `scripts/scan_secrets.py` called from `deploy.sh` plus a gitleaks CI
+  job with `.gitleaks.toml` allow-listing the documented placeholders
+  (`hf_xxxx…` in the WhisperX installation notes, `{placeholder}` /
+  `<tenant>` patterns) — shared deltas; until they land, reviewers grep
+  every PR (`CODEOWNERS` + PR template checklist).
 - **Transport/identity:** managed identities end-to-end (Logic Apps →
   Foundry, Function → Graph); function endpoints key-protected and
   VNet-restricted; TLS everywhere by platform default.
@@ -76,9 +93,17 @@ Every run is traceable: Foundry thread + tracing (prompts, tool calls,
 tokens) in App Insights; Logic Apps run history evidences every approval
 decision, approver and timestamp; SharePoint versioning preserves every
 stored report version; the durable memory store is inspectable and
-deletable (`scripts/memory_store.py`). Retention per the ISMS record
-schedule — configure App Insights retention ≥ 1 year for DORA Art. 28
-evidence needs.
+deletable (`scripts/memory_store.py`, policy in `MEMORY_POLICY.md`).
+Retention per the ISMS record schedule — `logRetentionDays = 365` in
+`infra/main.bicep` (DORA Art. 28 evidence). Template changes are logged
+in `templates/audit.log`. Full-coverage PDF analysis
+(`pdf-full-coverage-analyzer`) must ship its audit artefacts (chunk
+inventory, per-chunk extraction JSON, coverage statement, verdict) with
+the report: the evidence-summary contract carries an `auditArtifacts`
+array and the pipeline uploads them to
+`Reports/<Supplier>/<Service>/audit/<date>/` (shared delta); the verifier
+requires the coverage statement + verdict COMPLETE (or PARTIAL with
+explicit user acceptance).
 
 ## 5. Non-blocking principle — where the line sits
 

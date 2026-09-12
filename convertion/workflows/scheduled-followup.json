@@ -1,0 +1,234 @@
+{
+  "_comment": "Replaces Claude Code Remote send_later / run_once_at Routines: schedule a one-shot follow-up that re-opens an EXISTING Foundry thread (e.g. 're-check supplier remediation in 30 days'). Read-only outcome: the agent answers in the thread and the owner is notified on Teams; nothing is written to any system of record (documented exception in governance/HUMAN_APPROVAL.md: scheduling a run is not a submission). Exposed to agents via integrations/openapi/followup-scheduler.yaml / MCP schedule_followup.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "apiVersion": {
+        "type": "string",
+        "defaultValue": "2025-05-01",
+        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+      },
+      "teamsWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{teams-incoming-webhook-url}"
+      }
+    },
+    "triggers": {
+      "Followup_requested": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [
+              "threadId",
+              "agentId",
+              "fireAt",
+              "prompt",
+              "requestedBy"
+            ],
+            "properties": {
+              "threadId": {
+                "type": "string"
+              },
+              "agentId": {
+                "type": "string"
+              },
+              "fireAt": {
+                "type": "string",
+                "description": "RFC3339 UTC timestamp, max 90 days ahead (Logic Apps Wait limit)"
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "requestedBy": {
+                "type": "string",
+                "description": "UPN of the requesting team member (from the caller's token, not free text)"
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Respond_scheduled": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 202,
+          "body": {
+            "followupId": "@{workflow().run.name}",
+            "fireAt": "@{triggerBody()?['fireAt']}"
+          }
+        },
+        "runAfter": {}
+      },
+      "Delay_until_fireAt": {
+        "type": "Wait",
+        "inputs": {
+          "until": {
+            "timestamp": "@{triggerBody()?['fireAt']}"
+          }
+        },
+        "runAfter": {
+          "Respond_scheduled": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Post_followup_message_to_thread": {
+        "_comment": "Re-opens the SAME Foundry thread (engagement context is preserved) - the Claude 'fire into an existing session' semantics.",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{triggerBody()?['threadId']}/messages",
+          "queries": {
+            "api-version": "@parameters('apiVersion')"
+          },
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "role": "user",
+            "content": "[Scheduled follow-up requested by @{triggerBody()?['requestedBy']} on @{utcNow()}] @{triggerBody()?['prompt']}"
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Delay_until_fireAt": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Run_agent_on_thread": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{triggerBody()?['threadId']}/runs",
+          "queries": {
+            "api-version": "@parameters('apiVersion')"
+          },
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "assistant_id": "@{triggerBody()?['agentId']}"
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Post_followup_message_to_thread": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Until_run_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_run_status')?['status'])",
+        "limit": {
+          "count": 60,
+          "timeout": "PT1H"
+        },
+        "runAfter": {
+          "Run_agent_on_thread": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_Get_run_status": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 15,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_run_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_agent_on_thread')?['thread_id']}/runs/@{body('Run_agent_on_thread')?['id']}",
+              "queries": {
+                "api-version": "@parameters('apiVersion')"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_Get_run_status": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Get_answer": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_agent_on_thread')?['thread_id']}/messages",
+          "queries": {
+            "api-version": "@parameters('apiVersion')",
+            "order": "desc",
+            "limit": "1"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_run_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Notify_owner": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@parameters('teamsWebhookUrl')",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "text": "⏰ Follow-up for @{triggerBody()?['requestedBy']} (thread @{triggerBody()?['threadId']}): @{triggerBody()?['prompt']}\n\n@{first(body('Get_answer')?['data'])?['content']?[0]?['text']?['value']}\n\nNo submission of record was made - continue in the thread; any write still goes through a report/ticket pipeline with approval."
+          }
+        },
+        "runAfter": {
+          "Get_answer": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

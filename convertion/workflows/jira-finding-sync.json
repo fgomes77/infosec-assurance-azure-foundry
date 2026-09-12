@@ -3,20 +3,49 @@
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-      "jiraBaseUrl": { "type": "string", "defaultValue": "https://{jira-tenant}.atlassian.net" },
-      "jiraAuthHeader": { "type": "securestring", "defaultValue": "Basic {jira-basic-auth-from-key-vault}" },
+      "jiraBaseUrl": {
+        "type": "string",
+        "defaultValue": "https://{jira-tenant}.atlassian.net"
+      },
+      "jiraAuthHeader": {
+        "type": "securestring",
+        "defaultValue": "{jira-auth-header-app-setting-bound-to-key-vault}",
+        "_comment": "Bind to an app setting @Microsoft.KeyVault(SecretUri=...). Preferred: OAuth 2.0 (3LO) bearer for a service account; Basic API-token only as fallback."
+      },
       "jiraJql": {
         "type": "string",
         "defaultValue": "project = {jira-project-key} AND labels = tprm-finding AND updated >= -1h"
       },
-      "iafBaseUrl": { "type": "string", "defaultValue": "https://{iaf-api-host}" },
-      "iafApiToken": { "type": "securestring", "defaultValue": "{iaf-token-from-key-vault}" },
-      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "" }
+      "iafBaseUrl": {
+        "type": "string",
+        "defaultValue": "https://{iaf-api-host}"
+      },
+      "iafApiToken": {
+        "type": "securestring",
+        "defaultValue": "{iaf-token-from-key-vault}"
+      },
+      "approvalWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{human-approval-subscribe-endpoint}"
+      },
+      "allowedStatuses": {
+        "type": "array",
+        "defaultValue": [
+          "Open",
+          "In Progress",
+          "Remediated",
+          "Closed",
+          "Risk Accepted"
+        ]
+      }
     },
     "triggers": {
       "Hourly_recurrence": {
         "type": "Recurrence",
-        "recurrence": { "frequency": "Hour", "interval": 1 }
+        "recurrence": {
+          "frequency": "Hour",
+          "interval": 1
+        }
       }
     },
     "actions": {
@@ -32,7 +61,13 @@
           "body": {
             "jql": "@{parameters('jiraJql')}",
             "maxResults": 100,
-            "fields": [ "summary", "status", "labels", "customfield_finding_reference", "updated" ]
+            "fields": [
+              "summary",
+              "status",
+              "labels",
+              "customfield_finding_reference",
+              "updated"
+            ]
           }
         },
         "runAfter": {}
@@ -40,97 +75,148 @@
       "For_each_updated_finding_ticket": {
         "type": "Foreach",
         "foreach": "@body('Search_updated_TPRM_finding_tickets')?['issues']",
-        "runAfter": { "Search_updated_TPRM_finding_tickets": [ "Succeeded" ] },
+        "runAfter": {
+          "Search_updated_TPRM_finding_tickets": [
+            "Succeeded"
+          ]
+        },
         "actions": {
-          "Send_approval_request_iaf_submission": {
-            "type": "Http",
-            "inputs": {
-              "method": "POST",
-              "uri": "@parameters('approvalWebhookUrl')",
-              "headers": { "Content-Type": "application/json" },
-              "body": {
-                "subject": "IAF finding submission for @{items('For_each_updated_finding_ticket')?['key']} (@{items('For_each_updated_finding_ticket')?['fields']?['summary']})",
-                "targetSystem": "IAF API (@{parameters('iafBaseUrl')})",
-                "draft": {
-                  "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
-                  "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
-                  "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}"
-                },
-                "correlationId": "@{workflow().run.name}",
-                "callback": "Approve or reject via the callback URL registered by the Wait_for_approval_iaf_submission step of this run."
-              }
-            },
-            "runAfter": {}
-          },
-          "Wait_for_approval_iaf_submission": {
-            "type": "HttpWebhook",
-            "inputs": {
-              "subscribe": {
-                "method": "POST",
-                "uri": "@parameters('approvalWebhookUrl')",
-                "headers": { "Content-Type": "application/json" },
-                "body": {
-                  "callbackUrl": "@{listCallbackUrl()}",
-                  "correlationId": "@{workflow().run.name}",
-                  "instruction": "POST {\"decision\":\"approved\"|\"rejected\",\"approver\":\"<upn>\"} to callbackUrl"
-                }
-              },
-              "unsubscribe": {}
-            },
-            "limit": { "timeout": "P3D" },
-            "runAfter": { "Send_approval_request_iaf_submission": [ "Succeeded" ] }
-          },
-          "Check_approval_decision_iaf_submission": {
+          "Precheck_finding_payload": {
             "type": "If",
-            "expression": { "and": [ { "equals": [ "@body('Wait_for_approval_iaf_submission')?['decision']", "approved" ] } ] },
-            "runAfter": { "Wait_for_approval_iaf_submission": [ "Succeeded" ] },
-            "actions": {
-              "Submit_finding_status_to_IAF": {
-                "type": "Http",
-                "inputs": {
-                  "method": "POST",
-                  "uri": "@{parameters('iafBaseUrl')}/api/v1/findings/submitFinding",
-                  "headers": {
-                    "Content-Type": "application/json",
-                    "Authorization": "Bearer @{parameters('iafApiToken')}"
-                  },
-                  "body": {
-                    "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
-                    "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
-                    "summary": "@{items('For_each_updated_finding_ticket')?['fields']?['summary']}",
-                    "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}",
-                    "updatedAt": "@{items('For_each_updated_finding_ticket')?['fields']?['updated']}",
-                    "source": "jira-finding-sync"
+            "expression": {
+              "and": [
+                {
+                  "not": {
+                    "equals": [
+                      "@coalesce(items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference'],'')",
+                      ""
+                    ]
                   }
+                },
+                {
+                  "equals": [
+                    "@contains(parameters('allowedStatuses'), items('For_each_updated_finding_ticket')?['fields']?['status']?['name'])",
+                    true
+                  ]
+                }
+              ]
+            },
+            "runAfter": {},
+            "actions": {
+              "Wait_for_approval_iaf_submission": {
+                "type": "HttpWebhook",
+                "inputs": {
+                  "subscribe": {
+                    "method": "POST",
+                    "uri": "@parameters('approvalWebhookUrl')",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "callbackUrl": "@{listCallbackUrl()}",
+                      "correlationId": "@{workflow().run.name}",
+                      "instruction": "POST {\"decision\":\"approved\"|\"rejected\",\"approver\":\"<upn>\"} to callbackUrl",
+                      "kind": "IAF_SUBMIT",
+                      "requestedBy": "workflow:jira-finding-sync",
+                      "subject": "IAF finding submission for @{items('For_each_updated_finding_ticket')?['key']} (@{items('For_each_updated_finding_ticket')?['fields']?['summary']})",
+                      "targetSystem": "IAF API (@{parameters('iafBaseUrl')})",
+                      "draft": {
+                        "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
+                        "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                        "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}"
+                      }
+                    }
+                  },
+                  "unsubscribe": {}
+                },
+                "limit": {
+                  "timeout": "P3D"
                 },
                 "runAfter": {}
               },
-              "Add_Jira_comment_on_sync_failure": {
-                "type": "Http",
-                "inputs": {
-                  "method": "POST",
-                  "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue/@{items('For_each_updated_finding_ticket')?['key']}/comment",
-                  "headers": {
-                    "Content-Type": "application/json",
-                    "Authorization": "@parameters('jiraAuthHeader')"
+              "Check_approval_decision_iaf_submission": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "equals": [
+                        "@toLower(coalesce(body('Wait_for_approval_iaf_submission')?['decision'],''))",
+                        "approved"
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Wait_for_approval_iaf_submission": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Submit_finding_status_to_IAF": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('iafBaseUrl')}/api/v1/findings/submitFinding",
+                      "headers": {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer @{parameters('iafApiToken')}"
+                      },
+                      "body": {
+                        "findingReference": "@{items('For_each_updated_finding_ticket')?['fields']?['customfield_finding_reference']}",
+                        "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                        "summary": "@{items('For_each_updated_finding_ticket')?['fields']?['summary']}",
+                        "status": "@{items('For_each_updated_finding_ticket')?['fields']?['status']?['name']}",
+                        "updatedAt": "@{items('For_each_updated_finding_ticket')?['fields']?['updated']}",
+                        "source": "jira-finding-sync"
+                      }
+                    },
+                    "runAfter": {}
                   },
-                  "body": {
-                    "body": "Automated IAF sync FAILED for this finding at @{utcNow()}. IAF submitFinding returned status @{outputs('Submit_finding_status_to_IAF')?['statusCode']}. The finding status in IAF may be stale — please retry or escalate to the assurance tooling team."
+                  "Add_Jira_comment_on_sync_failure": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue/@{items('For_each_updated_finding_ticket')?['key']}/comment",
+                      "headers": {
+                        "Content-Type": "application/json",
+                        "Authorization": "@parameters('jiraAuthHeader')"
+                      },
+                      "body": {
+                        "body": "Automated IAF sync FAILED for this finding at @{utcNow()}. IAF submitFinding returned status @{outputs('Submit_finding_status_to_IAF')?['statusCode']}. The finding status in IAF may be stale — please retry or escalate to the assurance tooling team."
+                      }
+                    },
+                    "runAfter": {
+                      "Submit_finding_status_to_IAF": [
+                        "Failed",
+                        "TimedOut"
+                      ]
+                    }
                   }
                 },
-                "runAfter": { "Submit_finding_status_to_IAF": [ "Failed", "TimedOut" ] }
+                "else": {
+                  "actions": {
+                    "Record_rejection_iaf_submission": {
+                      "type": "Compose",
+                      "inputs": {
+                        "outcome": "rejected_or_expired",
+                        "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
+                        "decision": "@{body('Wait_for_approval_iaf_submission')?['decision']}",
+                        "approver": "@{body('Wait_for_approval_iaf_submission')?['approver']}",
+                        "note": "Finding status was NOT submitted to the IAF API."
+                      },
+                      "runAfter": {}
+                    }
+                  }
+                }
               }
             },
             "else": {
               "actions": {
-                "Record_rejection_iaf_submission": {
+                "Record_precheck_skip": {
                   "type": "Compose",
                   "inputs": {
-                    "outcome": "rejected_or_expired",
                     "jiraKey": "@{items('For_each_updated_finding_ticket')?['key']}",
-                    "decision": "@{body('Wait_for_approval_iaf_submission')?['decision']}",
-                    "approver": "@{body('Wait_for_approval_iaf_submission')?['approver']}",
-                    "note": "Finding status was NOT submitted to the IAF API."
+                    "note": "Skipped: missing finding reference or status not in allowedStatuses. Nothing submitted."
                   },
                   "runAfter": {}
                 }
@@ -142,5 +228,6 @@
     },
     "outputs": {}
   },
-  "parameters": {}
+  "parameters": {},
+  "_comment": "Hourly Jira -> IAF finding-status sync. No agent-generated content is involved (pure field mapping), so the output-verifier is not run; a deterministic pre-check (finding reference present, status in the allowed set) replaces it before the human approval gate."
 }

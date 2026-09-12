@@ -1,0 +1,9 @@
+// Detective layer (DATA_PROTECTION_GUARDRAILS §1): Bing grounding inputs that
+// carry internal markers. Tune the regex list per tenant (assessment ids,
+// internal domain suffixes, employee names list from Entra).
+AppDependencies
+| where TimeGenerated > ago(1h)
+| where Name has_any ("bing", "grounding", "web_search")
+| extend query = tostring(Properties["gen_ai.tool.input"])
+| where query matches regex @"(?i)(ENX-\d+|ASSESS-\d{4,}|CONTRACT-\d+|\.corp\.internal|\.euronext\.(local|corp))"
+| project TimeGenerated, OperationId, AgentName = tostring(Properties["gen_ai.agent.name"]), query

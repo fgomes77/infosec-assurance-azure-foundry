@@ -1,0 +1,9 @@
+// output-verifier FAIL ratio per agent over 24 h (alert when > 30 % with ≥ 5 runs).
+AppTraces
+| where TimeGenerated > ago(24h)
+| where Message startswith "verifier:"
+| extend agent = tostring(Properties["agent"]), verdict = tostring(Properties["verdict"])
+| summarize runs = count(), fails = countif(verdict == "FAIL") by agent
+| where runs >= 5
+| extend failRate = round(100.0 * fails / runs, 1)
+| where failRate > 30

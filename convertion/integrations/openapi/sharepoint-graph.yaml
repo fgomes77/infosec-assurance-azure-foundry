@@ -1,22 +1,31 @@
-# Purpose: Microsoft Graph SharePoint/OneDrive files API — read the evidence
-#   repository (assessment PDFs, contracts, policies) and publish generated
-#   deliverables (HTML dashboards, DOCX reports, PPTX decks) back to
-#   SharePoint document libraries.
-# Auth: Entra ID OAuth 2.0 client-credentials (same app pattern as the
-#   defender-graph spec). Token endpoint:
+# Purpose: Microsoft Graph SharePoint/OneDrive files API - READ the evidence
+#   repository (assessment PDFs, contracts, policies, the
+#   Infosec Assurance/GRC/TPA/Active/<Supplier>/<Service> tree) and locate
+#   prior deliverables. Agents NEVER upload: every write to SharePoint happens
+#   in functions/delivery (managed identity, Sites.Selected write) after the
+#   verifier PASS + human approval gate (governance/HUMAN_APPROVAL.md).
+# Auth: Entra ID OAuth 2.0 client-credentials on the Foundry project managed
+#   identity / app registration. Token endpoint:
 #   https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
 #   Scope: https://graph.microsoft.com/.default
-#   App permissions (admin-consented): Sites.Read.All (read) and
-#   Sites.ReadWrite.All or Sites.Selected (publish).
-# Credentials: Entra app registration; client id/secret in Azure Key Vault.
-#   Never embed real secrets in this file.
+#   App permission (admin-consented): Sites.Selected with a READ grant on the
+#   one InfoSec Assurance site (team/least-privilege/IDENTITY_RBAC.md). The
+#   tenant-wide /search/query needs Sites.Read.All - prefer driveSearch.
+# Credentials: never embedded here; Foundry connection conn-sharepoint-graph.
+# Read-only rule: GET operations + the x-enx-read-only query POST only.
+# Parameters cited by the instructions: SHAREPOINT_SITE_ID,
+#   SHAREPOINT_REPORTS_DRIVE_ID, SHAREPOINT_TPA_ACTIVE_DRIVE_ID,
+#   SHAREPOINT_TPA_ACTIVE_PATH (setup/.env.example).
 openapi: 3.0.3
 info:
   title: Microsoft Graph SharePoint Files (subset)
   description: >-
-    Minimal Graph surface for locating SharePoint sites, browsing and
-    downloading evidence files, uploading generated deliverables, and
-    searching content.
+    Read-only Graph surface for locating SharePoint sites and drives,
+    walking folders by item id or by path (e.g. the TPA/Active supplier
+    tree), downloading evidence files and searching content. Large PDFs:
+    do not read the bytes into the conversation - hand the driveId/itemId
+    to the pipeline (functions/delivery /api/fetch_evidence) which attaches
+    the file to the run for file_search / the pdf-coverage method.
   version: "1.0"
 servers:
   - url: https://graph.microsoft.com/v1.0
@@ -54,14 +63,104 @@ paths:
       responses:
         "200":
           description: Collection of driveItems (id, name, folder/file facet, size).
+  /sites/{siteId}/drives:
+    get:
+      operationId: listDrives
+      summary: List the document libraries (drives) of a site
+      description: >-
+        Return the drives of a site with id and name - e.g. the "Reports"
+        library and the "Infosec Assurance" GRC library. Use the driveId in
+        the drive-scoped operations below.
+      parameters:
+        - { name: siteId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Collection of drives (id, name, webUrl).
+  /drives/{driveId}/items/{itemId}/children:
+    get:
+      operationId: listChildren
+      summary: List the children of a folder by item id
+      description: >-
+        Enumerate files and sub-folders of a folder. Walk a tree recursively
+        by calling this again for every child that has a folder facet
+        (e.g. Infosec Assurance/GRC/TPA/Active/<Supplier>/<Service>/...).
+        Follow @odata.nextLink when more than $top items exist.
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 200 } }
+        - { name: $select, in: query, schema: { type: string, default: "id,name,size,folder,file,lastModifiedDateTime,webUrl" } }
+      responses:
+        "200":
+          description: Collection of driveItems.
+  /drives/{driveId}/root:/{path}:/children:
+    get:
+      operationId: listChildrenByPath
+      summary: List the children of a folder addressed by path
+      description: >-
+        Path-addressed listing relative to the drive root, e.g.
+        path = "Infosec Assurance/GRC/TPA/Active/{Supplier}" (URL-encode
+        spaces). Use it to enter the supplier subtree without walking from
+        the root; then recurse with listChildren on the returned item ids.
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: path, in: path, required: true, schema: { type: string }, description: Folder path relative to the drive root, without leading slash. }
+        - { name: $top, in: query, schema: { type: integer, default: 200 } }
+        - { name: $select, in: query, schema: { type: string, default: "id,name,size,folder,file,lastModifiedDateTime,webUrl" } }
+      responses:
+        "200":
+          description: Collection of driveItems under the path.
+  /drives/{driveId}/root:/{path}:
+    get:
+      operationId: getItemByPath
+      summary: Resolve a file or folder by path
+      description: >-
+        Return the driveItem (id, size, file/folder facet, webUrl) for a path
+        relative to the drive root - use it to obtain the itemId of a known
+        evidence file or of the supplier folder before listing/downloading.
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: path, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The driveItem.
+  /drives/{driveId}/items/{itemId}:
+    get:
+      operationId: getItem
+      summary: Get a driveItem's metadata by id
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: itemId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The driveItem (id, name, size, facets, webUrl).
+  /drives/{driveId}/root/search(q='{q}'):
+    get:
+      operationId: driveSearch
+      summary: Search within one drive (GET, works with Sites.Selected)
+      description: >-
+        Full-text search scoped to a single document library - e.g. find
+        prior reports or evidence mentioning a supplier name inside the
+        Reports or GRC library. Preferred over searchContent because it needs
+        only the Sites.Selected read grant.
+      parameters:
+        - { name: driveId, in: path, required: true, schema: { type: string } }
+        - { name: q, in: path, required: true, schema: { type: string }, description: Search terms (supplier public name, document type). }
+        - { name: $top, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        "200":
+          description: Matching driveItems with metadata.
   /drives/{driveId}/items/{itemId}/content:
     get:
       operationId: downloadFile
       summary: Download a file's content
       description: >-
-        Download the binary content of a file (e.g. a OneTrust assessment
-        PDF, a supplier contract, a policy document) by driveId and itemId.
-        Feed the bytes to the document-analysis agents.
+        Download the content of a SMALL text-like file (policy excerpt,
+        CSV, JSON, short PDF) by driveId and itemId. For large PDFs (SOC,
+        pentest, assessments) do NOT download into the conversation: report
+        the driveId/itemId so the pipeline attaches the file to the run
+        (functions/delivery /api/fetch_evidence -> inputFileIds) and the
+        pdf-coverage method processes it in chunks.
       parameters:
         - { name: driveId, in: path, required: true, schema: { type: string } }
         - { name: itemId, in: path, required: true, schema: { type: string } }
@@ -73,32 +172,10 @@ paths:
               schema:
                 type: string
                 format: binary
-  /drives/{driveId}/items/{parentId}:/{filename}:/content:
-    put:
-      operationId: uploadFile
-      summary: Upload (or overwrite) a file
-      description: >-
-        Upload a generated deliverable (HTML dashboard, DOCX report, PPTX
-        deck) into the folder identified by parentId, creating or replacing
-        {filename}. Simple upload — suitable up to ~250 MB; the generated
-        deliverables are far below that.
-      parameters:
-        - { name: driveId, in: path, required: true, schema: { type: string } }
-        - { name: parentId, in: path, required: true, schema: { type: string }, description: itemId of the destination folder. }
-        - { name: filename, in: path, required: true, schema: { type: string } }
-      requestBody:
-        required: true
-        content:
-          application/octet-stream:
-            schema:
-              type: string
-              format: binary
-      responses:
-        "201":
-          description: Created or replaced driveItem.
   /search/query:
     post:
       operationId: searchContent
+      x-enx-read-only: true  # idempotent query POST (Graph search); kept under the read-only rule. Prefer driveSearch (GET, drive-scoped) when Sites.Selected is the only grant
       summary: Search file content across SharePoint
       description: >-
         Full-text search across SharePoint/OneDrive content (entityTypes

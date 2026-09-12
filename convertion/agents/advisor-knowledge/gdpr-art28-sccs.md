@@ -168,3 +168,28 @@ Clause 14 of the 2021 SCCs codifies this:
   not compliance; regulators read the Annexes first, and so should we.
 - "We are ISO 27001 certified" answers part of clause (c) diligence; it answers
   nothing about (a), (d), (g) or (h).
+
+
+## ISO/IEC 27701 — Privacy Information Management System (PIMS)
+
+*Added 2026-09-12 (the previous environment treated ISO 27701 as in
+scope).* ISO/IEC 27701:2019 extends ISO 27001/27002 with privacy
+requirements; a 27701 certificate is always issued as an extension of a
+27001 certificate (check the base certificate, scope and whether the
+organisation is certified as **PII controller**, **PII processor**, or
+both).
+
+| Part | Content |
+|---|---|
+| Clause 5 | PIMS-specific requirements related to ISO 27001 (context incl. privacy law, risk assessment covering PII principals) |
+| Clause 6 | PIMS-specific guidance related to ISO 27002 controls (e.g. classification of PII, PII in logs, secure disposal) |
+| Clause 7 / **Annex A** | Additional controls for **PII controllers**: conditions for collection and processing (purpose, lawful basis, consent), obligations to PII principals (rights, transparency), privacy by design and default, PII sharing/transfer/disclosure |
+| Clause 8 / **Annex B** | Additional controls for **PII processors**: customer agreement, processing only on instructions, marketing prohibition, records, sub-processor engagement and notification, breach notification, return/disposal, transfer disclosure |
+| Annex C/D/E/F | Mappings to ISO/IEC 29100, GDPR articles, ISO/IEC 27018, 29151 |
+
+GDPR use: Annex B controls mirror Art. 28(3)(a)–(h) processor duties —
+use the certificate as supporting (not conclusive) evidence of Art. 28
+compliance; Art. 42 certification is separate (no EU-wide GDPR
+certification is conferred by ISO 27701). Read the scope statement for
+the processing activities and locations covered; verify sub-processor
+notification and breach-notification timelines in the DPA regardless.

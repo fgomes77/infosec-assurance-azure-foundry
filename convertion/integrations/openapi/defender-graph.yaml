@@ -87,6 +87,7 @@ paths:
   /security/runHuntingQuery:
     post:
       operationId: runHuntingQuery
+      x-enx-read-only: true  # idempotent query POST (KQL advanced hunting, read-only on Defender data); kept under the read-only rule
       summary: Run an advanced hunting (KQL) query
       description: >-
         Execute a KQL query against the Defender XDR advanced-hunting tables

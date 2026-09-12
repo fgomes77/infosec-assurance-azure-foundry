@@ -32,14 +32,28 @@ Foundry side.
   (`Azure AI User` on the AI Foundry project). The HTTP actions use
   `"authentication": {"type": "ManagedServiceIdentity", "audience":
   "https://ai.azure.com"}` — no keys.
-- **Microsoft Graph** (SharePoint upload/list read): same managed identity,
-  granted the needed Graph application permissions
-  (`Sites.ReadWrite.All` or Sites.Selected) via Entra admin consent;
-  audience `https://graph.microsoft.com`.
+- **Microsoft Graph** (read only): same managed identity, granted
+  **read** application permissions only (`Sites.Selected` read on the
+  InfoSec Assurance site, `Mail.Read`/`Mail.ReadWrite` on the one shared
+  mailbox via an Exchange application access policy, `Calendars.Read` /
+  `Mail.Read` / `Chat.Read.All` scoped to the five team accounts for
+  `morning-brief`); audience `https://graph.microsoft.com`. **No workflow
+  writes to SharePoint through Graph** — the delivery Function's managed
+  identity is the ONLY SharePoint writer (`../sharepoint/README.md`); the
+  workflows call its `/render`, `/ensure_folder`, `/upload` endpoints. The
+  only Graph writes left are Teams channel/chat messages
+  (`teams-post-approved`, gated) and marking a mailbox message read.
+- **Foundry API version:** every definition defaults `apiVersion` to
+  `2025-05-01`; bind it to the `FOUNDRY_API_VERSION` app setting so scripts
+  and workflows pin the same data-plane version. Run polling always uses the
+  terminal-state expression `contains(createArray('completed','failed',
+  'cancelled','expired'), status)` — never `!= 'in_progress'` (which exits
+  on `queued`/`requires_action`).
 - **OneTrust / Jira / IAF API:** API tokens referenced as
   `@parameters('...')`; store the real values in **Azure Key Vault** and
   bind them through app settings (`@Microsoft.KeyVault(SecretUri=...)`).
-  Never commit tokens.
+  Never commit tokens. For Jira prefer an OAuth 2.0 (3LO) bearer for a
+  service account; the Basic API-token header is the fallback only.
 - **Teams:** incoming-webhook URL of the target channel, also a parameter.
 
 ## Parameterisation
@@ -59,21 +73,48 @@ DeepSearch dashboard to SharePoint — is preceded by a
 card to Teams) are not gated. This implements the policy in
 `../governance/HUMAN_APPROVAL.md`.
 
-Each gate is three actions, named after the submission it guards:
+Each gate is two actions, named after the submission it guards:
 
-1. `Send_approval_request_<subject>` — HTTP POST to
-   `@parameters('approvalWebhookUrl')` (securestring, default empty) with
-   the draft payload (or a description/link), the target system, the
-   correlation id (`@{workflow().run.name}`), and a callback instruction.
-2. `Wait_for_approval_<subject>` — an **HttpWebhook** action whose
-   *subscribe* posts the run's callback URL (`@{listCallbackUrl()}`) to the
-   same approval webhook. The workflow run **suspends** at this action —
-   nothing is written anywhere — until the approval system POSTs the
-   decision to the callback URL.
-3. `Check_approval_decision_<subject>` — an If condition on
-   `@body('Wait_for_approval_<subject>')?['decision']`: only `approved`
-   runs the original submit action; the else branch records the rejection
-   (a Compose annotation) and the submission is skipped.
+1. `Wait_for_approval_<subject>` (or `Human_approval_gate` in the delivery
+   pipeline) — an **HttpWebhook** action whose *subscribe* POSTs the
+   **approval request** to `@parameters('approvalWebhookUrl')`. The
+   workflow run **suspends** at this action — nothing is written anywhere —
+   until the approval system POSTs the decision to the callback URL.
+2. `Check_approval_decision_<subject>` / `If_approved` — an If condition on
+   the decision: only `approved` runs the original submit action; the else
+   branch records the rejection (a Compose annotation) and the submission is
+   skipped.
+
+Agent-generated content always passes the **output-verifier** before a
+gate is raised (`Run_output_verifier` → `Verifier_passed`): the charter
+(`../agents/verifier_instructions.md`) makes the first line exactly
+`VERDICT: PASS` or `VERDICT: FAIL`; the workflows test
+`startsWith(trim(first(split(text,'\n'))),'VERDICT: PASS')` (a bare `PASS`
+first line is tolerated). FAIL ends the run with a Teams notice — no gate,
+no write. `jira-finding-sync` carries no agent content (pure field mapping)
+and uses a deterministic pre-check instead.
+
+### Approval-callback contract (single contract for every workflow)
+
+*Subscribe body* (workflow → approval app): `callbackUrl`, `kind` (a key of
+`../team/approval-policy.json`, e.g. `REPORT_DEEPSEARCH`, `JIRA_CREATE`,
+`IAF_SUBMIT`, `TEMPLATE_UPDATE`, `TEAMS_POST`, `REPORT_ADVISORY`),
+`correlationId` (`@{workflow().run.name}`), `requestedBy`, `subject` /
+`reportType`, `targetSystem`, `draft`, `verifierVerdict` when an agent
+produced the draft.
+
+*Decision callback* (approval app → `callbackUrl`):
+
+```json
+{ "decision": "approved" | "rejected", "approver": "{approver-upn}",
+  "comment": "optional", "correlationId": "<echoed>" }
+```
+
+`decision` is compared **case-insensitively** in every workflow
+(`toLower(coalesce(decision,''))` = `approved`); anything else, including a
+missing field or expiry, is a rejection. The approval app must verify the
+approver against the policy groups and reject approver == requestedBy (see
+`../team/approval-policy.json`).
 
 **Wiring the approval side.** Point `approvalWebhookUrl` at either:
 
@@ -98,17 +139,91 @@ webhook caller is returned *before* the gate (status
 `brief_pending_approval`), so the caller is not held while a human
 reviews.
 
-## The four workflows
+## The workflows
+
+### Report delivery (requirements a–f, g/h files, briefs)
+
+`report-delivery-pipeline.json` is a **template**: deploy one instance per
+entry of `pipelines.json` (12 instances: `deepsearch-report`,
+`ai-deepsearch-report`, `dpia-dpo-report`, `cyber-forum-pptx`,
+`cyber-forum-brief`, `ciso-exec-summary`, `ciso-global-pptx`,
+`tpa-evidence-analysis`, `soc-report-summary`, `pentest-report-summary`,
+`advisory-file-delivery`, `transcript-summary`). Every key of a
+`pipelines.json` entry is a workflow parameter of the same meaning
+(`agent`→`agentId`, `libraryRoot`→`libraryRootItemId`, `approvalKind`,
+`supplierNameFallback`, `serviceNameFallback`, `portfolioStatusOnStore`,
+`appendScoreHistory`). `scripts/build_logicapps.py` (see the deployment
+note below) derives `build/logicapps/<name>/workflow.json` from the two
+files.
+
+Flow: HTTP trigger → **immediate `202 {runId, status: ACCEPTED}`** (an
+approval can take days, so the outcome is never returned synchronously —
+poll `report-status.json` or pass `callbackUrl`) → resolve
+Supplier/Service segments (fallbacks only where the manifest allows:
+`_ALL-SERVICES` for d2, `General/Threat-Intel` for non-vendor briefs;
+otherwise the run terminates `MISSING_SUPPLIER_OR_SERVICE`) → uploaded
+file ids mapped to `{file_id, tools:[file_search, code_interpreter]}` → run
+the producing agent → output-verifier → human approval gate (`kind` =
+`approvalKind`) → extract the ```` ```json ```` contract (or the
+`<!DOCTYPE …</html>` document for html) → `/render` → `/ensure_folder`
+(`Reports/<Supplier>/<Service>/`, reuse-if-exists) → `/upload` + org share
+link → optional `/portfolio_update` (TPA Status `Ongoing` after DeepSearch,
+`Complete` after the CISO decks) and `/history_append` (score history for
+the TPSRCA Trend Analyzer; `overallScore` is read from the HTML's
+`data-overall-score` attribute and never inferred) → Teams notice →
+optional callback `{runId, status, webUrl, shareUrl, fileName,
+overallScore}`.
+
+| File | Trigger | Purpose |
+|---|---|---|
+| `report-delivery-pipeline.json` | HTTP | Template above; the only path to `Reports/…` |
+| `report-status.json` | HTTP GET-by-runId | Read-only status (`GENERATING_OR_VERIFYING` / `AWAITING_APPROVAL` / `STORED` / `DECIDED_NOT_STORED`) over the Logic Apps runtime management API — no storage, no writer |
+| `template-update-approval.json` | HTTP (template-manager) | Requirement j: visual preview → approval (P7D) → `update_templates.py` job |
+
+### Routine replacements
 
 | File | Trigger | Steps | Integrations |
 |---|---|---|---|
-| `onetrust-assessment-intake.json` | Recurrence, daily | List OneTrust assessments completed since last run → for each: run the **dpia** agent on the assessment reference → **approval gate** → upload the report to SharePoint (Graph) → post a summary card to Teams | OneTrust API, Foundry (dpia), Graph/SharePoint, Teams webhook |
-| `defender-incident-brief.json` | HTTP request (webhook from a Defender/Sentinel automation rule) | Run the **cyber-forum** agent on the incident JSON → respond 200 to the caller (`brief_pending_approval`) → **approval gate** → create a Jira issue containing the brief | Defender/Sentinel, Foundry (cyber-forum), Jira |
-| `scheduled-deepsearch.json` | Recurrence, weekly | Read the supplier watchlist from a SharePoint list (Graph) → for each supplier: run the **deepsearch-protocol** agent → **approval gate** → store the HTML dashboard in SharePoint → if the score is below threshold, **approval gate** → create a Jira ticket | Graph/SharePoint, Foundry (deepsearch-protocol), Jira |
-| `jira-finding-sync.json` | Recurrence, hourly | JQL-search Jira for TPRM finding tickets updated in the last hour → for each: **approval gate** → submit the finding status to the IAF API → on failure, add a Jira comment flagging the sync error | Jira, IAF API |
+| `onetrust-assessment-intake.json` | Recurrence, daily | List OneTrust assessments completed since last run → for each: resolve Supplier (primary inventory) / Service (assessment name) → **HttpWebhook call of the `dpia-dpo-report` pipeline** with `callbackUrl` → record outcome | OneTrust API (read), delivery pipeline |
+| `scheduled-deepsearch.json` | Recurrence, weekly | Read the supplier watchlist (SharePoint list: `SupplierName`, `SupplierDomain`, `ServiceName`, `Active`; Graph read) → for each active row: **HttpWebhook call of the `deepsearch-report` pipeline** → if `STORED` and `overallScore` < threshold: **approval gate** (`JIRA_CREATE`) → create a Jira ticket | Graph (read), delivery pipeline, Jira |
+| `defender-incident-brief.json` | HTTP (Defender/Sentinel automation rule) | **cyber-forum** brief → **output-verifier** → respond 200 (`brief_pending_approval` / `brief_failed_verification`) → **approval gate** → Jira issue | Defender/Sentinel, Foundry, Jira |
+| `jira-finding-sync.json` | Recurrence, hourly | JQL search → deterministic pre-check (finding reference, allowed status) → **approval gate** (`IAF_SUBMIT`) → IAF submit → Jira comment on failure | Jira, IAF API |
+| `morning-brief.json` | Recurrence, weekdays 07:00 (one instance per user) | Graph calendar/mail/chats (read) → `morning-brief` agent (language and sections written into the schedule; `includeActionButtons` hard-coded **false** — claude.ai deep links would send Euronext context to the web) → HTML to the user's OneDrive via the delivery Function (7-day retention) → Teams DM | Graph (read), Foundry, delivery Function |
+| `mailbox-intake.json` | Recurrence, 15 min | Shared mailbox unread+attachments → file under `TPA/Inbox/<Supplier>/<Service>/` via the delivery Function → `tpa-evidence-analyzer` triage → mark read → Teams summary; **never replies** | Graph (one mailbox), Foundry, delivery Function |
+| `watch-until.json` | Recurrence, N min (one instance per watch) | Read-only GET of a Jira/OneTrust/IAF item until a field equals the expected value → run an agent once → Teams → disable itself (replaces `/loop`, "monitor until") | Jira/OneTrust/IAF (read), ARM (self-disable) |
+
+### Event / session patterns (Claude Code Remote & connector features)
+
+| File | Trigger | Steps |
+|---|---|---|
+| `scheduled-followup.json` | HTTP `{threadId, agentId, fireAt, prompt, requestedBy}` | `202` → `Delay until fireAt` → post the prompt into the **existing** Foundry thread → run → Teams notice (replaces `send_later` / `run_once_at`; scheduling a run is not a submission of record — see `../governance/HUMAN_APPROVAL.md`) |
+| `agent-fanout.json` | HTTP `{tasks[{agentId,label,prompt}], synthesisPrompt}` | parallel (5) specialist runs → collect → orchestrator synthesis → response (replaces sibling sessions / Explore-Plan subagents; read-only tools only) |
+| `generic-event-intake.json` | HTTP, HMAC-signed `{source, payload, threadId?, agentId?}` | validate signature → post event to thread as DATA → run agent → `202` (replaces `watch_url` / artifact-republish wakes) |
+| `teams-post-approved.json` | HTTP `{teamId, channelId, format, brief, requestedBy}` | `internal-comms` draft (ENX formats) → output-verifier → `202` → **approval gate** (`TEAMS_POST`) → Graph channel message from the automation identity |
+| `speech-transcription.json` | HTTP `{audioBlobUrl, supplierName, serviceName}` | Azure AI Speech batch transcription + diarization (EU) → transcript contract → `transcript-summary` pipeline (replaces `whisperx-transcribe-diarize`) |
+
+### Not converted (decision of record)
+
+| claude.ai / Claude Code feature | Decision |
+|---|---|
+| PR babysitting / PR-steward, DevOps PR-activity hooks | **Excluded** — no code-repository write workflow exists at ENX for the assurance persona; `watch-until` covers "watch a ticket/assessment until it changes". |
+| Session orchestration `send_message` between live sessions, Remote Control | **Excluded** — connected agents (synchronous hand-offs) + `agent-fanout` cover the need; no live-session bus is deployed. |
+| Push/e-mail completion notifications | Teams-only (`teamsWebhookUrl`); e-mail sending would require an approval-gated mail action (`MAIL_SEND`), not implemented by design. |
+| `morning` action buttons (`claude.ai/new` deep links) | **Removed** — would send Euronext context to the web. |
+| claude.ai docs / living documents | Delivered as DOCX/XLSX through `advisory-file-delivery` and co-edited in Word/Excel Online (decision recorded in `../governance/PLATFORM_SKILLS_DECISION.md`). |
+
+### Deployment note
+
+Instances are derived, not hand-edited: `scripts/build_logicapps.py`
+reads `pipelines.json` + `report-delivery-pipeline.json`, substitutes agent
+ids from the live Foundry listing (read-only) and drive/root ids from
+environment variables, and emits `build/logicapps/<name>/workflow.json`
+for the 12 pipeline instances plus every standalone file here;
+`ci/deploy_logicapps.sh` zips that folder and runs `az logicapp deployment
+source config-zip`. Secrets stay `@Microsoft.KeyVault(...)` app settings.
 
 Notes: the Foundry run is asynchronous — each workflow polls the run with
-an `Until` loop before reading messages. Long DeepSearch runs are why that
+an `Until` loop (terminal-state expression) before reading messages. Long DeepSearch runs are why that
 workflow (and not M365 Copilot — see
 `../integrations/copilot/README.md`) is the right channel for
 report-generating agents. If the ENX Gateway MCP server

@@ -1,0 +1,405 @@
+{
+  "_comment": "internal-comms (example skill) adapted: draft an internal communication (TPRM weekly 3P update, Cyber Forum digest, incident report per NIS2 Art. 23 / DORA Art. 19 fields) -> output-verifier -> human approval -> post to a Teams channel via Graph from the automation identity. Context gathering (Confluence/Jira/SharePoint/Defender/Teams read) happens inside the agent's read-only tools. Without approval nothing is posted.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "apiVersion": {
+        "type": "string",
+        "defaultValue": "2025-05-01",
+        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+      },
+      "internalCommsAgentId": {
+        "type": "string",
+        "defaultValue": "{internal-comms-agent-id}"
+      },
+      "verifierAgentId": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-id}"
+      },
+      "approvalWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{human-approval-subscribe-endpoint}"
+      }
+    },
+    "triggers": {
+      "Post_requested": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [
+              "teamId",
+              "channelId",
+              "format",
+              "brief",
+              "requestedBy"
+            ],
+            "properties": {
+              "teamId": {
+                "type": "string"
+              },
+              "channelId": {
+                "type": "string"
+              },
+              "format": {
+                "type": "string",
+                "description": "tprm-weekly-3p | cyber-forum-digest | incident-report | leadership-update | faq"
+              },
+              "brief": {
+                "type": "string"
+              },
+              "requestedBy": {
+                "type": "string",
+                "description": "UPN from the caller's token"
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Run_internal_comms_agent": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+          "queries": {
+            "api-version": "@parameters('apiVersion')"
+          },
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "assistant_id": "@parameters('internalCommsAgentId')",
+            "thread": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Draft the following internal communication in ENX format '@{triggerBody()?['format']}' (agents/internal-comms_addendum.md): @{triggerBody()?['brief']}. Return the message text only, framed as DRAFT."
+                }
+              ]
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {}
+      },
+      "Until_draft_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_draft_status')?['status'])",
+        "limit": {
+          "count": 40,
+          "timeout": "PT20M"
+        },
+        "runAfter": {
+          "Run_internal_comms_agent": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_Get_draft_status": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 15,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_draft_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_internal_comms_agent')?['thread_id']}/runs/@{body('Run_internal_comms_agent')?['id']}",
+              "queries": {
+                "api-version": "@parameters('apiVersion')"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_Get_draft_status": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Get_draft": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_internal_comms_agent')?['thread_id']}/messages",
+          "queries": {
+            "api-version": "@parameters('apiVersion')",
+            "order": "desc",
+            "limit": "1"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_draft_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+          "queries": {
+            "api-version": "@parameters('apiVersion')"
+          },
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "assistant_id": "@parameters('verifierAgentId')",
+            "thread": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Deliverable type: Internal communication (Teams post). Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{first(body('Get_draft')?['data'])?['content']?[0]?['text']?['value']}"
+                }
+              ]
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Get_draft": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Until_verifier_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_verifier_status')?['status'])",
+        "limit": {
+          "count": 40,
+          "timeout": "PT30M"
+        },
+        "runAfter": {
+          "Run_output_verifier": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_Get_verifier_status": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 10,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_verifier_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/runs/@{body('Run_output_verifier')?['id']}",
+              "queries": {
+                "api-version": "@parameters('apiVersion')"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_Get_verifier_status": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Get_verifier_verdict": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/messages",
+          "queries": {
+            "api-version": "@parameters('apiVersion')",
+            "order": "desc",
+            "limit": "1"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_verifier_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Verifier_passed": {
+        "_comment": "Charter format (agents/verifier_instructions.md): first line 'VERDICT: PASS|FAIL'; bare 'PASS' tolerated.",
+        "type": "Compose",
+        "inputs": "@or(startsWith(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'VERDICT: PASS'), equals(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'PASS'))",
+        "runAfter": {
+          "Get_verifier_verdict": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond_accepted": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 202,
+          "body": {
+            "runId": "@{workflow().run.name}",
+            "status": "@{if(outputs('Verifier_passed'),'DRAFT_PENDING_APPROVAL','VERIFIER_FAIL')}"
+          }
+        },
+        "runAfter": {
+          "Verifier_passed": [
+            "Succeeded"
+          ]
+        }
+      },
+      "If_verifier_passed": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Verifier_passed')",
+                true
+              ]
+            }
+          ]
+        },
+        "runAfter": {
+          "Respond_accepted": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Wait_for_approval_teams_post": {
+            "type": "HttpWebhook",
+            "inputs": {
+              "subscribe": {
+                "method": "POST",
+                "uri": "@parameters('approvalWebhookUrl')",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}",
+                  "kind": "TEAMS_POST",
+                  "correlationId": "@{workflow().run.name}",
+                  "requestedBy": "@{triggerBody()?['requestedBy']}",
+                  "subject": "Post to Teams channel @{triggerBody()?['channelId']} as the assurance automation account",
+                  "targetSystem": "Microsoft Teams (Graph chatMessage)",
+                  "draft": "@{first(body('Get_draft')?['data'])?['content']?[0]?['text']?['value']}",
+                  "verifierVerdict": "@{first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value']}"
+                }
+              },
+              "unsubscribe": {}
+            },
+            "limit": {
+              "timeout": "P3D"
+            },
+            "runAfter": {}
+          },
+          "Check_approval_decision_teams_post": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "equals": [
+                    "@toLower(coalesce(body('Wait_for_approval_teams_post')?['decision'],''))",
+                    "approved"
+                  ]
+                }
+              ]
+            },
+            "runAfter": {
+              "Wait_for_approval_teams_post": [
+                "Succeeded"
+              ]
+            },
+            "actions": {
+              "Post_channel_message": {
+                "_comment": "Sending a message on someone's behalf is a submission of record (governance/HUMAN_APPROVAL.md). Posted from the Logic App identity (Graph ChannelMessage.Send / Teamwork.Migrate NOT used; application permission scoped to the assurance team only), never as the requester.",
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "https://graph.microsoft.com/v1.0/teams/@{triggerBody()?['teamId']}/channels/@{triggerBody()?['channelId']}/messages",
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://graph.microsoft.com"
+                  },
+                  "body": {
+                    "body": {
+                      "contentType": "html",
+                      "content": "@{replace(first(body('Get_draft')?['data'])?['content']?[0]?['text']?['value'], '\n', '<br/>')}<br/><i>Approved by @{body('Wait_for_approval_teams_post')?['approver']}; drafted by the InfoSec Assurance assistant on request of @{triggerBody()?['requestedBy']}.</i>"
+                    }
+                  }
+                },
+                "runAfter": {}
+              }
+            },
+            "else": {
+              "actions": {
+                "Record_rejection_teams_post": {
+                  "type": "Compose",
+                  "inputs": {
+                    "outcome": "rejected_or_expired",
+                    "decision": "@{body('Wait_for_approval_teams_post')?['decision']}",
+                    "note": "Nothing was posted to Teams."
+                  },
+                  "runAfter": {}
+                }
+              }
+            }
+          }
+        },
+        "else": {
+          "actions": {}
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

@@ -30,6 +30,16 @@ project — both as behaviour (instructions) and as grounded knowledge
 | NIS2 | nis2 agent | nis2 references: Art. 21 measures, ISO 27001 mapping |
 | EU AI Act | eu-ai-act agent | eu-ai-act references: risk classification, high-risk obligations, GPAI governance |
 | ISO/IEC 42001 | iso42001 agent | iso42001 references: clauses, Annex A controls, AI risk methodology |
+| ISO 22301 business continuity | advisor | `advisor-knowledge/iso22301-business-continuity.md` |
+| SOC 1/2/3 (SSAE 18 / ISAE 3402 / ISAE 3000) reliance | soc-report-analyzer, tpa-evidence-analyzer, advisor | `advisor-knowledge/soc-isae-assurance-reports.md`, `tpa-evidence-review-playbook.md` |
+| CSA CCM / CAIQ / STAR | advisor, tpsrca-assessment-engine | `advisor-knowledge/csa-ccm-caiq-star.md` |
+| ISO/IEC 27701 privacy management | dpia agent (process), advisor | section "ISO/IEC 27701" in `advisor-knowledge/gdpr-art28-sccs.md` |
+| PCI DSS v4 (supplier scope) | tpa-evidence-analyzer (AOC/ROC/SAQ/ASV), advisor | `advisor-knowledge/pci-dss-v4-supplier-assurance.md` |
+| Cloud service models, shared responsibility, ICT service assurance | advisor, tpsrca | `advisor-knowledge/cloud-ict-service-assurance.md`, `tpsrca-supplier-types.md` |
+| Security architecture | advisor | `advisor-knowledge/security-architecture-reference.md` |
+| Penetration-test standards (OWASP, PTES, CVSS) | pentest-report-analyzer, advisor | `advisor-knowledge/pentest-standards-owasp-ptes-cvss.md` |
+| ISO/IEC 20000-1 service management | advisor | `advisor-knowledge/iso20000-service-management.md` |
+| ISO/IEC 27002 control attributes | iso27001 agent, advisor | `advisor-knowledge/iso27002-control-attributes.md` |
 
 ## 3. Management-framework expertise → knowledge grounding
 
@@ -42,8 +52,29 @@ project — both as behaviour (instructions) and as grounded knowledge
 | Function | Agents delivering it |
 |---|---|
 | TPRM | deepsearch-protocol, ai-deepsearch-osint, tpsrca-assessment-engine, dpia, onetrust-form-b, ciso-reporting, ciso-executive-summary, slide generators, enx-tprm-control-center |
+| TPRM — evidence review (certificates, SOC reports, pentests, questionnaires) | tpa-evidence-analyzer (req. d2), soc-report-analyzer, pentest-report-analyzer (req. e/f), pdf-full-coverage-analyzer |
+| CISO reporting line | ciso-global-report (req. d), ciso-reporting, ciso-executive-summary, pptx-executive-summary-ciso |
+| Methodology / template control (req. j) | template-manager + `workflows/template-update-approval.json` |
+| Quality gate | output-verifier (`agents/verifier_instructions.md`) — no approval gate (`HUMAN_APPROVAL.md` Layer 2 exception) |
+| Entry point / routing | orchestrator (`create_orchestrator.py`), enx-tprm-control-center router, infosec-assurance-advisor |
 | ISMS | iso27001, iso42001, advisor (27005 risk methodology, SoA/treatment support) |
 | GRC / ICT GRC | dora, nis2, eu-ai-act, cyber-forum, advisor cross-framework mapping; CMDB integration for DORA RoI |
+
+Delivery agents, orchestrator, advisor and verifier receive the persona
+from `create_delivery_agents.py` / `create_orchestrator.py`, not from the
+converter — the `build/agents` grep below therefore counts converted
+skills only; check live agent instructions for the rest.
+
+## 5. Platform data-protection rules → implementation
+
+| Persona bullet | Behaviour (instructions) | Enforcement (tool / credential / detective) |
+|---|---|---|
+| Read-only posture | preamble bullet; APPROVAL GATE block | `attach_integrations.py` non-GET strip + empty `write_connections` + MCP `readOnlyHint` check; read-only app registrations / `Sites.Selected` read (`DATA_PROTECTION_GUARDRAILS.md` §2) |
+| Web egress | preamble bullet (the only instruction-layer carrier) | Bing grounding + allow-listed osint-proxy only; `infra/kql/egress-internal-markers.kql` alert (`§1`) |
+| Injection defence | preamble bullet | verifier rule 8 (injection resistance) |
+| Minimisation | preamble bullet; advisor memory ban | verifier rule 5; `MEMORY_POLICY.md`; `scripts/memory_store.py` |
+| Sanitise and proceed | preamble closing bullet | `DATA_PROTECTION_GUARDRAILS.md` §5 non-blocking table |
+| Consistent thresholds (principle 3) | preamble principle 3 → must cite `RISK_THRESHOLDS.md` (shared delta) | verifier rule 2 scale-aware table |
 
 ## How the pack reaches the agents
 
@@ -59,7 +90,8 @@ separately); the pack is advisor-scope by design, and its files carry an
 
 ```bash
 # persona preamble + approval gate present in every built agent
-grep -rl "Principal Security Assurance Consultant" build/agents/*/instructions.md | wc -l  # = agent count
+grep -rl "Principal Security Assurance Consultant" build/agents/*/instructions.md | wc -l  # = converted agent count
+grep -rL "APPROVAL GATE" build/agents/*/instructions.md   # empty (converted agents); live: every agent except output-verifier
 
 # advisor pack present and included in the combined store (dry run prints the file count)
 ls agents/advisor-knowledge/*.md

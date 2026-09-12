@@ -56,6 +56,41 @@ used to *implement* an ISO 20000-1 service management system (SMS); 20000-1 is
 the certifiable requirements standard, ITIL the how-to. They are aligned but
 not identical — an auditor certifies against 20000-1, never "against ITIL".
 
+
+### ITIL 4 — full practice catalogue (34) and guiding principles
+
+*Added 2026-09-12.* Security-relevant practices are marked ★.
+
+| Group | Practices |
+|---|---|
+| General management (14) | Architecture management · Continual improvement · **Information security management ★** · Knowledge management · Measurement and reporting · Organizational change management · Portfolio management · Project management · Relationship management · **Risk management ★** · Service financial management · Strategy management · **Supplier management ★** · Workforce and talent management |
+| Service management (17) | **Availability management ★** · Business analysis · Capacity and performance management · **Change enablement ★** · **Incident management ★** · **IT asset management ★** · **Monitoring and event management ★** · Problem management · Release management · Service catalogue management · **Service configuration management ★** · **Service continuity management ★** · Service design · Service desk · **Service level management ★** · Service request management · Service validation and testing |
+| Technical management (3) | Deployment management · Infrastructure and platform management · Software development and management ★ |
+
+Seven guiding principles: **Focus on value** (security controls justified by
+the value they protect); **Start where you are** (assess existing controls
+before redesign); **Progress iteratively with feedback** (remediation in
+sprints with measurable outcomes); **Collaborate and promote visibility**
+(shared risk registers, transparent supplier reporting); **Think and work
+holistically** (service = people, process, technology, partners — the
+"four dimensions"); **Keep it simple and practical** (minimum viable
+control set, no duplicate evidence requests); **Optimize and automate**
+(continuous control monitoring).
+
+Service value system → ISO 27001 clause map: guiding principles ↔ 5.1
+leadership; governance ↔ 5.2/5.3; service value chain (plan, improve,
+engage, design & transition, obtain/build, deliver & support) ↔ 6.1
+planning, 8 operation, 10 improvement; practices ↔ Annex A operational
+capabilities (see `iso27002-control-attributes.md`); continual
+improvement ↔ 10.2.
+
+ITIL 4 practice ↔ ISO/IEC 20000-1:2018 clause: supplier management ↔
+8.3.4; change enablement ↔ 8.5.1; incident ↔ 8.6.1; problem ↔ 8.6.3;
+service level ↔ 8.3.3; availability ↔ 8.7.1; continuity ↔ 8.7.2;
+information security ↔ 8.7.3; configuration ↔ 8.2.6; asset ↔ 8.2.5;
+release ↔ 8.5.3; capacity ↔ 8.4.3 (details in
+`iso20000-service-management.md`).
+
 ## COBIT 2019 — governance of enterprise I&T
 
 COBIT distinguishes **governance** (evaluate, direct, monitor — board level)
@@ -82,6 +117,32 @@ for board-level accountability questions ("who evaluates, who directs, who
 monitors third-party risk?") and its capability levels (0–5, CMMI-derived)
 provide a defensible maturity scale for programme reporting.
 
+
+### COBIT 2019 — the 40 governance and management objectives
+
+*Added 2026-09-12.* Assurance relevance: ★★ core to TPRM/ISMS, ★ supporting.
+
+| Domain | Objectives |
+|---|---|
+| EDM — Evaluate, Direct, Monitor (5) | EDM01 Ensured governance framework setting and maintenance ★ · EDM02 Ensured benefits delivery · EDM03 Ensured risk optimization ★★ · EDM04 Ensured resource optimization · EDM05 Ensured stakeholder engagement ★ |
+| APO — Align, Plan, Organize (14) | APO01 Managed I&T management framework ★ · APO02 Managed strategy · APO03 Managed enterprise architecture ★ · APO04 Managed innovation · APO05 Managed portfolio · APO06 Managed budget and costs · APO07 Managed human resources ★ · APO08 Managed relationships · APO09 Managed service agreements ★★ · **APO10 Managed vendors ★★** · APO11 Managed quality · **APO12 Managed risk ★★** · **APO13 Managed security ★★** · APO14 Managed data ★★ |
+| BAI — Build, Acquire, Implement (11) | BAI01 Managed programs · BAI02 Managed requirements definition ★ · BAI03 Managed solutions identification and build ★ · BAI04 Managed availability and capacity ★ · BAI05 Managed organizational change · BAI06 Managed IT changes ★★ · BAI07 Managed IT change acceptance and transitioning ★ · BAI08 Managed knowledge · BAI09 Managed assets ★ · BAI10 Managed configuration ★★ · BAI11 Managed projects |
+| DSS — Deliver, Service, Support (6) | DSS01 Managed operations ★ · DSS02 Managed service requests and incidents ★★ · DSS03 Managed problems ★ · DSS04 Managed continuity ★★ · **DSS05 Managed security services ★★** · DSS06 Managed business process controls ★ |
+| MEA — Monitor, Evaluate, Assess (4) | MEA01 Managed performance and conformance monitoring ★ · MEA02 Managed system of internal control ★★ · MEA03 Managed compliance with external requirements ★★ · MEA04 Managed assurance ★★ |
+
+Crosswalk for grounded citations:
+
+| COBIT objective | ISO 27001:2022 | DORA | NIS2 |
+|---|---|---|---|
+| EDM03 / APO12 risk | 6.1, A 5.7 | Art. 6 ICT risk framework | Art. 21(1) |
+| APO10 vendors / APO09 agreements | A 5.19–5.22 | Art. 28–30 | Art. 21(2)(d) |
+| APO13 security / DSS05 security services | 5.1–5.3, Annex A | Art. 9 | Art. 21(2) |
+| APO14 data | A 5.12–5.14, 8.10–8.12 | Art. 9(3) | — |
+| BAI06/BAI10 change & configuration | A 8.9, 8.32 | Art. 9(4)(e) | Art. 21(2)(e) |
+| DSS02 incidents | A 5.24–5.28 | Art. 17–19 | Art. 23 |
+| DSS04 continuity | A 5.29–5.30 | Art. 11–12 | Art. 21(2)(c) |
+| MEA02/MEA03/MEA04 | 9.1–9.3, A 5.35–5.36 | Art. 6(5)–(6), 24 | Art. 20–21(2)(f) |
+
 ## COSO Internal Control — Integrated Framework (2013)
 
 Five components and seventeen principles (paraphrased):
@@ -104,6 +165,33 @@ so internal audit and infosec test once, satisfy both. In TPRM, COSO is the
 lens external auditors bring to SOC reports — SOC 2 control environments are
 described in COSO terms, which is why we read Section III of a SOC 2 before
 the control matrix.
+
+
+### COSO ERM 2017 — Enterprise Risk Management: Integrating with Strategy and Performance
+
+*Added 2026-09-12.* Five components and 20 principles:
+
+| Component | Principles |
+|---|---|
+| Governance & Culture | 1 Exercises board risk oversight · 2 Establishes operating structures · 3 Defines desired culture · 4 Demonstrates commitment to core values · 5 Attracts, develops and retains capable individuals |
+| Strategy & Objective-Setting | 6 Analyzes business context · 7 Defines risk appetite · 8 Evaluates alternative strategies · 9 Formulates business objectives |
+| Performance | 10 Identifies risk · 11 Assesses severity of risk · 12 Prioritizes risks · 13 Implements risk responses · 14 Develops portfolio view |
+| Review & Revision | 15 Assesses substantial change · 16 Reviews risk and performance · 17 Pursues improvement in ERM |
+| Information, Communication & Reporting | 18 Leverages information and technology · 19 Communicates risk information · 20 Reports on risk, culture and performance |
+
+TPRM use: risk appetite (7) drives supplier tier thresholds; portfolio
+view (14) = concentration risk across suppliers; reporting (20) = CISO
+governance deliverables.
+
+ITGC framing for SOC 1 reliance (COSO 2013 principle 11 "selects and
+develops general controls over technology"):
+
+| ITGC area | Typical SOC 1 control objectives | ISO 27001:2022 Annex A |
+|---|---|---|
+| Logical access | provisioning, removal, periodic review, privileged access | 5.15–5.18, 8.2–8.5 |
+| Change management | authorisation, testing, approval, segregation | 8.31–8.32 |
+| Computer operations | job scheduling, backup, incident handling | 5.24–5.26, 8.13, 8.16 |
+| Program development | SDLC, acceptance testing | 8.25–8.29 |
 
 ## TOGAF 10 — where security architecture engages
 
@@ -152,6 +240,31 @@ mapping; conversely, TPRM findings should feed phase H as change drivers.
 - Guardrail: iteration never waives mandatory control gates (change approval,
   risk acceptance authority); agility is about batch size, not skipping
   governance.
+
+
+### Agile frameworks, security gates and Lean IT specifics
+
+*Added 2026-09-12.*
+
+| Framework | Vocabulary | Where security gates sit |
+|---|---|---|
+| Scrum | product backlog, sprint (1–4 weeks), sprint planning/review/retrospective, Definition of Done, product owner, scrum master | security stories in the backlog; DoD includes threat-model update, SAST/SCA clean, secrets scan; review demonstrates controls |
+| Kanban | WIP limits, flow, cycle time, classes of service | expedite class for critical vulnerabilities; policy explicit per column (e.g. "security review" column) |
+| SAFe | Agile Release Train, Program Increment (PI), architectural runway, enablers, System team | security enablers in the runway; PI planning risk (ROAM) includes security; release gate = compliance checklist |
+| DevSecOps control-gate pattern | commit → build → test → release → deploy → operate | pre-commit secrets scan; CI SAST/SCA/IaC scan; pre-release DAST/pentest and SBOM; deploy approval (change enablement, 4-eyes); operate monitoring/alerting; evidence captured automatically for auditors |
+
+Lean IT: Lean Six Sigma for IT (DMAIC on incident/vulnerability
+remediation flows), ITIL 4 "Lean" service value streams, waste taxonomy
+(defects, overproduction, waiting, non-utilised talent, transport,
+inventory, motion, extra-processing) applied to assessment work.
+
+Value-stream map template for the supplier assessment pipeline:
+intake (supplier/service, criticality) → evidence collection (TPA tree,
+questionnaire) → analysis (agents, analyst review) → verification
+(output-verifier) → approval (human) → delivery (SharePoint report) →
+actions (Contract Owner) → follow-up. Measure lead time, touch time,
+rework rate (verifier FAIL), waiting at approval; remove waste by
+standard templates, automated evidence checks and clear action wording.
 
 ## ISO/IEC 20000-1:2018 — the SMS and its ISMS interface
 

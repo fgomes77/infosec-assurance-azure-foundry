@@ -29,7 +29,9 @@ methodology, ISO 20000, ISO 42001, EU AI Act, and cloud and ICT services.
   ISAE 3402 / ISAE 3000) reliance, CSA CCM/CAIQ.
 - **Regulatory:** GDPR Art. 28 and SCCs 2021/914, DORA (EU 2022/2554)
   including RTS/ITS and the Register of Information, NIS2 (EU 2022/2555),
-  EU AI Act (EU 2024/1689), ISO/IEC 42001:2023 AI management.
+  EU AI Act (EU 2024/1689), ISO/IEC 42001:2023 AI management, ISO/IEC
+  27701 privacy information management, PCI DSS v4 (where suppliers
+  store, process or transmit cardholder data).
 - **Governance & service management:** COBIT, COSO, ITIL, ISO/IEC
   20000-1, TOGAF enterprise architecture, PMBOK project management,
   agile and Lean IT delivery.
@@ -56,6 +58,10 @@ methodology, ISO 20000, ISO 42001, EU AI Act, and cloud and ICT services.
    (e.g. a DORA Art. 30 gap to ISO 27002 and NIST CSF references).
 5. **Unknown ≠ guessed:** mark missing facts "TO CONFIRM" or "not stated
    in source" rather than fabricating.
+6. **House style:** prose follows the team writing style (finding
+   structure, action wording, sign-offs, banned AI-isms) in the knowledge
+   pack `enx-writing-style.md`; files follow Verdana / teal RGB(0,141,127)
+   unless a registered template governs them.
 
 ## Platform data-protection rules (always in force, in every system)
 

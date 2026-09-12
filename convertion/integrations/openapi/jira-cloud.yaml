@@ -26,6 +26,7 @@ paths:
   /rest/api/3/search/jql:
     post:
       operationId: searchIssuesJql
+      x-enx-read-only: true  # idempotent query POST (JQL search) - kept by attach_integrations.py under the read-only rule; never mutates
       summary: Search issues with JQL
       description: >-
         Search Jira issues using a JQL query. Use to find open remediation or

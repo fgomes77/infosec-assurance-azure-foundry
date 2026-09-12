@@ -1,10 +1,12 @@
 {
-  "_comment": "Instantiation manifest for report-delivery-pipeline.json - deploy one Logic App per entry, fixing its parameters as below (agent ids come out of create_agents/create_delivery_agents; drive/root ids out of setup/.env). Every pipeline enforces the same storage rule: Reports/<Supplier>/<Service>/, supplier folder reused if present, service folder created only when missing.",
+  "_comment": "Instantiation manifest for report-delivery-pipeline.json - deploy one Logic App per entry, fixing its parameters as below (agent ids come out of create_agents/create_delivery_agents; drive/root ids out of setup/.env; scripts/build_logicapps.py derives build/logicapps/<name>/workflow.json from this file). Every pipeline enforces the same storage rule: Reports/<Supplier>/<Service>/ (Advisory/<Topic>/<Subtopic>/ for advisoryRoot), supplier folder reused if present, service folder created only when missing. Keys map 1:1 to workflow parameters: agent->agentId, reportType, renderFormat, renderTemplate, libraryRoot->libraryRootItemId, approvalKind, supplierNameFallback, serviceNameFallback, portfolioStatusOnStore, appendScoreHistory (omitted = pipeline default).",
   "shared": {
     "verifierAgent": "output-verifier",
     "sharepointDrive": "${SHAREPOINT_REPORTS_DRIVE_ID}",
     "reportsRoot": "${SHAREPOINT_REPORTS_ROOT_ITEM_ID}",
-    "dpoRoot": "${SHAREPOINT_DPO_ROOT_ITEM_ID}"
+    "dpoRoot": "${SHAREPOINT_DPO_ROOT_ITEM_ID}",
+    "advisoryRoot": "${SHAREPOINT_ADVISORY_ROOT_ITEM_ID}",
+    "apiVersion": "${FOUNDRY_API_VERSION}"
   },
   "pipelines": {
     "deepsearch-report": {
@@ -14,7 +16,10 @@
       "renderFormat": "html",
       "renderTemplate": "",
       "libraryRoot": "reportsRoot",
-      "notes": "Agent gathers public info via Bing grounding and Euronext tooling (SecurityScorecard, Defender Graph, IAF, Jira Assets CMDB, ENX gateway MCP - read-only) and emits the finished single-file HTML dashboard per the V17.02.11 template."
+      "notes": "Agent gathers public info via Bing grounding and Euronext tooling (SecurityScorecard, IAF, ENX gateway MCP - read-only; Defender Graph / Jira Assets CMDB only if attached in integrations/registry.json) and emits the finished single-file HTML dashboard per the V17.02.11 template with data-overall-score=\"NN\" on <body> (agent addendum). The verified HTML is the source for the scheduled-deepsearch low-score Jira gate. NOTE: SharePoint serves .html as a download, not inline - see sharepoint/README.md.",
+      "approvalKind": "REPORT_DEEPSEARCH",
+      "portfolioStatusOnStore": "Ongoing",
+      "appendScoreHistory": true
     },
     "dpia-dpo-report": {
       "requirement": "b",
@@ -23,7 +28,8 @@
       "renderFormat": "docx",
       "renderTemplate": "dpia",
       "libraryRoot": "dpoRoot",
-      "notes": "OT PDF uploaded by the user (inputFileIds). Stored under Reports/DPO/<Supplier>/<Service>/ and share link sent to the DPO channel."
+      "notes": "OT PDF uploaded by the user (inputFileIds). Stored under Reports/DPO/<Supplier>/<Service>/ and share link sent to the DPO channel.",
+      "approvalKind": "REPORT_DPO"
     },
     "cyber-forum-pptx": {
       "requirement": "c",
@@ -32,7 +38,9 @@
       "renderFormat": "pptx",
       "renderTemplate": "ciso-reporting",
       "libraryRoot": "reportsRoot",
-      "notes": "OT PDF(s) -> Infosec Cyber Forum deck for CISOs/stakeholders using the verified 8-slide governance template."
+      "notes": "Requirement c: OT PDF(s) -> Infosec Cyber Forum deck for CISOs/stakeholders. DECISION: the deck IS the verified 8-slide Group CISO Governance template (ciso-reporting); no separate Cyber Forum slide template exists in the export. Threat-intel context for the forum comes from the separate cyber-forum-brief pipeline (DOCX) attached alongside the deck - no merge of the two contracts (keeps the byte-verified template untouched).",
+      "approvalKind": "REPORT_CYBERFORUM",
+      "portfolioStatusOnStore": "Complete"
     },
     "ciso-global-pptx": {
       "requirement": "d",
@@ -41,7 +49,9 @@
       "renderFormat": "pptx",
       "renderTemplate": "ciso-global",
       "libraryRoot": "reportsRoot",
-      "notes": "9-slide Global CISO deck: contract owner, impacted ENX entities, service/supplier description, risk & controls resume, internal/external exposure diagram, ICT inherent+residual scores, ENX actions to the Contract Owner."
+      "notes": "9-slide Global CISO deck: contract owner, impacted ENX entities, service/supplier description, risk & controls resume, internal/external exposure diagram, ICT inherent+residual scores, ENX actions to the Contract Owner.",
+      "approvalKind": "REPORT_CISO_GLOBAL",
+      "portfolioStatusOnStore": "Complete"
     },
     "tpa-evidence-analysis": {
       "requirement": "d2",
@@ -50,7 +60,9 @@
       "renderFormat": "docx",
       "renderTemplate": "evidence-summary",
       "libraryRoot": "reportsRoot",
-      "notes": "Agent enumerates Infosec Assurance/GRC/TPA/Active/<Supplier> itself via read-only Graph tools; serviceName optional at trigger but required for storage - the pipeline asks for it."
+      "notes": "Agent enumerates Infosec Assurance/GRC/TPA/Active/<Supplier> itself via read-only Graph tools; serviceName optional at trigger (d2): when absent the report is stored under Reports/<Supplier>/_ALL-SERVICES/ (serviceNameFallback) - a Logic App cannot ask; the orchestrator collects it conversationally when the user knows it.",
+      "approvalKind": "REPORT_EVIDENCE",
+      "serviceNameFallback": "_ALL-SERVICES"
     },
     "soc-report-summary": {
       "requirement": "e",
@@ -59,7 +71,8 @@
       "renderFormat": "docx",
       "renderTemplate": "evidence-summary",
       "libraryRoot": "reportsRoot",
-      "notes": "User-uploaded SOC 1/2/3 report -> full findings/exceptions/CUEC summary."
+      "notes": "User-uploaded SOC 1/2/3 report -> full findings/exceptions/CUEC summary.",
+      "approvalKind": "REPORT_SOC"
     },
     "pentest-report-summary": {
       "requirement": "f",
@@ -68,7 +81,62 @@
       "renderFormat": "docx",
       "renderTemplate": "evidence-summary",
       "libraryRoot": "reportsRoot",
-      "notes": "User-uploaded pentest report -> normalised findings register and reliance verdict."
+      "notes": "User-uploaded pentest report -> normalised findings register and reliance verdict.",
+      "approvalKind": "REPORT_PENTEST"
+    },
+    "ciso-exec-summary": {
+      "requirement": "c/d",
+      "agent": "ciso-executive-summary",
+      "reportType": "CISOExecSummary",
+      "renderFormat": "html",
+      "renderTemplate": "",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_CISO_GLOBAL",
+      "notes": "OneTrust Infosec Form PDF -> Strategic Risk Intelligence Dashboard (single-file HTML from assets/template.html, 5-domain spider, dual-perimeter). Extraction/classification/thresholds stay in the agent (verified JSON shown to the human first, as in ciso-reporting); the agent emits the finished HTML. Registered in templates/registry.json as ciso-executive-summary-html."
+    },
+    "ai-deepsearch-report": {
+      "requirement": "a",
+      "agent": "ai-deepsearch-osint-gathering-report",
+      "reportType": "AIDeepSearch",
+      "renderFormat": "html",
+      "renderTemplate": "",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_DEEPSEARCH",
+      "portfolioStatusOnStore": "Ongoing",
+      "appendScoreHistory": true,
+      "notes": "Second DeepSearch variant from the export (same 11 sections / dashboard contract as deepsearch-protocol). Kept as its own instance so results stay reproducible vs claude.ai."
+    },
+    "cyber-forum-brief": {
+      "requirement": "c (threat-intel brief)",
+      "agent": "cyber-forum",
+      "reportType": "ThreatIntelBrief",
+      "renderFormat": "docx",
+      "renderTemplate": "evidence-summary",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_CYBERFORUM",
+      "supplierNameFallback": "General",
+      "serviceNameFallback": "Threat-Intel",
+      "notes": "On-request structured THREAT-INTEL BRIEF (sections BLUF / DETAIL / ENX RELEVANCE / RECOMMENDATION / SOURCES) as DOCX. Vendor-advisory briefs are supplier-scoped (Reports/<Supplier>/<Service>/); non-vendor briefs land in Reports/General/Threat-Intel/. Verifier rule 1 lists the five sections (agents/verifier_instructions.md)."
+    },
+    "advisory-file-delivery": {
+      "requirement": "g/h",
+      "agent": "TRIGGER",
+      "reportType": "Advisory",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "advisoryRoot",
+      "approvalKind": "REPORT_ADVISORY",
+      "notes": "Generic governed path for advisory deliverables (ISO 27001/42001, NIS2, DORA, EU AI Act, Form B drafts ...). agent = 'TRIGGER' means the caller passes agentId in the trigger body (the only instance that allows it). supplierName/serviceName are used as Advisory/<Framework-or-Topic>/<Subtopic>/ segments. Deploy one extra instance per renderFormat needed (docx via docx-generic, xlsx via xlsx-generic, pptx via tprm-board-slide) - files stay in chat only when the user does not ask to store them (agents/advisory_addendum.md). 'Living' documents are co-edited in Word/Excel Online from here (docs tool excluded)."
+    },
+    "transcript-summary": {
+      "requirement": "- (whisperx replacement)",
+      "agent": "whisperx-transcribe-diarize",
+      "reportType": "Transcript",
+      "renderFormat": "docx",
+      "renderTemplate": "evidence-summary",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_EVIDENCE",
+      "notes": "Fed by workflows/speech-transcription.json (Azure AI Speech batch transcription + diarization, EU region). The knowledge-only whisperx agent cleans/summarises the diarized transcript into the evidence-summary contract; stored as DOCX under Reports/<Supplier>/<Service>/."
     }
   }
 }

@@ -18,6 +18,10 @@ uploaded by the user and produce the **SOC Report Findings Summary**
 
 ## Analysis — extract ALL of the following
 
+(Reference: `soc-isae-assurance-reports.md` in your knowledge store —
+report sections, opinion types, TSC criteria, CUEC/CSOC semantics,
+bridge-letter rules.)
+
 1. **Opinion** — unqualified / qualified / adverse / disclaimer; quote
    the qualification language and identify the affected control
    objectives / criteria.
@@ -46,6 +50,21 @@ RELIANCE OK / RELIANCE WITH CONDITIONS / INSUFFICIENT) → report
 identification table → exceptions register → CUEC mapping table →
 subservice/carve-out register → recommended actions (bridge letter,
 CUEC confirmations, follow-ups) each with a proposed owner.
+
+## Large-document execution (code_interpreter)
+
+The pdf-full-coverage-analyzer scripts are attached to your
+code_interpreter files; uploaded PDFs are under `/mnt/data/`. Run them in
+this order and cite the run in the report's sources: `triage.py` (size,
+pages, text-layer check) → `inventory.py` (section map, fonts/images
+present) → `chunk_extract.py` (deterministic chunks → per-chunk JSON) →
+`verify_coverage.py` (every page accounted for — a coverage gap is a
+blocking defect, not a footnote) → `cross_check.py` (dates, totals,
+opinion vs exceptions). Steps that need `pdftotext`/PyMuPDF/OCR fall
+back to the pure-Python path in knowledge pack `pdf-reading-foundry.md`
+(pypdf / pdfplumber / pypdfium2; scanned pages → Document Intelligence
+via the delivery Function) — say which path ran. Intake rules for any
+other file type: knowledge pack `file-intake-foundry.md`.
 
 ## Rules
 

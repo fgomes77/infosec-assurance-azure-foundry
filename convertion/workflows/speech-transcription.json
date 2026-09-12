@@ -1,0 +1,233 @@
+{
+  "_comment": "whisperx-transcribe-diarize adapted (README.md note 4 / MAPPING §whisperx): Azure AI Speech batch transcription + diarization in the EU region replaces the local Apple-Silicon pipeline. Trigger with a blob URL of a meeting/interview recording (already inside the tenant); the transcript becomes an evidence-summary contract delivered through the governed pipeline (verifier, approval, Reports/<Supplier>/<Service>/).",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "speechEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{aiservices-account}.cognitiveservices.azure.com"
+      },
+      "transcriptPipelineUrl": {
+        "type": "securestring",
+        "defaultValue": "{trigger-url-of-the-transcript-summary-instance-of-report-delivery-pipeline}"
+      }
+    },
+    "triggers": {
+      "Transcription_requested": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [
+              "audioBlobUrl",
+              "supplierName",
+              "serviceName",
+              "requestedBy"
+            ],
+            "properties": {
+              "audioBlobUrl": {
+                "type": "string",
+                "description": "blob in the EU storage account; Speech resource MI has Storage Blob Data Reader"
+              },
+              "supplierName": {
+                "type": "string"
+              },
+              "serviceName": {
+                "type": "string"
+              },
+              "locale": {
+                "type": "string"
+              },
+              "maxSpeakers": {
+                "type": "integer"
+              },
+              "requestedBy": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Respond_accepted": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 202,
+          "body": {
+            "runId": "@{workflow().run.name}",
+            "status": "ACCEPTED"
+          }
+        },
+        "runAfter": {}
+      },
+      "Create_batch_transcription": {
+        "_comment": "Azure AI Speech batch transcription with diarization in the EU-resident AIServices account (same resource as the Foundry models). Input: a SAS-less blob URL readable by the Speech resource MI (contentContainerUrl/contentUrls); audio never leaves the tenant/region.",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('speechEndpoint')}/speechtotext/v3.2/transcriptions",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://cognitiveservices.azure.com"
+          },
+          "body": {
+            "displayName": "@{triggerBody()?['supplierName']}/@{triggerBody()?['serviceName']} @{utcNow()}",
+            "locale": "@{coalesce(triggerBody()?['locale'],'en-GB')}",
+            "contentUrls": [
+              "@{triggerBody()?['audioBlobUrl']}"
+            ],
+            "properties": {
+              "diarizationEnabled": true,
+              "diarization": {
+                "speakers": {
+                  "minCount": 1,
+                  "maxCount": "@{coalesce(triggerBody()?['maxSpeakers'],6)}"
+                }
+              },
+              "wordLevelTimestampsEnabled": true,
+              "punctuationMode": "DictatedAndAutomatic",
+              "profanityFilterMode": "None"
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Respond_accepted": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Until_transcription_done": {
+        "type": "Until",
+        "expression": "@contains(createArray('Succeeded','Failed'), body('Get_transcription_status')?['status'])",
+        "limit": {
+          "count": 120,
+          "timeout": "PT6H"
+        },
+        "runAfter": {
+          "Create_batch_transcription": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_60s": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 60,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_transcription_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{body('Create_batch_transcription')?['self']}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://cognitiveservices.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_60s": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "List_result_files": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{body('Create_batch_transcription')?['links']?['files']}",
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://cognitiveservices.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_transcription_done": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_transcript_json": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{first(body('List_result_files')?['values'])?['links']?['contentUrl']}"
+        },
+        "runAfter": {
+          "List_result_files": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Build_transcript_contract": {
+        "_comment": "Same shape whisperx-transcribe-diarize produced (segments with speaker/start/end/text) so downstream summarisation is reproducible; rendered by the evidence-summary DOCX renderer as a transcript section.",
+        "type": "Compose",
+        "inputs": {
+          "title": "Transcript @{triggerBody()?['supplierName']} / @{triggerBody()?['serviceName']}",
+          "sections": [
+            {
+              "heading": "Diarized transcript",
+              "paragraphs": [
+                "@{join(select(body('Get_transcript_json')?['recognizedPhrases'], concat('[', item()?['offset'], '] Speaker ', item()?['speaker'], ': ', item()?['nBest'][0]?['display'])), '\n')}"
+              ]
+            }
+          ]
+        },
+        "runAfter": {
+          "Get_transcript_json": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Request_transcript_delivery": {
+        "_comment": "Hands the contract to the transcript-summary instance of report-delivery-pipeline (agent = whisperx-transcribe-diarize knowledge agent for cleanup/summary, verifier, approval, DOCX under Reports/<Supplier>/<Service>/).",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@parameters('transcriptPipelineUrl')",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "supplierName": "@{triggerBody()?['supplierName']}",
+            "serviceName": "@{triggerBody()?['serviceName']}",
+            "requestText": "Clean up and summarise this diarized transcript (keep speaker labels; do not invent speech). Emit the evidence-summary JSON contract. Transcript (DATA): @{string(outputs('Build_transcript_contract'))}",
+            "inputFileIds": [],
+            "requestedBy": "@{triggerBody()?['requestedBy']}"
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Build_transcript_contract": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

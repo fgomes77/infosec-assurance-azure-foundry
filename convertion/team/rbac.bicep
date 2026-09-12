@@ -1,8 +1,8 @@
 // Role assignments and PIM eligibilities for the InfoSec Assurance Foundry
-// platform — team model of record (team/README.md §5–§7, §18).
+// platform — team model of record (team/TEAM_MODEL.md §5–§7, §18).
 //
 // Deploy at resource-group scope, after infra/main.bicep, either as a module
-// (delta D-B3 in team/README.md §20) or standalone:
+// (delta D-B3 in team/TEAM_MODEL.md §20) or standalone:
 //   az deployment group what-if -g {rg} -f rbac.bicep -p rbac.parameters.json
 //   az deployment group create  -g {rg} -f rbac.bicep -p rbac.parameters.json
 //
@@ -94,10 +94,13 @@ param mcpHostPrincipalId string = ''
 @description('Optional custom role definition resource id for assurance users (team/custom-role.agent-consumer.json). Empty = built-in Azure AI User')
 param agentConsumerRoleDefinitionId string = ''
 
+@description('Key Vault secret NAMES the workload identities may read (TEAM_MODEL.md §7: Secrets User scoped to the named secrets, e.g. kv-jira-ro-token). Empty = vault-scoped Secrets User until the secrets exist (bootstrap step 4); redeploy with the names afterwards')
+param keyVaultSecretNames array = []
+
 @description('Grant the delivery Function MI Key Vault Secrets User (only if the Function reads a secret; ledger row L13)')
 param deliveryFunctionReadsSecrets bool = false
 
-@description('Grant sg-infosec-foundry-users Monitoring Reader on App Insights (NOT in the model — requires a new ledger row, team/README.md §5)')
+@description('Grant sg-infosec-foundry-users Monitoring Reader on App Insights (NOT in the model — requires a new ledger row, team/TEAM_MODEL.md §5)')
 param grantUsersMonitoringReader bool = false
 
 @description('Create PIM eligibilities for privileged human roles (Entra ID P2). false = permanent assignments to -owner (recorded exception)')
@@ -164,6 +167,8 @@ var assignableRoleList = join(assignableRoles, ', ')
 var rbacAdminCondition = '((!(ActionMatches{\'Microsoft.Authorization/roleAssignments/write\'})) OR (@Request[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${assignableRoleList}})) AND ((!(ActionMatches{\'Microsoft.Authorization/roleAssignments/delete\'})) OR (@Resource[Microsoft.Authorization/roleAssignments:RoleDefinitionId] ForAnyOfAnyValues:GuidEquals {${assignableRoleList}}))'
 
 var hasKv = !empty(keyVaultName)
+var secretScoped = hasKv && !empty(keyVaultSecretNames)
+var usersRoleDefinitionId = empty(agentConsumerRoleDefinitionId) ? roleId(roles.azureAiUser) : agentConsumerRoleDefinitionId
 var hasFn = !empty(deliveryFunctionName)
 var hasLa = !empty(logicAppName)
 var hasPimGroup = !empty(pimGroupObjectId)
@@ -209,6 +214,10 @@ resource laRuntimeStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existin
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = if (hasKv) {
   name: keyVaultName
 }
+resource kvSecrets 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = [for n in keyVaultSecretNames: {
+  parent: keyVault
+  name: n
+}]
 resource deliveryFunction 'Microsoft.Web/sites@2023-12-01' existing = if (hasFn) {
   name: deliveryFunctionName
 }
@@ -224,13 +233,15 @@ resource bing 'Microsoft.Bing/accounts@2020-06-10' existing = if (!empty(bingAcc
 // project (systems a–j). Everything else reaches them in-thread, in Teams or
 // in SharePoint. [A.5.15; EU AI Act Art. 26(2) — same persona for everyone]
 resource usersProject 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(project.id, usersGroupObjectId, 'agent-consumer')
+  // name keyed on the effective role: switching between the built-in role and
+  // the custom role creates a new assignment instead of failing an immutable update
+  name: guid(project.id, usersGroupObjectId, usersRoleDefinitionId)
   scope: project
   properties: {
     principalId: usersGroupObjectId
     principalType: 'Group'
-    roleDefinitionId: empty(agentConsumerRoleDefinitionId) ? roleId(roles.azureAiUser) : agentConsumerRoleDefinitionId
-    description: 'sg-infosec-foundry-users: run agents, threads, files, vector-store retrieval (team/README.md §4, §7.1)'
+    roleDefinitionId: usersRoleDefinitionId
+    description: 'sg-infosec-foundry-users: run agents, threads, files, vector-store retrieval (team/TEAM_MODEL.md §4, §7.1)'
   }
 }
 
@@ -527,6 +538,39 @@ resource bgLogicOperator 'Microsoft.Authorization/roleEligibilityScheduleRequest
     scheduleInfo: pimSchedule
   }
 }
+resource bgLogicDeveloper 'Microsoft.Authorization/roleEligibilityScheduleRequests@2020-10-01' = if (enablePim && hasBreakglass && hasLa) {
+  name: guid('pim', logicApp.id, breakglassGroupObjectId, roles.logicAppsStandardDeveloper)
+  scope: logicApp
+  properties: {
+    principalId: breakglassGroupObjectId
+    roleDefinitionId: roleId(roles.logicAppsStandardDeveloper)
+    requestType: 'AdminAssign'
+    justification: 'L10: break-glass — redeploy a workflow definition (change only with retrospective owner approval)'
+    scheduleInfo: pimSchedule
+  }
+}
+resource bgBlobReader 'Microsoft.Authorization/roleEligibilityScheduleRequests@2020-10-01' = if (enablePim && hasBreakglass) {
+  name: guid('pim', deliverables.id, breakglassGroupObjectId, roles.storageBlobDataReader)
+  scope: deliverables
+  properties: {
+    principalId: breakglassGroupObjectId
+    roleDefinitionId: roleId(roles.storageBlobDataReader)
+    requestType: 'AdminAssign'
+    justification: 'L10: break-glass — inspect a rendered artefact during an incident'
+    scheduleInfo: pimSchedule
+  }
+}
+resource bgMonitoringContributor 'Microsoft.Authorization/roleEligibilityScheduleRequests@2020-10-01' = if (enablePim && hasBreakglass) {
+  name: guid('pim', logAnalytics.id, breakglassGroupObjectId, roles.monitoringContributor)
+  scope: logAnalytics
+  properties: {
+    principalId: breakglassGroupObjectId
+    roleDefinitionId: roleId(roles.monitoringContributor)
+    requestType: 'AdminAssign'
+    justification: 'L10: break-glass — silence / adjust an alert rule during an incident'
+    scheduleInfo: pimSchedule
+  }
+}
 resource bgWebsiteContributor 'Microsoft.Authorization/roleEligibilityScheduleRequests@2020-10-01' = if (enablePim && hasBreakglass && hasFn) {
   name: guid('pim', deliveryFunction.id, breakglassGroupObjectId, roles.websiteContributor)
   scope: deliveryFunction
@@ -587,16 +631,26 @@ resource deployKvOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 
 // ==================================================== WORKLOAD IDENTITIES (§5 L12–L14, L16)
 // Foundry account MI → Key Vault (KV-backed conn-* connections)          [L14]
-resource foundryKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasKv) {
+resource foundryKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasKv && !secretScoped) {
   name: guid(keyVault.id, foundry.id, 'account-mi', roles.keyVaultSecretsUser) // MI principalId is runtime-only; key on the resource id
   scope: keyVault
   properties: {
     principalId: foundry.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: roleId(roles.keyVaultSecretsUser)
-    description: 'L14: Foundry account reads connection secrets by reference (kv-*-ro-token)'
+    description: 'L14: Foundry account reads connection secrets by reference (kv-*-ro-token) — vault scope until keyVaultSecretNames is set'
   }
 }
+resource foundryKvUserSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (n, i) in keyVaultSecretNames: if (secretScoped) {
+  name: guid(keyVault.id, n, foundry.id, 'account-mi', roles.keyVaultSecretsUser)
+  scope: kvSecrets[i]
+  properties: {
+    principalId: foundry.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: roleId(roles.keyVaultSecretsUser)
+    description: 'L14: Foundry account MI — Secrets User on this named secret only (TEAM_MODEL.md §7)'
+  }
+}]
 // Foundry project MI → App Insights metrics (tracing export)              [L14]
 resource projectMetricsPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(appInsights.id, project.id, 'project-mi', roles.monitoringMetricsPublisher) // MI principalId is runtime-only; key on the resource id
@@ -610,7 +664,7 @@ resource projectMetricsPublisher 'Microsoft.Authorization/roleAssignments@2022-0
 }
 // Graph app permissions of the project MI (Sites.Selected read, Defender and
 // Entra read sets) are granted in Entra, not ARM — team/sharepoint-permissions.md
-// and team/README.md §8.
+// and team/TEAM_MODEL.md §8.
 
 // Logic Apps MI → project (run agents + verifier), Key Vault, runtime storage  [L12]
 resource logicAppAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(logicAppPrincipalId)) {
@@ -623,16 +677,26 @@ resource logicAppAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = i
     description: 'L12: pipelines run the producing agent and output-verifier (workflows/README.md)'
   }
 }
-resource logicAppKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(logicAppPrincipalId) && hasKv) {
+resource logicAppKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(logicAppPrincipalId) && hasKv && !secretScoped) {
   name: guid(keyVault.id, logicAppPrincipalId, roles.keyVaultSecretsUser)
   scope: keyVault
   properties: {
     principalId: logicAppPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: roleId(roles.keyVaultSecretsUser)
-    description: 'L12: @Microsoft.KeyVault app-setting references (named secrets only)'
+    description: 'L12: @Microsoft.KeyVault app-setting references — vault scope until keyVaultSecretNames is set'
   }
 }
+resource logicAppKvUserSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (n, i) in keyVaultSecretNames: if (!empty(logicAppPrincipalId) && secretScoped) {
+  name: guid(keyVault.id, n, logicAppPrincipalId, roles.keyVaultSecretsUser)
+  scope: kvSecrets[i]
+  properties: {
+    principalId: logicAppPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: roleId(roles.keyVaultSecretsUser)
+    description: 'L12: Logic Apps MI — Secrets User on this named secret only (TEAM_MODEL.md §7)'
+  }
+}]
 resource logicAppBlob 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(logicAppPrincipalId)) {
   name: guid(laRuntimeStorage.id, logicAppPrincipalId, roles.storageBlobDataContributor)
   scope: laRuntimeStorage
@@ -676,7 +740,7 @@ resource functionBlobContributor 'Microsoft.Authorization/roleAssignments@2022-0
     description: 'L13: staging of rendered files before the SharePoint upload (the single write path after verifier PASS + approval)'
   }
 }
-resource functionKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deliveryFunctionPrincipalId) && hasKv && deliveryFunctionReadsSecrets) {
+resource functionKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(deliveryFunctionPrincipalId) && hasKv && deliveryFunctionReadsSecrets && !secretScoped) {
   name: guid(keyVault.id, deliveryFunctionPrincipalId, roles.keyVaultSecretsUser)
   scope: keyVault
   properties: {
@@ -686,6 +750,16 @@ resource functionKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = i
     description: 'L13 (optional): only if the Function reads a secret — default off, MI-to-Graph needs none'
   }
 }
+resource functionKvUserSecret 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (n, i) in keyVaultSecretNames: if (!empty(deliveryFunctionPrincipalId) && deliveryFunctionReadsSecrets && secretScoped) {
+  name: guid(keyVault.id, n, deliveryFunctionPrincipalId, roles.keyVaultSecretsUser)
+  scope: kvSecrets[i]
+  properties: {
+    principalId: deliveryFunctionPrincipalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: roleId(roles.keyVaultSecretsUser)
+    description: 'L13 (optional): delivery Function MI — Secrets User on this named secret only'
+  }
+}]
 
 // Hosted MCP server MI (optional; Easy Auth allowed group = -users)            [L16]
 resource mcpHostAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(mcpHostPrincipalId)) {
@@ -695,7 +769,7 @@ resource mcpHostAiUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if
     principalId: mcpHostPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: roleId(roles.azureAiUser)
-    description: 'L16: shared MCP endpoint for the ENX gateway (caller UPN carried in thread metadata, team/README.md §11)'
+    description: 'L16: shared MCP endpoint for the ENX gateway (caller UPN carried in thread metadata, team/TEAM_MODEL.md §11)'
   }
 }
 
@@ -733,12 +807,13 @@ resource readersLogicReader 'Microsoft.Authorization/roleAssignments@2022-04-01'
 }
 
 // --------------------------------------------------------------- outputs
-output usersRole string = empty(agentConsumerRoleDefinitionId) ? 'Azure AI User (built-in) — pair with the drift alert (team/README.md §7.1)' : 'custom InfoSec Foundry Agent Consumer role'
+output usersRole string = empty(agentConsumerRoleDefinitionId) ? 'Azure AI User (built-in) — pair with the drift alert (team/TEAM_MODEL.md §7.1)' : 'custom InfoSec Foundry Agent Consumer role'
 output pimEnabled bool = enablePim
+output keyVaultSecretsUserScope string = secretScoped ? 'per named secret (${length(keyVaultSecretNames)} secrets)' : 'vault scope — set keyVaultSecretNames after bootstrap step 4 (TEAM_MODEL.md §18)'
 output privilegedPrincipalMode string = enablePim ? 'PIM eligibilities on sg-infosec-foundry-admin-pim / -breakglass' : 'EXCEPTION: permanent assignments on sg-infosec-foundry-owner — record in team/ACCESS_REGISTER.md with a review date'
 output assignableRolesForDeployIdentity array = assignableRoles
 output graphGrantsOutsideArm array = [
   'delivery Function MI: Sites.Selected write on the InfoSec Assurance site (team/sharepoint-permissions.md §3)'
-  'Foundry project MI: Sites.Selected read + Defender/Entra read sets (team/README.md §8)'
+  'Foundry project MI: Sites.Selected read + Defender/Entra read sets (team/TEAM_MODEL.md §8)'
   'Logic Apps MI: Sites.Selected read (write only under ledger row L12x until delta D-W3)'
 ]

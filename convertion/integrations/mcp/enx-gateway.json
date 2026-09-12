@@ -1,14 +1,17 @@
 {
-  "_comment": "ENX Gateway MCP — template for attaching the Euronext internal gateway MCP server as a tool on an Azure AI Foundry agent. Fill server_url with the tenant's gateway MCP endpoint and replace allowed_tools with the actual tool names from the gateway's own tool listing (query the server's tools/list, then allowlist ONLY the tools the agent needs — least privilege). The bearer token must be stored in Azure Key Vault and injected at deploy time (e.g. by create_agents.py reading a Key Vault secret via managed identity, or an azd/pipeline variable) — NEVER commit a real token to this repository. Placeholders in {braces} are tenant-specific values.",
+  "_comment": "ENX Gateway MCP - template for attaching the Euronext internal gateway MCP server to a Foundry agent. Fill server_url with the tenant's gateway MCP endpoint. READ-ONLY CHARTER (governance/HUMAN_APPROVAL.md Layer 1, DATA_PROTECTION_GUARDRAILS section 2): allowed_tools MUST contain ONLY read tools - attach_integrations.py calls the gateway's tools/list before attaching and refuses any tool whose annotations lack readOnlyHint=true unless the connection is named in that agent's write_connections (no agent has any). Placeholders in {braces} are tenant-specific values. Auth: this definition carries NO headers - Foundry MCP tools take server_label/server_url/allowed_tools only; the bearer token is fetched from Key Vault (secret {kv-secret-name-enx-gateway-token}) at RUN time and passed as tool_resources.mcp[].headers by the caller (Logic Apps HTTP body, mcp-server/server.py, smoke_test.py via _azure_helpers.mcp_run_headers()). Never commit a real token.",
   "type": "mcp",
   "server_label": "enx_gateway",
   "server_url": "https://{enx-gateway-host}/mcp",
   "allowed_tools": [
-    "{tool-name-1, e.g. search_supplier_register}",
-    "{tool-name-2, e.g. get_assessment_status}",
-    "{tool-name-3, e.g. submit_finding}"
+    "{read-tool-1, e.g. search_supplier_register}",
+    "{read-tool-2, e.g. get_assessment_status}",
+    "{read-tool-3, e.g. list_vulnerability_findings}"
   ],
-  "headers": {
-    "Authorization": "Bearer {token-from-key-vault}"
-  }
+  "require_approval": "never",
+  "_require_approval_justification": "'never' is safe ONLY because every allow-listed tool is read-only by construction (readOnlyHint check at attach time + gateway-side read-only policy for this project). If the gateway ever exposes a write tool to this project, list it under write_connections of a specific agent AND set require_approval to 'always' - the approval then lands in the same human gate as the workflows (kind MCP_WRITE in team/approval-policy.json).",
+  "_run_time_headers_example": {
+    "Authorization": "Bearer {token-read-from-key-vault-at-run-time-not-stored-here}"
+  },
+  "_verification": "python3 scripts/attach_integrations.py --dry-run --list-mcp-tools prints each allow-listed tool with its readOnlyHint; tools without it fail the run."
 }

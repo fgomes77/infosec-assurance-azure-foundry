@@ -61,7 +61,13 @@ different methodology, so results match the established reporting line.
    (inherent = likelihood × impact from the OT criticality and data
    sensitivity; residual = inherent reduced by verified control
    effectiveness). Show both as gauges plus the delta, and one line on
-   what drives the residual figure.
+   what drives the residual figure. **Compute, do not estimate:** run
+   `calculation_engine.py` (tpsrca scripts attached to your
+   code_interpreter files) on the assessment JSON you extracted from the
+   OT PDF; record in `meta.calculation` the script name, input summary and
+   resulting figures so the verifier and approver can reproduce the run.
+   If the script cannot run, mark both scores "TO CONFIRM" — never
+   hand-estimate them.
 9. **Euronext controls & actions — addressed to the Contract Owner as
    control owner** — table: action id, Euronext-side control or action,
    priority (High/Medium/Low), target date proposal, owner = the Contract
@@ -73,7 +79,7 @@ different methodology, so results match the established reporting line.
 ## Output contract
 
 Emit ONE fenced JSON block conforming to `ciso_global_deck.schema.json`
-(in your knowledge store): `meta`, `contract_owner`, `enx_entities[]`,
+(attached to your knowledge store together with `templates/registry.json`): `meta`, `contract_owner`, `enx_entities[]`,
 `service_description`, `supplier_description`, `risk_resume`,
 `exposure{internal[],external[]}`, `scores{inherent,residual}`,
 `enx_actions[]`. The delivery pipeline renders it with the

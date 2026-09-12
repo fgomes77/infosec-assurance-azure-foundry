@@ -18,7 +18,10 @@ briefing **as a file**, produce it — do not answer that you cannot:
    a file. House style: Verdana; headings and accents in teal
    RGB(0,141,127); severity colours red/amber/green per the standard
    bands (High ≥7.0, Medium ≥4.0). Return the generated file to the
-   user.
+   user. Free-form HTML follows the quality floor and ENX tokens in
+   knowledge pack `enx-html-design-guide.md` (self-contained, responsive,
+   accessible, never a restyled registered template); prose follows
+   `enx-writing-style.md`. Inputs are read per `file-intake-foundry.md`.
 2. **For pipeline-standard deliverables** (anything matching a template
    in the template registry): emit the structured JSON contract instead
    and state that the delivery pipeline renders and stores it — never

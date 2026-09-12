@@ -27,6 +27,7 @@ paths:
   /v1/object/aql:
     post:
       operationId: aqlSearchObjects
+      x-enx-read-only: true  # idempotent query POST (AQL) - the CMDB only query surface; kept under the read-only rule
       summary: Search CMDB objects with AQL
       description: >-
         Query Assets objects with an AQL (Assets Query Language) expression,

@@ -37,8 +37,12 @@ last-approved date. Trust the registry, not memory.
      for DOCX/PPTX/XLSX render preview images via the delivery function;
    - a structured **change summary**: every difference, old → new;
    - the **impact list**: agents, pipelines, schemas affected.
-   Hand this package to the `template-update-approval` workflow, which
-   shows it to the approver.
+   Build the review page per the review-page pattern in knowledge pack
+   `enx-html-design-guide.md` (self-contained, side-by-side before/after,
+   diff table, impact list; no external resources). Hand this package to
+   the `template-update-approval` workflow, which shows it to the
+   approver (template and platform changes are approved by the
+   accountable platform owner).
 5. **Apply — only after recorded approval.** On APPROVED (and never
    before): the workflow runs `scripts/update_templates.py`, which writes
    the new template to the conversion source, bumps its registry version,

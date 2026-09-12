@@ -1,0 +1,106 @@
+# Purpose: sanitised PUBLIC page fetch for OSINT research - the replacement
+#   for claude.ai web_fetch / Firecrawl page reads used by deepsearch-protocol
+#   (PHASE 2 streams 2A-2G: Trust Center, privacy policy, DPA, subprocessor
+#   lists, IAF CertSearch results, security headers), tpsrca-assessment-engine
+#   (Agent 3 Evidence Validator: URL accessibility + content), cyber-forum and
+#   the advisor. It is NOT a generic HTTP tool (DATA_PROTECTION_GUARDRAILS §1):
+#   served by the delivery Function (functions/delivery, GET /api/fetch_public_page)
+#   which enforces: public-host allow-list (supplier domain(s) named in the
+#   request + curated OSINT registries: IAF CertSearch, NVD, CISA KEV, EUR-Lex,
+#   ENISA, crt.sh, SecurityScorecard/SSL Labs public pages), no internal
+#   domain suffixes / private IP ranges / link-local, outbound DLP regex on the
+#   URL (internal markers ENX-*, assessment-id pattern, employee names list),
+#   response size cap (default 1 MB), HTML -> text, redirects only inside the
+#   allow-list, App Insights audit of every call (url, agent, bytes, status).
+# Auth: Foundry connection conn-osint-proxy (custom key = Function key from
+#   Key Vault) or managed identity; never in this file.
+# Residency: the Function runs in the EU region; the target hosts are public
+#   supplier / registry sites, i.e. public terms only leave the boundary.
+openapi: 3.0.3
+info:
+  title: ENX OSINT proxy - sanitised public page fetch
+  description: >-
+    Read-only fetch of allow-listed public web pages for OSINT evidence.
+    Returns extracted text plus HTTP metadata; never fetches internal
+    Euronext hosts and never forwards internal identifiers.
+  version: "1.0"
+servers:
+  - url: https://{delivery-function}.azurewebsites.net/api
+security:
+  - functionKey: []
+paths:
+  /fetch_public_page:
+    get:
+      operationId: fetchPublicPage
+      summary: Fetch and extract the text of one public web page
+      description: >-
+        Retrieve a public page (supplier trust centre, privacy/DPA page,
+        subprocessor list, certificate registry entry, advisory) and return
+        its readable text, title, final URL, status and response headers.
+        The URL must be on a public host; internal hosts, IPs and any URL
+        containing internal identifiers are refused (HTTP 403 with reason).
+        Cite the returned finalUrl and retrievedAt as the source. If the
+        page is not retrievable, record "page not retrievable" - never
+        guess its content.
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string, format: uri }
+          description: Absolute https URL of the public page.
+        - name: supplierDomain
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Public domain of the supplier under assessment (e.g. example-vendor.com).
+            Adds that domain and its sub-domains to the allow-list for this call.
+        - name: mode
+          in: query
+          required: false
+          schema: { type: string, enum: [text, head, headers], default: text }
+          description: >-
+            text = extracted readable text; head = HEAD request only
+            (accessibility check for the evidence validator); headers =
+            GET but return only the security-relevant response headers
+            (HSTS, CSP, X-Frame-Options, server) without body.
+        - name: maxBytes
+          in: query
+          required: false
+          schema: { type: integer, default: 1048576, maximum: 4194304 }
+      responses:
+        "200":
+          description: Extracted page content.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  finalUrl: { type: string }
+                  status: { type: integer }
+                  title: { type: string }
+                  text: { type: string, description: Readable text (HTML tags, scripts and navigation stripped). }
+                  headers: { type: object, additionalProperties: { type: string } }
+                  truncated: { type: boolean }
+                  retrievedAt: { type: string, format: date-time }
+        "403":
+          description: Host not allow-listed, internal host, or internal marker detected in the URL.
+        "422":
+          description: Unsupported content type or page not retrievable.
+  /allowlist:
+    get:
+      operationId: getAllowlist
+      summary: Return the curated public-host allow-list
+      description: >-
+        List the registry/authority hosts the proxy accepts by default, so
+        the agent can plan which sources are retrievable before searching.
+      responses:
+        "200":
+          description: Array of allowed host patterns.
+components:
+  securitySchemes:
+    functionKey:
+      type: apiKey
+      in: header
+      name: x-functions-key
+      description: Function key held in Key Vault and bound to the Foundry connection conn-osint-proxy.

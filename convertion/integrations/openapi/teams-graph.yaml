@@ -1,0 +1,78 @@
+# Purpose: Slack-connector replacement - READ-ONLY Microsoft Teams surface
+#   (chats and channel messages) for the context-gathering example skills
+#   (internal-comms, morning, doc-coauthoring) and interactive use.
+# Auth: DELEGATED on-behalf-of (OBO) the calling user - never app-only:
+#   Chat.Read, ChannelMessage.Read.All (delegated), Team.ReadBasic.All.
+#   The Copilot / ask-wrapper passes the user token; the wrapper exchanges it
+#   for a Graph token (integrations/copilot/README.md, Authentication). The
+#   Foundry connection conn-teams-graph holds the OAuth2 authorization-code
+#   client (no secret in this repo). Scheduled runs (workflows/morning-brief.json)
+#   use application access limited by a Teams resource-specific consent /
+#   policy to the five team members' chats only.
+# Personal data: purpose limitation - read only what the current task needs,
+#   never persist message text to shared memory (DATA_PROTECTION_GUARDRAILS
+#   personal-data section). Posting to Teams happens only via approval-gated
+#   workflows (teams-post-approved.json).
+openapi: 3.0.3
+info:
+  title: Microsoft Graph Teams (read-only, delegated subset)
+  version: "1.0"
+servers:
+  - url: https://graph.microsoft.com/v1.0
+security:
+  - oauth2Delegated: []
+paths:
+  /me/joinedTeams:
+    get:
+      operationId: listJoinedTeams
+      summary: Teams the current user belongs to
+      responses:
+        "200": { description: Teams (id, displayName). }
+  /teams/{teamId}/channels:
+    get:
+      operationId: listChannels
+      summary: Channels of a team
+      parameters:
+        - { name: teamId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Channels (id, displayName). }
+  /teams/{teamId}/channels/{channelId}/messages:
+    get:
+      operationId: listChannelMessages
+      summary: Recent messages of a channel
+      parameters:
+        - { name: teamId, in: path, required: true, schema: { type: string } }
+        - { name: channelId, in: path, required: true, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        "200": { description: Channel messages (from, createdDateTime, body). }
+  /me/chats:
+    get:
+      operationId: listChats
+      summary: Chats of the current user
+      parameters:
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+        - { name: $expand, in: query, schema: { type: string, default: "members" } }
+      responses:
+        "200": { description: Chats (id, topic, chatType, members). }
+  /me/chats/{chatId}/messages:
+    get:
+      operationId: listChatMessages
+      summary: Messages of one chat
+      parameters:
+        - { name: chatId, in: path, required: true, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        "200": { description: Chat messages. }
+components:
+  securitySchemes:
+    oauth2Delegated:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            Chat.Read: Read the user's chats.
+            ChannelMessage.Read.All: Read channel messages in the user's teams.
+            Team.ReadBasic.All: List joined teams.

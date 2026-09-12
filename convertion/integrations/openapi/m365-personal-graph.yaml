@@ -1,0 +1,71 @@
+# Purpose: Gmail + Google Calendar (personal) replacement for the example
+#   skills (morning, internal-comms, doc-coauthoring): the calling user's OWN
+#   Outlook calendar and mailbox, READ-ONLY.
+# Auth: DELEGATED on-behalf-of the calling user ONLY (Calendars.Read,
+#   Mail.Read delegated). App-only access to personal mailboxes is forbidden
+#   on this platform; the scheduled morning brief (workflows/morning-brief.json)
+#   uses an Exchange application access policy limited to the five team
+#   members. Foundry connection conn-m365-personal = OAuth2 authorization-code
+#   client registration; no secret in this repo.
+# Personal data: purpose limitation, no retention beyond the run, never
+#   written to the shared memory store or to a deliverable
+#   (DATA_PROTECTION_GUARDRAILS personal-data section).
+openapi: 3.0.3
+info:
+  title: Microsoft Graph - my calendar and mail (read-only, delegated)
+  version: "1.0"
+servers:
+  - url: https://graph.microsoft.com/v1.0
+security:
+  - oauth2Delegated: []
+paths:
+  /me/calendarView:
+    get:
+      operationId: getMyCalendarView
+      summary: Events in a time window
+      parameters:
+        - { name: startDateTime, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: endDateTime, in: query, required: true, schema: { type: string, format: date-time } }
+        - { name: $select, in: query, schema: { type: string, default: "subject,start,end,location,organizer,isOnlineMeeting,webLink" } }
+        - { name: $orderby, in: query, schema: { type: string, default: "start/dateTime" } }
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        "200": { description: Calendar events. }
+  /me/messages:
+    get:
+      operationId: listMyMessages
+      summary: Recent or searched messages in my mailbox
+      parameters:
+        - { name: $search, in: query, schema: { type: string } }
+        - { name: $filter, in: query, schema: { type: string } }
+        - { name: $select, in: query, schema: { type: string, default: "id,subject,from,receivedDateTime,isRead,importance,bodyPreview" } }
+        - { name: $top, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        "200": { description: Messages (preview only). }
+  /me/messages/{messageId}:
+    get:
+      operationId: getMyMessage
+      summary: Read one of my messages
+      parameters:
+        - { name: messageId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The message. }
+  /me/mailFolders/inbox/messages/delta:
+    get:
+      operationId: getInboxDelta
+      summary: Incremental changes of the inbox since the last delta token
+      parameters:
+        - { name: $deltatoken, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Changed messages plus next delta link. }
+components:
+  securitySchemes:
+    oauth2Delegated:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            Calendars.Read: Read the user's calendars.
+            Mail.Read: Read the user's mail.

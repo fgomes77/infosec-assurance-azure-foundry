@@ -27,9 +27,23 @@ DORA/NIS2/ISO questions or the cyber-forum agent without leaving their chat.
 This path needs no extra hosting, gives you Copilot Studio's built-in
 analytics and DLP integration, and is the fastest to govern centrally.
 
-## Option 2 — Declarative agent + API plugin via Teams Toolkit
+## Option 2 — Declarative agent + API plugin via Teams Toolkit (shipped here)
 
-For teams that prefer a code-first package:
+Deployable artefacts in this folder:
+
+| File | Role |
+|---|---|
+| `openapi/ask.yaml` | API plugin spec: `POST /ask` (advisory Q&A), `POST /request_report` (starts a `workflows/pipelines.json` pipeline, returns `runId`), `GET /report_status/{runId}` |
+| `appPackage/declarativeAgent.json`, `ai-plugin.json`, `manifest.json` | Teams Toolkit app package (placeholders in `{braces}`; add icons) — publish to `sg-infosec-foundry-users` only |
+| `function/function_app.py` (+ `host.json`, `requirements.txt`) | Thin wrapper Function: Easy Auth (Entra) → group check → Foundry thread/run with **managed identity** → OBO for user-scoped Graph reads; input limits (8 000 chars), 110 s run budget (504 → use `request_report`), App Insights logging. Also implements the **approval gate UI** the workflows' `approvalWebhookUrl` points at: `POST /approval/subscribe` (stores the draft, posts the link to Teams), `GET /approval/{id}` (draft + Approve/Reject), `POST /approval/{id}/decide` (verifies approver against `team/approval-policy.json` groups via `checkMemberGroups`, rejects self-approval, records `{kind, correlationId, requestedBy, approver, decision, timestamp}`, then POSTs `{decision, approver}` to the workflow's `callbackUrl`). Deploy it as `{copilot-wrapper-function}` (or copy to `functions/ask/`). |
+
+App settings (Key Vault references, no secrets in code): `PROJECT_ENDPOINT`,
+`FOUNDRY_API_VERSION`, `ADVISORY_AGENT_IDS_JSON`, `PIPELINE_TRIGGER_URLS_JSON`,
+`ENTRA_GROUP_USERS_OBJECT_ID`, `APPROVAL_POLICY_JSON`, `STATE_TABLE_ENDPOINT`,
+`TEAMS_APPROVAL_WEBHOOK_URL`, `TENANT_ID`, `WRAPPER_CLIENT_ID`,
+`WRAPPER_FEDERATED_ASSERTION`, `WRAPPER_BASE_URL`.
+
+Original step list:
 
 1. Deploy a **thin Azure Function** wrapper over the Foundry Agents API:
    one HTTP-triggered function per operation you want to expose, e.g.
@@ -59,10 +73,13 @@ response-shaping, or want the wrapper to also enforce input limits/logging.
   passes the user token; the wrapper exchanges it (OBO flow) for a
   downstream token. More setup (consent, `api://` scopes) but a clean audit
   trail per user.
-- **Application permissions (app-only)** — simpler when the agents only
-  reason over their own vector-store knowledge (the DORA/NIS2/ISO advisors):
-  the wrapper's managed identity calls Foundry; every user gets the same
-  capability. Do NOT use app-only if the agent can reach user-scoped data.
+- **Decision for this platform:** the wrapper ALWAYS calls Foundry with its
+  managed identity, and ALWAYS exchanges the caller's token (OBO) for the
+  user-scoped Graph reads (`teams-graph`, `m365-personal-graph`, and the
+  SharePoint-scoped advisors, whose answers must respect the user's site
+  permissions). App-only is used for nothing user-scoped — the advisors
+  carry SharePoint tools, so the earlier "app-only is simpler" option does
+  not apply here.
 - Secrets (if any client secret is unavoidable) live in **Azure Key Vault**;
   prefer managed identity / federated credentials everywhere else.
 
@@ -73,14 +90,19 @@ response-shaping, or want the wrapper to also enforce input limits/logging.
 - `cyber-forum` — security/GRC Q&A and regulatory interpretation
 - `dora`, `nis2`, `eu-ai-act`, `iso27001`, `iso42001` — compliance advisors
 
-**Poor fits (long-running, file-producing pipelines):** `ciso-reporting`,
-`deepsearch-protocol` / `ai-deepsearch-osint`, `dpia`,
-`tprm-slide-generator` / `pptx-executive-summary-ciso`. These run for
-minutes and emit HTML/DOCX/PPTX artifacts — Copilot plugin calls will time
-out and chat is the wrong delivery vehicle. Route these through the
-**workflow layer** instead (see `../../workflows/README.md`): trigger via a
-Teams workflow / Logic Apps HTTP endpoint, run asynchronously, then email
-the artifact or drop it in SharePoint and post the link back to Teams.
+- `infosec-assurance-advisor` — routing front door (default for `/ask`)
+
+**Poor fits as synchronous chat, good fits as `request_report`:** every
+delivery pipeline of `../../workflows/pipelines.json` — `deepsearch-report`,
+`ai-deepsearch-report` (a), `dpia-dpo-report` (b), `cyber-forum-pptx` (c),
+`ciso-global-pptx` (d), `tpa-evidence-analysis` (d2), `soc-report-summary`
+(e), `pentest-report-summary` (f), `ciso-exec-summary`, `cyber-forum-brief`,
+`advisory-file-delivery`, `transcript-summary`. They run for minutes and
+emit HTML/DOCX/PPTX/XLSX; Copilot starts them through `POST /request_report`
+(returns `runId`), the pipeline runs verifier → human approval → SharePoint
+`Reports/<Supplier>/<Service>/`, and the requester gets the link in Teams.
+`enx-tprm-control-center` is not surfaced: the declarative agent's own
+instructions ARE the menu.
 
 ## Governance note (ISO 42001 / EU AI Act)
 

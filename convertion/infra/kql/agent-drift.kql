@@ -1,0 +1,8 @@
+// Agent definition changed by an identity other than the deploy service
+// principal (team/least-privilege/IDENTITY_RBAC.md §2 compensating control).
+AzureDiagnostics
+| where TimeGenerated > ago(1h)
+| where ResourceProvider == "MICROSOFT.COGNITIVESERVICES"
+| where OperationName has_any ("Agents.CreateAgent", "Agents.UpdateAgent", "Agents.DeleteAgent")
+| where CallerIPAddress != "" and identity_claim_appid_g != "{deploy-service-principal-appid}"
+| project TimeGenerated, OperationName, identity_claim_appid_g, CallerIPAddress, ResultType

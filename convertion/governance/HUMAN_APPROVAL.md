@@ -21,6 +21,22 @@ only by listing the connection in that agent's `"write_connections"` in
 `integrations/registry.json` — the default for every agent is none, and any
 grant is a deliberate, reviewable diff to this repository.
 
+MCP tools follow the same rule: an `allowed_tools` list may name READ
+tools only — `attach_integrations.py` calls the gateway's `tools/list` and
+refuses any tool whose annotations lack `readOnlyHint=true` unless the
+connection is in `write_connections` (`integrations/mcp/enx-gateway.json`).
+Write-capable Euronext operations that remain in OpenAPI specs at source
+(e.g. Jira transitions, IAF submit) are stripped at attach time AND are
+reachable only from Layer 3 workflows. Identity layer: the ONLY SharePoint
+writer is the delivery Function's managed identity (`Sites.Selected` write
+on the one site); agents' Graph app and the Foundry project MI hold
+`Sites.Selected` read; the Logic App MI's direct-upload write is a
+time-boxed exception (L12x) recorded in `../team/TEAM_MODEL.md` §8 and
+`../team/ACCESS_REGISTER.md`. Reviewable-diff dependency: changes to
+`write_connections`, this folder, `workflows/`, `infra/` and `agents/`
+require CODEOWNER review and passing checks on `main` (branch protection
+per the CI delta; see `DATA_PROTECTION_GUARDRAILS.md` §3).
+
 ## Layer 2 — Behavioural: a draft-then-approve protocol in every agent
 
 `convert_skills.py` and `create_orchestrator.py` append the APPROVAL GATE
@@ -30,16 +46,35 @@ finding, report, answer set), present it to the human with a clear
 the conversation; a rejection or edit request restarts the cycle. This keeps
 behaviour correct even for channels Layer 1 cannot see (e.g. text the human
 might paste onward), and preserves the mandatory sign-off gate the
-onetrust-form-b skill already carried.
+onetrust-form-b skill already carried. Delivery agents and the
+orchestrator/advisor get the same block from `create_delivery_agents.py` /
+`create_orchestrator.py`. **Documented exception:** `output-verifier`
+carries no gate — it generates nothing and returns PASS/FAIL only; the
+count in "Verifying the control" is therefore agents − 1.
 
 ## Layer 3 — Process: approval steps inside the workflows
 
 Every Logic Apps workflow suspends before its submission-of-record actions
-(Jira create, IAF submit, SharePoint deliverable upload) on an
-`HttpWebhook` approval gate: the draft is sent to the approver (Teams), the
-workflow waits for a human `approved`/`rejected` callback, expires after 3
-days, and records rejections without submitting. Notifications-only steps
-(Teams summaries) are not gated. See `../workflows/README.md`.
+on an `HttpWebhook` approval gate: the draft is sent to the approver
+(Teams adaptive card / Power App), the workflow waits for a human
+`approved`/`rejected` callback, and expiry auto-rejects without
+submitting. Notifications-only steps (Teams summaries) are not gated.
+Approver ≠ requester and tiered approver groups are enforced by the
+approval flow per `../team/approval-policy.json`. See `../workflows/README.md`.
+
+| Gated workflow | Submission of record | Expiry |
+|---|---|---|
+| `report-delivery-pipeline.json` (the twelve deliverable pipelines in `workflows/pipelines.json`: deepsearch-report, ai-deepsearch-report, dpia-dpo-report, cyber-forum-pptx, cyber-forum-brief, ciso-global-pptx, ciso-exec-summary, tpa-evidence-analysis, soc-report-summary, pentest-report-summary, advisory-file-delivery, transcript-summary) | SharePoint upload to `Reports/<Supplier>/<Service>/` via the delivery Function (`functions/delivery`) — the only technical write path — after `output-verifier` PASS | P3D → auto-reject |
+| `defender-incident-brief.json`, `onetrust-assessment-intake.json`, `scheduled-deepsearch.json`, `jira-finding-sync.json` | report upload / Jira create / IAF submit (Jira and IAF writes exist ONLY here — Layer-3 exceptions, never in agents) | P3D |
+| `template-update-approval.json` | `scripts/update_templates.py` writes the template back, bumps `templates/registry.json` (logged in `templates/audit.log`) and re-runs convert → verify → create | **P7D** (template change = methodology change; owner-tier approval) |
+
+Documented exceptions inside Layer 3: (a) the template workflow uploads the
+before/after **review page** to the review location BEFORE approval — review
+material, not a deliverable of record; (b) the post-approval propagation
+must also pass `output-verifier` on a rendered sample from
+`templates/samples` before `Apply_template_update`, and `update_templates.py`
+must refuse to run without `--approval-run` (both shared deltas until
+implemented).
 
 ## Scope notes
 
@@ -62,10 +97,26 @@ days, and records rejections without submitting. Notifications-only steps
   instructions, and workflow run history showing approval callbacks.
 - **DORA/NIS2 context:** submissions of record into risk registers and
   ticketing remain human-accountable acts.
+- **DORA Art. 28(2)/(3) evidence retention:** Log Analytics / App Insights
+  retention is `logRetentionDays = 365` in `../infra/main.bicep`; Logic
+  Apps run history and the approval flow's persisted decision record
+  ({kind, correlationId, requestedBy, approver, decision, timestamp}) are
+  the approval evidence; `operations/BACKUP_DR.md` archives them.
+- **DORA Art. 30 contractual evidence:** stored with the assessment under
+  `Reports/<Supplier>/<Service>/` (SharePoint versioning on).
+- **Copilot second channel:** in AIMS scope; same agents, same Layers 1–2,
+  no write path. Deployer assessment: `AI-ACT-DEPLOYER-ASSESSMENT-TEMPLATE.md`.
+- Additional audit evidence: `templates/audit.log`, SharePoint version
+  history, `team/ACCESS_REGISTER.md` (write-capable identities).
 
 ## Verifying the control
 
 ```bash
 python3 ../scripts/attach_integrations.py --dry-run   # shows [read-only] on every OpenAPI tool
-grep -rn "APPROVAL GATE" ../build/agents/*/instructions.md | wc -l   # = number of agents
+grep -rn "APPROVAL GATE" ../build/agents/*/instructions.md | wc -l   # = converted agents (delivery/orchestrator agents are assembled at create time — check the live agent instructions)
+python3 ../scripts/attach_integrations.py --dry-run --list-mcp-tools           # every MCP tool shows readOnlyHint
+# live check: every agent except output-verifier carries the gate
 ```
+
+Related: `RISK_THRESHOLDS.md` (threshold changes are methodology changes),
+`MEMORY_POLICY.md`, `../team/TEAM_MODEL.md` (identities and groups).

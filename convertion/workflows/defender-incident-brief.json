@@ -7,12 +7,40 @@
         "type": "string",
         "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
       },
-      "apiVersion": { "type": "string", "defaultValue": "{foundry-api-version}" },
-      "cyberForumAgentId": { "type": "string", "defaultValue": "{cyber-forum-agent-id}" },
-      "jiraBaseUrl": { "type": "string", "defaultValue": "https://{jira-tenant}.atlassian.net" },
-      "jiraAuthHeader": { "type": "securestring", "defaultValue": "Basic {jira-basic-auth-from-key-vault}" },
-      "jiraProjectKey": { "type": "string", "defaultValue": "{jira-project-key}" },
-      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "" }
+      "apiVersion": {
+        "type": "string",
+        "defaultValue": "2025-05-01",
+        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+      },
+      "cyberForumAgentId": {
+        "type": "string",
+        "defaultValue": "{cyber-forum-agent-id}"
+      },
+      "jiraBaseUrl": {
+        "type": "string",
+        "defaultValue": "https://{jira-tenant}.atlassian.net"
+      },
+      "jiraAuthHeader": {
+        "type": "securestring",
+        "defaultValue": "{jira-auth-header-app-setting-bound-to-key-vault}",
+        "_comment": "Bind to an app setting @Microsoft.KeyVault(SecretUri=...). Preferred: OAuth 2.0 (3LO) bearer for a service account; Basic API-token only as fallback."
+      },
+      "jiraProjectKey": {
+        "type": "string",
+        "defaultValue": "{jira-project-key}"
+      },
+      "approvalWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{human-approval-subscribe-endpoint}"
+      },
+      "verifierAgentId": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-id}"
+      },
+      "teamsWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{teams-incoming-webhook-url}"
+      }
     },
     "triggers": {
       "Defender_incident_webhook": {
@@ -23,10 +51,18 @@
           "schema": {
             "type": "object",
             "properties": {
-              "incidentId": { "type": "string" },
-              "title": { "type": "string" },
-              "severity": { "type": "string" },
-              "alerts": { "type": "array" }
+              "incidentId": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "severity": {
+                "type": "string"
+              },
+              "alerts": {
+                "type": "array"
+              }
             }
           }
         }
@@ -38,9 +74,16 @@
         "inputs": {
           "method": "POST",
           "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": { "api-version": "@parameters('apiVersion')" },
-          "headers": { "Content-Type": "application/json" },
-          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" },
+          "queries": {
+            "api-version": "@parameters('apiVersion')"
+          },
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
           "body": {
             "assistant_id": "@parameters('cyberForumAgentId')",
             "thread": {
@@ -51,19 +94,36 @@
                 }
               ]
             }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
           }
         },
         "runAfter": {}
       },
       "Wait_until_brief_run_completes": {
         "type": "Until",
-        "expression": "@not(equals(body('Poll_brief_run_status')?['status'], 'in_progress'))",
-        "limit": { "count": 30, "timeout": "PT10M" },
-        "runAfter": { "Run_cyber_forum_agent_on_incident": [ "Succeeded" ] },
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Poll_brief_run_status')?['status'])",
+        "limit": {
+          "count": 30,
+          "timeout": "PT10M"
+        },
+        "runAfter": {
+          "Run_cyber_forum_agent_on_incident": [
+            "Succeeded"
+          ]
+        },
         "actions": {
           "Delay_before_poll": {
             "type": "Wait",
-            "inputs": { "interval": { "count": 10, "unit": "Second" } },
+            "inputs": {
+              "interval": {
+                "count": 10,
+                "unit": "Second"
+              }
+            },
             "runAfter": {}
           },
           "Poll_brief_run_status": {
@@ -71,10 +131,19 @@
             "inputs": {
               "method": "GET",
               "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_cyber_forum_agent_on_incident')?['thread_id']}/runs/@{body('Run_cyber_forum_agent_on_incident')?['id']}",
-              "queries": { "api-version": "@parameters('apiVersion')" },
-              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+              "queries": {
+                "api-version": "@parameters('apiVersion')"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
             },
-            "runAfter": { "Delay_before_poll": [ "Succeeded" ] }
+            "runAfter": {
+              "Delay_before_poll": [
+                "Succeeded"
+              ]
+            }
           }
         }
       },
@@ -83,10 +152,134 @@
         "inputs": {
           "method": "GET",
           "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_cyber_forum_agent_on_incident')?['thread_id']}/messages",
-          "queries": { "api-version": "@parameters('apiVersion')", "order": "desc", "limit": "1" },
-          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+          "queries": {
+            "api-version": "@parameters('apiVersion')",
+            "order": "desc",
+            "limit": "1"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
         },
-        "runAfter": { "Wait_until_brief_run_completes": [ "Succeeded" ] }
+        "runAfter": {
+          "Wait_until_brief_run_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+          "queries": {
+            "api-version": "@parameters('apiVersion')"
+          },
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "assistant_id": "@parameters('verifierAgentId')",
+            "thread": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Deliverable type: Incident brief (Jira issue draft). Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
+                }
+              ]
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Get_incident_brief_message": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Until_verifier_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_verifier_status')?['status'])",
+        "limit": {
+          "count": 40,
+          "timeout": "PT30M"
+        },
+        "runAfter": {
+          "Run_output_verifier": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_Get_verifier_status": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 10,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_verifier_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/runs/@{body('Run_output_verifier')?['id']}",
+              "queries": {
+                "api-version": "@parameters('apiVersion')"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_Get_verifier_status": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Get_verifier_verdict": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/messages",
+          "queries": {
+            "api-version": "@parameters('apiVersion')",
+            "order": "desc",
+            "limit": "1"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_verifier_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Verifier_passed": {
+        "_comment": "Charter format (agents/verifier_instructions.md): first line 'VERDICT: PASS|FAIL'; bare 'PASS' tolerated.",
+        "type": "Compose",
+        "inputs": "@or(startsWith(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'VERDICT: PASS'), equals(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'PASS'))",
+        "runAfter": {
+          "Get_verifier_verdict": [
+            "Succeeded"
+          ]
+        }
       },
       "Respond_200_to_webhook_caller": {
         "type": "Response",
@@ -94,82 +287,134 @@
         "inputs": {
           "statusCode": 200,
           "body": {
-            "status": "brief_pending_approval",
+            "status": "@{if(outputs('Verifier_passed'),'brief_pending_approval','brief_failed_verification')}",
             "correlationId": "@{workflow().run.name}"
           }
         },
-        "runAfter": { "Get_incident_brief_message": [ "Succeeded" ] }
+        "runAfter": {
+          "Verifier_passed": [
+            "Succeeded"
+          ]
+        }
       },
-      "Send_approval_request_jira_incident_issue": {
-        "type": "Http",
-        "inputs": {
-          "method": "POST",
-          "uri": "@parameters('approvalWebhookUrl')",
-          "headers": { "Content-Type": "application/json" },
-          "body": {
-            "subject": "Jira issue creation for incident @{triggerBody()?['incidentId']} (@{triggerBody()?['title']}, severity @{triggerBody()?['severity']})",
-            "targetSystem": "Jira project @{parameters('jiraProjectKey')}",
-            "draft": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}",
-            "correlationId": "@{workflow().run.name}",
-            "callback": "Approve or reject via the callback URL registered by the Wait_for_approval_jira_incident_issue step of this run."
-          }
-        },
-        "runAfter": { "Respond_200_to_webhook_caller": [ "Succeeded" ] }
-      },
-      "Wait_for_approval_jira_incident_issue": {
-        "type": "HttpWebhook",
-        "inputs": {
-          "subscribe": {
-            "method": "POST",
-            "uri": "@parameters('approvalWebhookUrl')",
-            "headers": { "Content-Type": "application/json" },
-            "body": {
-              "callbackUrl": "@{listCallbackUrl()}",
-              "correlationId": "@{workflow().run.name}",
-              "instruction": "POST {\"decision\":\"approved\"|\"rejected\",\"approver\":\"<upn>\"} to callbackUrl"
-            }
-          },
-          "unsubscribe": {}
-        },
-        "limit": { "timeout": "P3D" },
-        "runAfter": { "Send_approval_request_jira_incident_issue": [ "Succeeded" ] }
-      },
-      "Check_approval_decision_jira_incident_issue": {
+      "If_verifier_passed": {
         "type": "If",
-        "expression": { "and": [ { "equals": [ "@body('Wait_for_approval_jira_incident_issue')?['decision']", "approved" ] } ] },
-        "runAfter": { "Wait_for_approval_jira_incident_issue": [ "Succeeded" ] },
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Verifier_passed')",
+                true
+              ]
+            }
+          ]
+        },
+        "runAfter": {
+          "Respond_200_to_webhook_caller": [
+            "Succeeded"
+          ]
+        },
         "actions": {
-          "Create_Jira_issue_with_brief": {
-            "type": "Http",
+          "Wait_for_approval_jira_incident_issue": {
+            "type": "HttpWebhook",
             "inputs": {
-              "method": "POST",
-              "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue",
-              "headers": {
-                "Content-Type": "application/json",
-                "Authorization": "@parameters('jiraAuthHeader')"
-              },
-              "body": {
-                "fields": {
-                  "project": { "key": "@{parameters('jiraProjectKey')}" },
-                  "issuetype": { "name": "Task" },
-                  "summary": "Incident brief: @{triggerBody()?['title']} (@{triggerBody()?['incidentId']}, severity @{triggerBody()?['severity']})",
-                  "description": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
+              "subscribe": {
+                "method": "POST",
+                "uri": "@parameters('approvalWebhookUrl')",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}",
+                  "kind": "JIRA_CREATE",
+                  "correlationId": "@{workflow().run.name}",
+                  "requestedBy": "workflow:defender-incident-brief",
+                  "subject": "Jira issue creation for incident @{triggerBody()?['incidentId']} (@{triggerBody()?['title']}, severity @{triggerBody()?['severity']})",
+                  "targetSystem": "Jira project @{parameters('jiraProjectKey')}",
+                  "draft": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}",
+                  "verifierVerdict": "@{first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value']}"
                 }
-              }
+              },
+              "unsubscribe": {}
+            },
+            "limit": {
+              "timeout": "P3D"
             },
             "runAfter": {}
+          },
+          "Check_approval_decision_jira_incident_issue": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "equals": [
+                    "@toLower(coalesce(body('Wait_for_approval_jira_incident_issue')?['decision'],''))",
+                    "approved"
+                  ]
+                }
+              ]
+            },
+            "runAfter": {
+              "Wait_for_approval_jira_incident_issue": [
+                "Succeeded"
+              ]
+            },
+            "actions": {
+              "Create_Jira_issue_with_brief": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('jiraBaseUrl')}/rest/api/2/issue",
+                  "headers": {
+                    "Content-Type": "application/json",
+                    "Authorization": "@parameters('jiraAuthHeader')"
+                  },
+                  "body": {
+                    "fields": {
+                      "project": {
+                        "key": "@{parameters('jiraProjectKey')}"
+                      },
+                      "issuetype": {
+                        "name": "Task"
+                      },
+                      "summary": "Incident brief: @{triggerBody()?['title']} (@{triggerBody()?['incidentId']}, severity @{triggerBody()?['severity']})",
+                      "description": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
+                    }
+                  }
+                },
+                "runAfter": {}
+              }
+            },
+            "else": {
+              "actions": {
+                "Record_rejection_jira_incident_issue": {
+                  "type": "Compose",
+                  "inputs": {
+                    "outcome": "rejected_or_expired",
+                    "incidentId": "@{triggerBody()?['incidentId']}",
+                    "decision": "@{body('Wait_for_approval_jira_incident_issue')?['decision']}",
+                    "approver": "@{body('Wait_for_approval_jira_incident_issue')?['approver']}",
+                    "note": "No Jira issue was created for this incident brief."
+                  },
+                  "runAfter": {}
+                }
+              }
+            }
           }
         },
         "else": {
           "actions": {
-            "Record_rejection_jira_incident_issue": {
-              "type": "Compose",
+            "Notify_verifier_fail": {
+              "type": "Http",
               "inputs": {
-                "outcome": "rejected_or_expired",
-                "incidentId": "@{triggerBody()?['incidentId']}",
-                "decision": "@{body('Wait_for_approval_jira_incident_issue')?['decision']}",
-                "approver": "@{body('Wait_for_approval_jira_incident_issue')?['approver']}",
-                "note": "No Jira issue was created for this incident brief."
+                "method": "POST",
+                "uri": "@parameters('teamsWebhookUrl')",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "text": "❌ Incident brief for @{triggerBody()?['incidentId']} FAILED verification - no Jira issue raised. Findings: @{first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value']}"
+                }
               },
               "runAfter": {}
             }
@@ -179,5 +424,6 @@
     },
     "outputs": {}
   },
-  "parameters": {}
+  "parameters": {},
+  "_comment": "Defender/Sentinel incident webhook -> cyber-forum agent brief -> output-verifier -> 200 to the caller -> human approval gate -> Jira issue. Verifier FAIL ends the run with a Teams notice (no gate, no Jira)."
 }
