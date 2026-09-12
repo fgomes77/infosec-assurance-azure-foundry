@@ -10,7 +10,7 @@ system tree is not user data and re-materialises identically in every session.
 | Path | Contents | In this backup? |
 |---|---|---|
 | `/home/user/<repo>` | The cloned repository (working directory) | Is the repository itself |
-| `/mnt/skills` | Anthropic built-in skills (8 public + 32 examples) | Yes — `platform-skills/` |
+| `/mnt/skills` | Anthropic built-in skills (8 public + 33 examples) | Yes — `platform-skills/` |
 | `/mnt/attach`, `/mnt/user-data` | Empty session mount points | Nothing to copy |
 | `/root/.claude` | Agent config: account skill sync, session hooks, launcher settings | Skills yes (`skills/`); hooks and settings are harness-provisioned per container and blocked from export as sensitive-source — they regenerate automatically |
 | `/root/.ccr` | Network proxy CA bundle and credentials | Never exported (credentials) |
