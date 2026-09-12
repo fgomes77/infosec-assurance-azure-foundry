@@ -14,6 +14,22 @@ list of every template: id, human name, format, source path in the
 conversion build, which agents/pipelines consume it, current version and
 last-approved date. Trust the registry, not memory.
 
+Two registry fields carry evidence rather than configuration and are never
+edited by hand:
+
+- `promoted_agent_versions` — the `<agent>:<version>` refs the last approved
+  propagation promoted. `update_templates.py` writes them from the deploy
+  ledger `build/agent-versions.json` after the consuming agents have been
+  recreated, and appends the same list as `agent_versions=…` to
+  `templates/audit.log`. An approved template change is therefore linked to the
+  exact agent versions serving it, and **rollback means switching those agents
+  back to the previous versions**, not redeploying.
+- `sensitivity_label` — the per-report-type Purview label applied to the stored
+  file by the delivery Function; empty means the Reports library default label
+  stands.
+
+Full field reference: `templates/README.md`.
+
 ## Workflow — five steps, in order, no skipping
 
 1. **Select.** When the user wants to analyse or update a template,

@@ -87,6 +87,24 @@ Low-risk change (`CHANGE_MANAGEMENT.md` §5).
 
 ## 4. Alert catalogue (`alerts.bicep`)
 
+> **Two catalogues exist — deploy exactly one.** `../infra/monitoring.bicep` is
+> the **set of record**: a module of `../infra/main.bicep` (`enableMonitoring`),
+> owning the action groups `{baseName}-ag` / `{baseName}-ag-soc`, the five
+> platform rules and the Defender-for-AI activity-log routing (finding C17).
+> `alerts.bicep` below is the **extended operations catalogue**: the same five
+> signals plus latency/token budget, delivery-function 5xx, break-glass,
+> Key Vault human secret read, 429 throttling and the daily token budget, on
+> its own action groups. Deploying both double-pages the owner, because the
+> same signals appear under different rule names
+> (`egress-internal-markers` ~ `egress-internal-marker`, `pipeline-failures` ~
+> `pipeline-run-failed`, `approval-expiry` ~ `approval-sla`, `agent-drift` ~
+> `agent_modified_by_non_deploy_identity`). Choose: default =
+> `enableMonitoring: true` and `alerts.bicep` not deployed; extended =
+> `enableMonitoring: false` and `alerts.bicep` deployed standalone. The
+> thresholds in this section are the catalogue of record either way, and
+> `alerts.bicep` is never wired as a module of `main.bicep`.
+
+
 Action groups: `infosec-foundry-ag-owner` (e-mail to
 `{email:sg-infosec-foundry-owner}` + optional Teams webhook of
 `{teams:infosec-assurance-platform}`); `infosec-foundry-ag-soc` (optional
@@ -131,6 +149,7 @@ contents (W5), Copilot publication age (FM-30), SharePoint sharing scope
 | Data protection | egress hits (should be flat zero); content-filter blocks; tool calls per connection | `egress-detection.kql`; `AppDependencies` by `gen_ai.tool.name` |
 | Privileged access | ARM writes by caller; PIM activations (from the IAM report); KV human reads | `AzureActivity`; `AzureDiagnostics` |
 | Cost | tokens and estimated EUR per agent, per tier; month-to-date vs forecast | `latency-and-tokens.kql`; Cost Management |
+| KPIs | the weekly snapshot tiles of `KPIS.md` §3 (A1, Q1, E1a–c, E4, E5, R1, R4, R6, R7, R11) with green/amber/red thresholds | the queries named per KPI in `KPIS.md` §1 |
 
 The workbook is version-controlled like everything else (A.8.9):
 `operations/workbook.json` is the importable Azure Workbook definition

@@ -276,3 +276,12 @@ workflow (and not M365 Copilot — see
 report-generating agents. If the ENX Gateway MCP server
 (`../integrations/mcp/enx-gateway.json`) is attached to an agent, the tool
 calls happen inside the Foundry run; the workflows need no extra steps.
+
+### Diagnostic settings (required for the operations alerts)
+
+Enable the diagnostic setting with category **`WorkflowRuntime`** on
+`{baseName}-la` to the platform Log Analytics workspace. The operations alerts
+(`../operations/MONITORING.md` §4) read `LogicAppWorkflowRuntime` and key on
+the action names `Human_approval_gate`, `Wait_for_approval_*` and
+`Notify_verifier_fail` — **keep those names when editing definitions**, or the
+verifier-fail-rate and approval-SLA alerts go silent.

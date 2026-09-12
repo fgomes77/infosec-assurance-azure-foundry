@@ -109,6 +109,7 @@ File `Governance/Onboarding/{upn}.md`:
 | Draft shadow-reviewed | {pipeline}, requester {upn:peer} |
 | I confirm I understand: read-only agents, verifier + human approval, no Euronext data to the web, thread/memory conventions | signature {upn}, {date} |
 | Owner confirmation | {upn:francisco.gomes}, {date} |
+| Training quiz (`../operations/ROLLOUT_PLAN.md` §5, modules T1–T5) | ≥ 80 % | joiner + owner |
 ```
 
 Then the owner adds the joiner to `sg-infosec-foundry-report-approvers`

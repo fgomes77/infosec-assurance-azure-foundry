@@ -8,8 +8,9 @@
 // rule here - two alert catalogues on one signal means duplicate pages.
 //
 // Deploy at resource-group scope AFTER infra/main.bicep (needs the Log Analytics
-// workspace and the Foundry account it created), as a module (delta D-OPS-B1 in
-// MONITORING.md §7) or standalone:
+// workspace and the Foundry account it created). Deploy it STANDALONE — do
+// NOT wire it as a module of main.bicep, which already deploys
+// infra/monitoring.bicep (see the reconciliation note below):
 //   az deployment group what-if -g {rg} -f alerts.bicep \
 //       -p logAnalyticsName={baseName}-logs foundryAccountName={baseName}-aif \
 //          ownerAlertEmail={email:sg-infosec-foundry-owner}
@@ -28,6 +29,35 @@
 //   - skipQueryValidation is on: tables such as LogicAppWorkflowRuntime only exist
 //     once diagnostic settings have shipped data (MONITORING.md §2 delta D-OPS-B2)
 //
+//
+// ===========================================================================
+// TWO ALERT CATALOGUES — WHICH ONE IS DEPLOYED (reconciliation 2026-09-12)
+// ===========================================================================
+// `infra/monitoring.bicep` is the SET OF RECORD: it is a module of
+// infra/main.bicep (`enableMonitoring`), owns the action groups
+// `{baseName}-ag` and `{baseName}-ag-soc`, the five platform rules
+// (egress-internal-markers, verifier-fail-rate, pipeline-failures,
+// approval-expiry, agent-drift + agent_version_not_in_manifest) and the
+// Defender-for-AI activity-log routing (finding C17).
+//
+// `operations/alerts.bicep` is the EXTENDED OPERATIONS CATALOGUE: the same
+// five signals PLUS latency-and-token-budget, delivery-function-5xx,
+// breakglass_window_write, keyvault-human-secret-read, model-throttling-429
+// and daily-token-budget, on its own action groups `{alertPrefix}-ag-owner`
+// / `-ag-soc`.
+//
+// **Deploy exactly one of the two.** They cover overlapping signals under
+// different rule names, so deploying both double-pages the owner:
+//   * default            -> main.bicep with `enableMonitoring: true`, and
+//                           operations/alerts.bicep NOT deployed;
+//   * extended operations -> main.bicep with `enableMonitoring: false`, then
+//                           operations/alerts.bicep standalone.
+// Name mapping between the two: egress-internal-markers ~
+// egress-internal-marker; pipeline-failures ~ pipeline-run-failed;
+// approval-expiry ~ approval-sla; agent-drift ~
+// agent_modified_by_non_deploy_identity. `operations/MONITORING.md` §4 is the
+// catalogue of record for thresholds either way.
+// ===========================================================================
 // Placeholders in {braces}; no real e-mail addresses, hostnames or object ids.
 
 targetScope = 'resourceGroup'

@@ -2,30 +2,80 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "foundryAccountName": { "value": "infosecfoundry-aif" },
-    "projectName": { "value": "infosecfoundry-proj" },
-    "logAnalyticsName": { "value": "infosecfoundry-logs" },
-    "appInsightsName": { "value": "infosecfoundry-appi" },
-    "storageAccountName": { "value": "infosecfoundrysa" },
-    "keyVaultName": { "value": "infosecfoundry-kv" },
-    "keyVaultSecretNames": { "value": [] },
-    "deliveryFunctionName": { "value": "infosecfoundry-fn-delivery" },
-    "logicAppName": { "value": "infosecfoundry-la" },
-    "logicAppRuntimeStorageAccountName": { "value": "" },
-    "bingAccountName": { "value": "infosecfoundry-bing" },
-    "usersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-users}" },
-    "ownerGroupObjectId": { "value": "{objectId:sg-infosec-foundry-owner}" },
-    "pimGroupObjectId": { "value": "{objectId:sg-infosec-foundry-admin-pim}" },
-    "breakglassGroupObjectId": { "value": "{objectId:sg-infosec-foundry-breakglass}" },
-    "readersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-readers}" },
-    "deployerPrincipalId": { "value": "{objectId:app-infosec-foundry-deployer}" },
-    "logicAppPrincipalId": { "value": "{principalId:mi-infosecfoundry-la}" },
-    "deliveryFunctionPrincipalId": { "value": "{principalId:mi-infosec-delivery-fn}" },
-    "mcpHostPrincipalId": { "value": "" },
-    "agentConsumerRoleDefinitionId": { "value": "" },
-    "deliveryFunctionReadsSecrets": { "value": false },
-    "grantUsersMonitoringReader": { "value": false },
-    "enablePim": { "value": true },
-    "pimEligibilityDuration": { "value": "P365D" }
+    "foundryAccountName": {
+      "value": "infosecfoundry-aif"
+    },
+    "projectName": {
+      "value": "infosecfoundry-proj"
+    },
+    "logAnalyticsName": {
+      "value": "infosecfoundry-logs"
+    },
+    "appInsightsName": {
+      "value": "infosecfoundry-appi"
+    },
+    "storageAccountName": {
+      "value": "infosecfoundrysa"
+    },
+    "keyVaultName": {
+      "value": "infosecfoundry-kv"
+    },
+    "keyVaultSecretNames": {
+      "value": []
+    },
+    "deliveryFunctionName": {
+      "value": "infosecfoundry-fn-delivery"
+    },
+    "logicAppName": {
+      "value": "infosecfoundry-la"
+    },
+    "logicAppRuntimeStorageAccountName": {
+      "value": ""
+    },
+    "bingAccountName": {
+      "value": "infosecfoundry-bing"
+    },
+    "usersGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-users}"
+    },
+    "ownerGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-owner}"
+    },
+    "pimGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-admin-pim}"
+    },
+    "breakglassGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-breakglass}"
+    },
+    "readersGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-readers}"
+    },
+    "deployerPrincipalId": {
+      "value": "{objectId:app-infosec-foundry-deployer}"
+    },
+    "logicAppPrincipalId": {
+      "value": "{principalId:mi-infosecfoundry-la}"
+    },
+    "deliveryFunctionPrincipalId": {
+      "value": "{principalId:mi-infosec-delivery-fn}"
+    },
+    "mcpHostPrincipalId": {
+      "value": ""
+    },
+    "agentConsumerRoleDefinitionId": {
+      "value": ""
+    },
+    "deliveryFunctionReadsSecrets": {
+      "value": false
+    },
+    "grantUsersMonitoringReader": {
+      "value": false
+    },
+    "enablePim": {
+      "value": true
+    },
+    "pimEligibilityDuration": {
+      "value": "P365D"
+    }
   }
 }

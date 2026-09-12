@@ -2,75 +2,197 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "baseName": { "value": "infosecfoundry" },
-    "location": { "value": "swedencentral" },
-    "environmentName": { "value": "dev" },
-
-    "modelName": { "value": "gpt-4o" },
-    "modelVersion": { "value": "2024-11-20" },
-    "modelCapacity": { "value": 50 },
-    "reasoningModelName": { "value": "o4-mini" },
-    "reasoningModelVersion": { "value": "2025-04-16" },
-    "reasoningModelCapacity": { "value": 30 },
-    "lightModelName": { "value": "gpt-4o-mini" },
-    "lightModelVersion": { "value": "2024-07-18" },
-    "lightModelCapacity": { "value": 100 },
-    "chatModelFormat": { "value": "OpenAI" },
-    "reasoningModelFormat": { "value": "OpenAI" },
-    "lightModelFormat": { "value": "OpenAI" },
-    "deploymentSku": { "value": "DataZoneStandard" },
-    "modelVersionUpgradeOption": { "value": "NoAutoUpgrade" },
-    "enableWebSearch": { "value": true },
-
-    "publicNetworkAccess": { "value": "Enabled" },
-    "enablePrivateNetworking": { "value": false },
-    "logRetentionDays": { "value": 365 },
-    "storageSku": { "value": "Standard_ZRS" },
-    "enableDocumentIntelligence": { "value": true },
-    "enableSpeech": { "value": false },
-
-    "enableStandardAgentSetup": { "value": true },
-    "cosmosThroughputLimitRuPerSecond": { "value": 3000 },
-    "conversationRetentionDays": { "value": 90 },
-    "searchSku": { "value": "basic" },
-    "enableAgentVnetInjection": { "value": false },
-    "agentSubnetId": { "value": "" },
-    "cmkKeyUri": { "value": "" },
-    "cmkKeyName": { "value": "infosec-foundry-cmk" },
-    "searchCmkEnforcement": { "value": "Unspecified" },
-    "enablePolicyAssignments": { "value": false },
-    "policyEffectMode": { "value": "Audit" },
-    "denyGlobalSkuDefinitionId": { "value": "" },
-    "purviewAccountId": { "value": "" },
-    "enableDefenderAiAlerts": { "value": false },
-    "socEmail": { "value": "{soc-mailbox}" },
-    "agentIdentityPrincipalIds": { "value": [] },
-
-    "enableDelivery": { "value": true },
-    "deliveryImage": { "value": "" },
-    "officeToolsImage": { "value": "" },
-    "enableLogicApps": { "value": true },
-    "enableMcpHosting": { "value": false },
-    "mcpImage": { "value": "{registry}.azurecr.io/infosec-mcp:{tag}" },
-    "mcpEasyAuthClientId": { "value": "{app-registration-client-id}" },
-    "enableStaticWebApp": { "value": false },
-    "enableMonitoring": { "value": true },
-    "ownerEmail": { "value": "{owner-mailbox}" },
-    "alertWebhookUrl": { "value": "" },
-    "enableBudget": { "value": false },
-    "monthlyBudget": { "value": 1500 },
-    "budgetStartDate": { "value": "{yyyy-MM-01}" },
-
-    "deployTeamRbac": { "value": false },
-    "usersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-users}" },
-    "ownerGroupObjectId": { "value": "{objectId:sg-infosec-foundry-owner}" },
-    "readersGroupObjectId": { "value": "" },
-    "pimGroupObjectId": { "value": "" },
-    "breakglassGroupObjectId": { "value": "" },
-    "deployerPrincipalId": { "value": "" },
-    "deployServicePrincipalAppId": { "value": "{deploy-service-principal-appid}" },
-
-    "sharepointSiteId": { "value": "{sharepoint-site-id}" },
-    "sharepointReportsDriveId": { "value": "{sharepoint-reports-drive-id}" }
+    "baseName": {
+      "value": "infosecfoundry"
+    },
+    "location": {
+      "value": "swedencentral"
+    },
+    "environmentName": {
+      "value": "dev"
+    },
+    "modelName": {
+      "value": "gpt-4o"
+    },
+    "modelVersion": {
+      "value": "2024-11-20"
+    },
+    "modelCapacity": {
+      "value": 50
+    },
+    "reasoningModelName": {
+      "value": "o4-mini"
+    },
+    "reasoningModelVersion": {
+      "value": "2025-04-16"
+    },
+    "reasoningModelCapacity": {
+      "value": 30
+    },
+    "lightModelName": {
+      "value": "gpt-4o-mini"
+    },
+    "lightModelVersion": {
+      "value": "2024-07-18"
+    },
+    "lightModelCapacity": {
+      "value": 100
+    },
+    "chatModelFormat": {
+      "value": "OpenAI"
+    },
+    "reasoningModelFormat": {
+      "value": "OpenAI"
+    },
+    "lightModelFormat": {
+      "value": "OpenAI"
+    },
+    "deploymentSku": {
+      "value": "DataZoneStandard"
+    },
+    "modelVersionUpgradeOption": {
+      "value": "NoAutoUpgrade"
+    },
+    "enableWebSearch": {
+      "value": true
+    },
+    "publicNetworkAccess": {
+      "value": "Enabled"
+    },
+    "enablePrivateNetworking": {
+      "value": false
+    },
+    "logRetentionDays": {
+      "value": 365
+    },
+    "storageSku": {
+      "value": "Standard_ZRS"
+    },
+    "enableDocumentIntelligence": {
+      "value": true
+    },
+    "enableSpeech": {
+      "value": false
+    },
+    "enableStandardAgentSetup": {
+      "value": true
+    },
+    "cosmosThroughputLimitRuPerSecond": {
+      "value": 3000
+    },
+    "conversationRetentionDays": {
+      "value": 90
+    },
+    "searchSku": {
+      "value": "basic"
+    },
+    "enableAgentVnetInjection": {
+      "value": false
+    },
+    "agentSubnetId": {
+      "value": ""
+    },
+    "cmkKeyUri": {
+      "value": ""
+    },
+    "cmkKeyName": {
+      "value": "infosec-foundry-cmk"
+    },
+    "searchCmkEnforcement": {
+      "value": "Unspecified"
+    },
+    "enablePolicyAssignments": {
+      "value": false
+    },
+    "policyEffectMode": {
+      "value": "Audit"
+    },
+    "denyGlobalSkuDefinitionId": {
+      "value": ""
+    },
+    "purviewAccountId": {
+      "value": ""
+    },
+    "enableDefenderAiAlerts": {
+      "value": false
+    },
+    "socEmail": {
+      "value": "{soc-mailbox}"
+    },
+    "agentIdentityPrincipalIds": {
+      "value": []
+    },
+    "enableDelivery": {
+      "value": true
+    },
+    "deliveryImage": {
+      "value": ""
+    },
+    "officeToolsImage": {
+      "value": ""
+    },
+    "enableLogicApps": {
+      "value": true
+    },
+    "enableMcpHosting": {
+      "value": false
+    },
+    "mcpImage": {
+      "value": "{registry}.azurecr.io/infosec-mcp:{tag}"
+    },
+    "mcpEasyAuthClientId": {
+      "value": "{app-registration-client-id}"
+    },
+    "enableStaticWebApp": {
+      "value": false
+    },
+    "enableMonitoring": {
+      "value": true
+    },
+    "ownerEmail": {
+      "value": "{owner-mailbox}"
+    },
+    "alertWebhookUrl": {
+      "value": ""
+    },
+    "enableBudget": {
+      "value": false
+    },
+    "monthlyBudget": {
+      "value": 1500
+    },
+    "budgetStartDate": {
+      "value": "{yyyy-MM-01}"
+    },
+    "deployTeamRbac": {
+      "value": false
+    },
+    "usersGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-users}"
+    },
+    "ownerGroupObjectId": {
+      "value": "{objectId:sg-infosec-foundry-owner}"
+    },
+    "readersGroupObjectId": {
+      "value": ""
+    },
+    "pimGroupObjectId": {
+      "value": ""
+    },
+    "breakglassGroupObjectId": {
+      "value": ""
+    },
+    "deployerPrincipalId": {
+      "value": ""
+    },
+    "deployServicePrincipalAppId": {
+      "value": "{deploy-service-principal-appid}"
+    },
+    "sharepointSiteId": {
+      "value": "{sharepoint-site-id}"
+    },
+    "sharepointReportsDriveId": {
+      "value": "{sharepoint-reports-drive-id}"
+    }
   }
 }
