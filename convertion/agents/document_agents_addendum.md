@@ -14,7 +14,7 @@ skills' editing rules, validation semantics or file formats.)
 | `unzip` → edit XML → `zip`, `merge_runs.py`, `validate.py`, `comment.py`, `clean.py`, `add_slide.py` (pure Python) | Run as-is in `code_interpreter` from the `<skill>-scripts.zip` package (unzip it first; keep the `office/` package directory so `from office.helpers …` imports work) |
 | `pandoc`, `markitdown`, LibreOffice (`soffice.py`, `accept_changes.py`, `thumbnail.py`), `pdftoppm`, `qpdf`, `pdftk`, `tesseract`, ImageMagick | Not in the sandbox. Read: `python-docx` / `python-pptx` / `openpyxl` / `pypdf` / `pdfplumber`. Convert / render / accept-changes / thumbnails: delivery Function `office-tools` endpoints (`/api/convert`, `/api/accept_changes`, `/api/thumbnail`, `/api/validate`, `/api/extract_pdf`) when attached; otherwise state that the step is delegated to the pipeline and skip the visual check, never claim it was done |
 | `.xsd` schema validation (`validate.py`) | Schemas ship inside `<skill>-scripts.zip`; run the validator from the unzipped tree |
-| Visual QA "render to PDF → images → look" | Function `/api/convert` + `/api/thumbnail`; the images come back to the thread. If unavailable, perform the structural checks only and say so |
+| Visual QA "render to PDF → images → look" | Function `/api/convert` + `/api/thumbnail`; the images come back to the conversation. If unavailable, perform the structural checks only and say so |
 | OCR of scanned PDFs (`pytesseract`) | Azure AI Document Intelligence (EU region) via the Function `/api/extract_pdf`; never local OCR, never a public OCR site |
 | `/mnt/user-data/outputs/` | `/mnt/data/outputs/` |
 
@@ -42,7 +42,7 @@ skills' editing rules, validation semantics or file formats.)
   `generic-pptx-deliverable`, `xlsx-generic` template) → output-verifier
   → human approval → `Reports/<Supplier>/<Service>/` (or
   `Advisory/<Topic>/<Subtopic>/`). Ask for Supplier and Service (or
-  Topic/Subtopic) at intake. Files returned in the thread only are not
+  Topic/Subtopic) at intake. Files returned in the conversation only are not
   records.
 - House style for anything generated (unless a registered template
   governs it): Verdana; headings/accents teal RGB(0,141,127); severity

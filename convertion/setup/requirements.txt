@@ -1,8 +1,23 @@
-# Pinned for the create_agents.py / smoke_test.py SDK surface.
-# If Azure has moved the API since, consult the azure-ai-projects migration
-# notes for these majors before bumping.
-azure-ai-projects==1.0.0
-azure-ai-agents==1.1.0
-azure-identity==1.19.0
+# Foundry data-plane SDK for scripts/ (enterprise/series/06 §A, delta S-06).
+# azure-ai-projects 2.x is the GA agents / conversations / responses runtime
+# (api-version v1) and no longer depends on azure-ai-agents.
+azure-ai-projects>=2.3.0,<3
+azure-identity>=1.19.0,<2
 python-dotenv==1.0.1
 PyYAML==6.0.2
+
+# DOCUMENTED FALLBACK (scripts/_foundry_runtime.py "classic" mode).
+# The classic threads/runs Agent Service retires 2027-03-31. Until an
+# environment is upgraded it can pin the previous surface instead:
+#   azure-ai-projects==1.0.0
+#   azure-ai-agents==1.1.0
+# The scripts detect the installed major and deploy.sh step [0b] warns on
+# every run that takes this path (STRICT_RUNTIME=1 turns it into a failure).
+# azure-ai-agents is also still imported for the tool DEFINITION models
+# (FileSearchTool, CodeInterpreterTool, BingGroundingTool, OpenApiTool,
+# AzureAISearchTool); keep it installed until those live in azure-ai-projects.
+azure-ai-agents>=1.1.0,<2
+
+# Only needed when MEMORY_BACKEND=search-index (finding C3,
+# enterprise/MEMORY_AND_LEARNING.md §2):
+# azure-search-documents>=11.5.0,<12

@@ -10,12 +10,17 @@
       },
       "apiVersion": {
         "type": "string",
-        "defaultValue": "2025-05-01",
-        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
       },
-      "agentId": {
+      "agentName": {
         "type": "string",
-        "defaultValue": "{agent-id}"
+        "defaultValue": "{agent-name}"
+      },
+      "agentVersion": {
+        "type": "string",
+        "defaultValue": "{agent-version}",
+        "_comment": "Promoted agent version (build/agent-versions.json `ref` = `<agent>:<version>`, finding C19)."
       },
       "watchLabel": {
         "type": "string",
@@ -117,14 +122,12 @@
           ]
         },
         "actions": {
-          "Run_agent": {
+          "Create_watch_conversation": {
+            "_comment": "One conversation per watch hit (read-only outcome).",
             "type": "Http",
             "inputs": {
               "method": "POST",
-              "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
               "headers": {
                 "Content-Type": "application/json"
               },
@@ -133,14 +136,10 @@
                 "audience": "https://ai.azure.com"
               },
               "body": {
-                "assistant_id": "@parameters('agentId')",
-                "thread": {
-                  "messages": [
-                    {
-                      "role": "user",
-                      "content": "Watched item @{parameters('watchLabel')} reached '@{parameters('expectedValue')}'. @{parameters('onMetPrompt')} Current state (DATA): @{string(body('Get_current_state'))}"
-                    }
-                  ]
+                "metadata": {
+                  "source": "watch-until",
+                  "watchLabel": "@{parameters('watchLabel')}",
+                  "runId": "@{workflow().run.name}"
                 }
               },
               "retryPolicy": {
@@ -151,12 +150,42 @@
             },
             "runAfter": {}
           },
+          "Run_agent": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              },
+              "body": {
+                "conversation": "@{body('Create_watch_conversation')?['id']}",
+                "agent_reference": "@if(empty(parameters('agentVersion')), createObject('type','agent_reference','name',parameters('agentName')), createObject('type','agent_reference','name',parameters('agentName'),'version',parameters('agentVersion')))",
+                "input": "Watched item @{parameters('watchLabel')} reached '@{parameters('expectedValue')}'. @{parameters('onMetPrompt')} Current state (DATA): @{string(body('Get_current_state'))}",
+                "background": true
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT10S"
+              }
+            },
+            "runAfter": {
+              "Create_watch_conversation": [
+                "Succeeded"
+              ]
+            }
+          },
           "Until_agent_completes": {
             "type": "Until",
-            "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_agent_status')?['status'])",
+            "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_agent_status')?['status'])",
             "limit": {
-              "count": 60,
-              "timeout": "PT30M"
+              "count": 40,
+              "timeout": "PT20M"
             },
             "runAfter": {
               "Run_agent": [
@@ -178,10 +207,7 @@
                 "type": "Http",
                 "inputs": {
                   "method": "GET",
-                  "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_agent')?['thread_id']}/runs/@{body('Run_agent')?['id']}",
-                  "queries": {
-                    "api-version": "@parameters('apiVersion')"
-                  },
+                  "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_agent')?['id']}?api-version=@{parameters('apiVersion')}",
                   "authentication": {
                     "type": "ManagedServiceIdentity",
                     "audience": "https://ai.azure.com"
@@ -196,15 +222,11 @@
             }
           },
           "Get_agent_answer": {
+            "_comment": "Answer text is `output_text` of the response.",
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_agent')?['thread_id']}/messages",
-              "queries": {
-                "api-version": "@parameters('apiVersion')",
-                "order": "desc",
-                "limit": "1"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_agent')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -225,7 +247,7 @@
                 "Content-Type": "application/json"
               },
               "body": {
-                "text": "👀 watch-until: @{parameters('watchLabel')} is now '@{parameters('expectedValue')}'.\n\n@{first(body('Get_agent_answer')?['data'])?['content']?[0]?['text']?['value']}"
+                "text": "👀 watch-until: @{parameters('watchLabel')} is now '@{parameters('expectedValue')}'.\n\n@{coalesce(body('Get_agent_answer')?['output_text'], last(body('Get_agent_answer')?['output'])?['content'][0]?['text'], '')}"
               }
             },
             "runAfter": {

@@ -33,6 +33,8 @@ param iafBaseUrl string = 'https://{iaf-api-host}/api/v1'
 param deliveryFunctionBaseUrl string = 'https://{delivery-function}.azurewebsites.net/api'
 @description('Azure DevOps organisation URL')
 param azureDevOpsOrgUrl string = 'https://dev.azure.com/{organization}'
+@description('ENX internal gateway MCP endpoint (finding C10: the MCP tool authenticates through this project connection instead of run-time bearer headers - see ../mcp/enx-gateway.json)')
+param enxGatewayMcpUrl string = 'https://{enx-gateway-host}/mcp'
 @description('Entra tenant id used for the OAuth2 delegated connections')
 param tenantId string = subscription().tenantId
 @description('Client id of the delegated Graph app registration (teams / m365-personal)')
@@ -54,6 +56,8 @@ param iafApiKey string = ''               // IAF read-only key
 param osintProxyFunctionKey string = ''   // Function key of fetch_public_page
 @secure()
 param azureDevOpsReaderToken string = ''  // Entra token/PAT of the Reader-only SP (prefer AAD via MI if supported)
+@secure()
+param enxGatewayToken string = ''         // ENX gateway bearer, read-only tool scope (Key Vault secret {kv-secret-name-enx-gateway-token})
 
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
   name: foundryAccountName
@@ -73,6 +77,7 @@ var keyed = [
   { name: 'conn-iaf-api', target: iafBaseUrl, header: 'X-API-Key', value: iafApiKey, scope: 'IAF: read (no /findings POST)' }
   { name: 'conn-osint-proxy', target: deliveryFunctionBaseUrl, header: 'x-functions-key', value: osintProxyFunctionKey, scope: 'delivery Function: fetch_public_page + allowlist only' }
   { name: 'conn-azure-devops', target: azureDevOpsOrgUrl, header: 'Authorization', value: 'Bearer ${azureDevOpsReaderToken}', scope: 'Azure DevOps: Project Reader, repos read' }
+  { name: 'conn-enx-gateway', target: enxGatewayMcpUrl, header: 'Authorization', value: 'Bearer ${enxGatewayToken}', scope: 'ENX gateway MCP: allow-listed read tools only (readOnlyHint=true), require_approval waiver limited to that list - ../mcp/enx-gateway.json' }
 ]
 
 resource keyedConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = [for c in keyed: if (deployKeyedConnections) {
@@ -110,6 +115,12 @@ resource graphConnections 'Microsoft.CognitiveServices/accounts/projects/connect
 }]
 
 // ---- delegated (OAuth2 authorization-code) connections -------------------
+// Finding C9: 'conn-sharepoint-grounding' (native SharePoint grounding tool,
+// preview, OBO-only) is deliberately NOT created here. It is registered in
+// ../registry.json with enabled=false and is created in the portal only after
+// the tool reaches GA and the licence decision is taken
+// (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md); unattended reads keep
+// conn-sharepoint-graph (managed identity, Sites.Selected) in every case.
 var delegated = [
   { name: 'conn-teams-graph', scope: 'Chat.Read ChannelMessage.Read.All Team.ReadBasic.All (delegated)' }
   { name: 'conn-m365-personal', scope: 'Calendars.Read Mail.Read (delegated)' }
@@ -137,5 +148,5 @@ resource delegatedConnections 'Microsoft.CognitiveServices/accounts/projects/con
   }
 }]
 
-var keyedNames = ['conn-jira-cloud', 'conn-jira-assets', 'conn-confluence', 'conn-onetrust', 'conn-securityscorecard', 'conn-iaf-api', 'conn-osint-proxy', 'conn-azure-devops']
+var keyedNames = ['conn-jira-cloud', 'conn-jira-assets', 'conn-confluence', 'conn-onetrust', 'conn-securityscorecard', 'conn-iaf-api', 'conn-osint-proxy', 'conn-azure-devops', 'conn-enx-gateway']
 output connectionNames array = concat(keyedNames, map(graphMi, g => g.name), map(delegated, d => d.name))

@@ -9,7 +9,17 @@ Azure catalogue evolves — the TIER structure is the contract):
 |---|---|---|---|
 | `light` | `gpt-4o-mini` | ~15–30× cheaper than reasoning | Deterministic transformation against fixed templates and schemas, routing, bookkeeping: `docx`, `pdf`, `pptx`, `xlsx`, `enx-tprm-control-center` (router, no tools), `morning` |
 | `chat` | `gpt-4o` | mid | Standard report generation where the template + verified extraction rules carry the quality: `dpia`, `ciso-reporting`, `ciso-executive-summary`, `tprm-slide-generator`, `pptx-executive-summary-ciso`, `onetrust-form-b`, `template-manager`, `whisperx-transcribe-diarize`, `doc-coauthoring`, `internal-comms`, `learn` |
-| `reasoning` | `o3-mini` | high per token, but fewer iterations on analytic work | Judgement-heavy analysis: `deepsearch-protocol`, `ai-deepsearch-osint-gathering-report`, `cyber-forum`, `ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`, `pentest-report-analyzer`, `pdf-full-coverage-analyzer`, `tpsrca-assessment-engine`, `mcp-builder`, framework advisors (`iso27001`, `iso42001`, `dora`, `nis2`, `eu-ai-act`), `infosec-assurance-advisor`, orchestrator, `output-verifier` |
+| `reasoning` | `o4-mini` (tool-capable reasoning model — finding C4; **never `o3-mini`**, which supports none of the OpenAPI, MCP, Azure AI Search, SharePoint or Web Search tools that every reasoning agent carries) | high per token, but fewer iterations on analytic work | Judgement-heavy analysis: `deepsearch-protocol`, `ai-deepsearch-osint-gathering-report`, `cyber-forum`, `ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`, `pentest-report-analyzer`, `pdf-full-coverage-analyzer`, `tpsrca-assessment-engine`, `mcp-builder`, framework advisors (`iso27001`, `iso42001`, `dora`, `nis2`, `eu-ai-act`), `infosec-assurance-advisor`, orchestrator, `output-verifier` |
+
+**Tool compatibility is part of the routing rule (finding C4).** An agent may
+only be pinned to a tier whose model supports *every* tool type it carries. The
+matrix of record — per model, per tool type, with the Microsoft tool-support
+table as source — is `../integrations/registry.json` →
+`model_tiers._tool_compatibility`, and the deployment per tier is
+`model_tiers._deployment_of_record`. `attach_integrations.py` fails the run for
+any agent whose tier model is marked `no` for a tool type it carries. Re-check
+the matrix at every model change and at the standing platform-currency review
+(`../enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md`).
 
 Assignment of record: the `model_tier` field per agent in
 `integrations/registry.json`, applied by `attach_integrations.py`. The
@@ -17,10 +27,48 @@ table above was regenerated from the registry (2026-09-12); a
 `verify_kit`/`verify_conversion` drift check comparing this table with
 the registry is a shared delta — until it exists, edit both together.
 
+### Tool compatibility (tier name ≠ tool support)
+
+Tool support is a property of the MODEL, not of the tier label. `o3-mini`
+supports **no** OpenAPI, MCP, AI Search / `file_search`, SharePoint or Web
+Search tools, yet every advisory, analyzer and research agent above is
+pinned to `reasoning` AND carries the 11-tool read-only surface
+(`advisory_read_only_toolset` in `integrations/registry.json`). The
+`reasoning` deployment is therefore a tool-capable reasoning model
+(`o4-mini` of record; validate candidates on the dev comparison set before
+promotion). Pinning the tier back to `o3-mini` would leave those agents
+unable to call a single enterprise tool, and
+`scripts/attach_integrations.py` now refuses the run if that is attempted.
+
+| Tool class | `light` (`gpt-4o-mini`) | `chat` (`gpt-4o`) | `reasoning` (`o3-mini`) | `reasoning` (`o4-mini`, of record) |
+|---|---|---|---|---|
+| `code_interpreter` | yes | yes | yes | yes |
+| `file_search` / AI Search | yes | yes | **no** | yes |
+| OpenAPI (Confluence, Jira, CMDB, Graph, OneTrust, SecurityScorecard, IAF, osint-proxy) | yes | yes | **no** | yes |
+| MCP (ENX gateway) | yes | yes | **no** | yes |
+| SharePoint grounding (preview, OBO) | yes | yes | **no** | verify on the day |
+| Bing grounding / Web Search | yes | yes | **no** | yes |
+| Image input | yes | yes | **no** | per model — verify |
+
+Source: Microsoft Foundry — tool support by region and model,
+https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model (GA, 2026-09-07).
+
+Routing consequence (already written into the agent charters): an agent on a
+model that cannot carry a tool never guesses the result — the read is routed
+to `enterprise-explorer` (light) and the retrieved material is handed to the
+reasoning agent as text.
+
+The `reasoning` row of the tier table above names the re-selected model, and
+`integrations/registry.json` `model_tiers._comment` /
+`model_tiers._deployment_of_record` carry the same value; the three move in one
+change.
+
 ### Vision / image inputs
 
-`o3-mini` (reasoning) accepts no image input; `gpt-4o` / `gpt-4o-mini`
-do. Requirement d2 lists images and scanned PDFs as evidence, so the rule
+`o3-mini` accepts no image input; `gpt-4o` / `gpt-4o-mini` do. The image-input
+column of the newly selected reasoning model (`o4-mini`) must be re-verified on
+the day of deployment and the row above updated before any pipeline relies on
+it; until then the platform keeps the conservative rule below. Requirement d2 lists images and scanned PDFs as evidence, so the rule
 is: **image inputs never reach a reasoning agent directly.** A pre-step
 transcribes them to text — scanned PDFs via Document Intelligence
 (`/api/extract_pdf` in the delivery Function), images via a
@@ -36,7 +84,7 @@ verifier's grounding rule like any other source.
 |---|---|---|
 | `light` | yes | cheap OCR-style transcription of simple scans |
 | `chat` | yes | `describe_image` transcription of complex evidence (certificates, dashboards) |
-| `reasoning` | no | consumes transcribed text only |
+| `reasoning` | no (assumed until the selected model's row is verified) | consumes transcribed text only |
 
 **Advisory pin (requirements g/h/i):** every information-providing system
 — the framework advisors (iso27001, iso42001, dora, nis2, eu-ai-act),

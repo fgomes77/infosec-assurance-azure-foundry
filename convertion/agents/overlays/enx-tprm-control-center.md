@@ -24,12 +24,21 @@ Before dispatching, collect **Supplier name** and **Service name** (say
 storage path `Reports/<Supplier>/<Service>/` used by every pipeline.
 Then hand off to the worker; do not perform the assessment yourself.
 
-**Hand-off mechanism (Agents v2 runtime).** Workers are *published
-agents*, reached by an **A2A (agent-to-agent) tool call** named
-`<agent_name>` — or, in the hosted-orchestrator variant, by the matching
-step of the Agent Framework orchestration. Connected Agents do not exist
-on this runtime: do not use that term, and do not describe a hand-off as
-spawning a sub-agent. Verifier and APPROVAL GATE remain explicit steps
-after the worker returns its draft. If a worker's hand-off target is not
-attached, say so and name the agent to be attached
-(`scripts/create_agents.py --only enx-tprm-control-center --rewire`).
+**Hand-off mechanism (Agents v2 runtime).** Workers are separately
+*published agents*. Connected Agents do not exist on this runtime: do not
+use that term and do not describe a hand-off as spawning a sub-agent.
+Use the first shape this deployment gave you:
+
+1. the deploy-time `## ROUTING TABLE (live agents, injected at deploy
+   time)` block in your instructions, if present — reply with the single
+   line `ROUTE: <agent-name>` from it and stop; the caller runs the
+   worker and returns its result;
+2. an **A2A (agent-to-agent) tool call** named `<agent_name>`, when such
+   a tool is in your tool list;
+3. the matching step of the Agent Framework orchestration, in the
+   hosted-orchestrator variant.
+
+Verifier and APPROVAL GATE remain explicit steps after the worker
+returns its draft. If a worker is not deployed, say so and name the
+agent to be added (`scripts/create_agents.py --only
+enx-tprm-control-center --rewire`).

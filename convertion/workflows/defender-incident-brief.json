@@ -9,12 +9,17 @@
       },
       "apiVersion": {
         "type": "string",
-        "defaultValue": "2025-05-01",
-        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
       },
-      "cyberForumAgentId": {
+      "cyberForumAgentName": {
         "type": "string",
-        "defaultValue": "{cyber-forum-agent-id}"
+        "defaultValue": "{cyber-forum-agent-name}"
+      },
+      "cyberForumAgentVersion": {
+        "type": "string",
+        "defaultValue": "{cyber-forum-agent-version}",
+        "_comment": "Promoted agent version (build/agent-versions.json `ref` = `<agent>:<version>`, finding C19). Empty = latest version, which pipelines must not use."
       },
       "jiraBaseUrl": {
         "type": "string",
@@ -33,9 +38,14 @@
         "type": "securestring",
         "defaultValue": "{human-approval-subscribe-endpoint}"
       },
-      "verifierAgentId": {
+      "verifierAgentName": {
         "type": "string",
-        "defaultValue": "{output-verifier-agent-id}"
+        "defaultValue": "{output-verifier-agent-name}"
+      },
+      "verifierAgentVersion": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-version}",
+        "_comment": "Promoted verifier version (build/agent-versions.json, C19)."
       },
       "teamsWebhookUrl": {
         "type": "securestring",
@@ -69,14 +79,12 @@
       }
     },
     "actions": {
-      "Run_cyber_forum_agent_on_incident": {
+      "Create_incident_conversation": {
+        "_comment": "One conversation per incident brief; metadata ties the Foundry trace to the Logic Apps run.",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -85,14 +93,10 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "assistant_id": "@parameters('cyberForumAgentId')",
-            "thread": {
-              "messages": [
-                {
-                  "role": "user",
-                  "content": "Produce a concise incident brief (impact, likely TTPs, affected third parties if any, recommended next actions) for this Defender/Sentinel incident JSON: @{string(triggerBody())}"
-                }
-              ]
+            "metadata": {
+              "source": "defender-incident",
+              "incidentId": "@{triggerBody()?['incidentId']}",
+              "runId": "@{workflow().run.name}"
             }
           },
           "retryPolicy": {
@@ -103,11 +107,41 @@
         },
         "runAfter": {}
       },
+      "Run_cyber_forum_agent_on_incident": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_incident_conversation')?['id']}",
+            "agent_reference": "@if(empty(parameters('cyberForumAgentVersion')), createObject('type','agent_reference','name',parameters('cyberForumAgentName')), createObject('type','agent_reference','name',parameters('cyberForumAgentName'),'version',parameters('cyberForumAgentVersion')))",
+            "input": "Produce a concise incident brief (impact, likely TTPs, affected third parties if any, recommended next actions) for this Defender/Sentinel incident JSON: @{string(triggerBody())}",
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Create_incident_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
       "Wait_until_brief_run_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Poll_brief_run_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Poll_brief_run_status')?['status'])",
         "limit": {
-          "count": 30,
+          "count": 60,
           "timeout": "PT10M"
         },
         "runAfter": {
@@ -130,10 +164,7 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_cyber_forum_agent_on_incident')?['thread_id']}/runs/@{body('Run_cyber_forum_agent_on_incident')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_cyber_forum_agent_on_incident')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -148,15 +179,11 @@
         }
       },
       "Get_incident_brief_message": {
+        "_comment": "Final read of the response object; the brief text is `output_text`.",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_cyber_forum_agent_on_incident')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_cyber_forum_agent_on_incident')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -168,14 +195,12 @@
           ]
         }
       },
-      "Run_output_verifier": {
+      "Create_verifier_conversation": {
+        "_comment": "Separate conversation for the verifier turn - the draft is verified out of the producing agent's context (agents/verifier_instructions.md).",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -184,14 +209,9 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "assistant_id": "@parameters('verifierAgentId')",
-            "thread": {
-              "messages": [
-                {
-                  "role": "user",
-                  "content": "Deliverable type: Incident brief (Jira issue draft). Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
-                }
-              ]
+            "metadata": {
+              "source": "output-verifier",
+              "runId": "@{workflow().run.name}"
             }
           },
           "retryPolicy": {
@@ -206,9 +226,39 @@
           ]
         }
       },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_verifier_conversation')?['id']}",
+            "agent_reference": "@if(empty(parameters('verifierAgentVersion')), createObject('type','agent_reference','name',parameters('verifierAgentName')), createObject('type','agent_reference','name',parameters('verifierAgentName'),'version',parameters('verifierAgentVersion')))",
+            "input": "Deliverable type: Incident brief (Jira issue draft). Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{coalesce(body('Get_incident_brief_message')?['output_text'], last(body('Get_incident_brief_message')?['output'])?['content'][0]?['text'], '')}",
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Create_verifier_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
       "Until_verifier_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_verifier_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_verifier_status')?['status'])",
         "limit": {
           "count": 40,
           "timeout": "PT30M"
@@ -233,10 +283,7 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/runs/@{body('Run_output_verifier')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -251,15 +298,11 @@
         }
       },
       "Get_verifier_verdict": {
+        "_comment": "Verdict text is `output_text` of the verifier response.",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -274,7 +317,7 @@
       "Verifier_passed": {
         "_comment": "Charter format (agents/verifier_instructions.md): first line 'VERDICT: PASS|FAIL'; bare 'PASS' tolerated.",
         "type": "Compose",
-        "inputs": "@or(startsWith(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'VERDICT: PASS'), equals(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'PASS'))",
+        "inputs": "@or(startsWith(trim(first(split(coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], ''), '\n'))), 'VERDICT: PASS'), equals(trim(first(split(coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], ''), '\n'))), 'PASS'))",
         "runAfter": {
           "Get_verifier_verdict": [
             "Succeeded"
@@ -331,8 +374,8 @@
                   "requestedBy": "workflow:defender-incident-brief",
                   "subject": "Jira issue creation for incident @{triggerBody()?['incidentId']} (@{triggerBody()?['title']}, severity @{triggerBody()?['severity']})",
                   "targetSystem": "Jira project @{parameters('jiraProjectKey')}",
-                  "draft": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}",
-                  "verifierVerdict": "@{first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value']}"
+                  "draft": "@{coalesce(body('Get_incident_brief_message')?['output_text'], last(body('Get_incident_brief_message')?['output'])?['content'][0]?['text'], '')}",
+                  "verifierVerdict": "@{coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], '')}"
                 }
               },
               "unsubscribe": {}
@@ -378,7 +421,7 @@
                         "name": "Task"
                       },
                       "summary": "Incident brief: @{triggerBody()?['title']} (@{triggerBody()?['incidentId']}, severity @{triggerBody()?['severity']})",
-                      "description": "@{first(body('Get_incident_brief_message')?['data'])?['content']?[0]?['text']?['value']}"
+                      "description": "@{coalesce(body('Get_incident_brief_message')?['output_text'], last(body('Get_incident_brief_message')?['output'])?['content'][0]?['text'], '')}"
                     }
                   }
                 },
@@ -413,7 +456,7 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "text": "❌ Incident brief for @{triggerBody()?['incidentId']} FAILED verification - no Jira issue raised. Findings: @{first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value']}"
+                  "text": "❌ Incident brief for @{triggerBody()?['incidentId']} FAILED verification - no Jira issue raised. Findings: @{coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], '')}"
                 }
               },
               "runAfter": {}

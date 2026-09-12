@@ -218,11 +218,11 @@ PLATFORM_HARNESS_ADAPTATION = """
 
 | Harness primitive in the text above | Here |
 |---|---|
-| `/mnt/user-data/uploads/<file>`, `uploaded_files` block | Files attached to the thread by id: `/mnt/data/<file-id>` in `code_interpreter`; searchable via `file_search` |
+| `/mnt/user-data/uploads/<file>`, `uploaded_files` block | Files attached to the conversation by id: `/mnt/data/<file-id>` in `code_interpreter`; searchable via `file_search` |
 | `view` tool, "look at the image" | Describe the image with the vision-capable chat deployment, or route scanned pages to the Function `/api/extract_pdf` (Document Intelligence, EU) |
 | `bash_tool`, `str_replace_based_edit_tool`, `computer`, browser tools | `code_interpreter` (Python only, no network, no shell packages); browsing is NOT available - Bing grounding snippets or the read-only `osint-proxy` only |
 | `present_files`, `SendUserFile`, `/mnt/user-data/outputs/` | Save under `/mnt/data/outputs/` and return the file from the run |
-| `Task` / sub-agents / "spawn" | Connected agents (hand-off tools); sequential, no background threads |
+| `Task` / sub-agents / "spawn" | A hand-off to a **published agent**: reply `ROUTE: <agent-name>` from the deploy-time ROUTING TABLE if you carry one, otherwise an A2A (agent-to-agent) tool call. Connected Agents do not exist on the Agents v2 runtime. Sequential; nothing runs in the background |
 | `AskUserQuestion` / `ask_user_input` | Ask in the conversation; the APPROVAL GATE below is conversational |
 | Google Workspace, Slack, Gmail, consumer services | Not connected. SharePoint via the delivery pipeline (read-only Graph for agents); Teams/Exchange through the approval-gated workflows only |
 

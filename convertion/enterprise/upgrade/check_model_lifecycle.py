@@ -80,7 +80,10 @@ EMBEDDED_TABLE = {
         {"name": "gpt-4o-mini", "version": "2024-07-18", "status": "Deprecated", "retirement_date": "2027-04-14", "replacement": "{owner-to-confirm}"},
         {"name": "o3-mini", "version": "2025-01-31", "status": "unknown", "retirement_date": None,
          "replacement": "o4-mini / gpt-5 family (tool-support table)",
-         "note": "listed on the retirement schedule on 2026-09-02; date not captured — confirm at the next review"},
+         "note": "listed on the retirement schedule on 2026-09-02; date not captured — confirm at the next review. REJECTED for the reasoning tier (finding C4): no OpenAPI/MCP/AI Search/SharePoint/Web Search tool support"},
+        {"name": "o4-mini", "version": "2025-04-16", "status": "unknown", "retirement_date": None,
+         "replacement": "{owner-to-confirm}",
+         "note": "reasoning tier of record (finding C4). Version and retirement date must be re-confirmed against `az cognitiveservices model list -l <location>` and the retirement schedule on the day of deployment — recorded in the step-02 sign-off"},
     ],
 }
 
@@ -91,7 +94,12 @@ EMBEDDED_TABLE = {
 TOOL_SUPPORT = {
     "reviewed": "2026-09-12",
     "models": {
-        "o3-mini":     {"openapi": False, "mcp": False, "azure_ai_search": False, "sharepoint": False, "web_search": False, "file_search": True, "code_interpreter": True, "bing_grounding": True},
+        "o3-mini":     {"openapi": False, "mcp": False, "azure_ai_search": False, "sharepoint": False, "web_search": False, "file_search": True, "code_interpreter": True, "bing_grounding": False},
+        # finding C4: tier of record for 'reasoning'. sharepoint = grounding tool
+        # (preview) — left unverified here because the kit never attaches it
+        # (integrations/registry.json connections.sharepoint-grounding is disabled).
+        "o4-mini":     {"openapi": True, "mcp": True, "azure_ai_search": True, "sharepoint": None, "web_search": True, "file_search": True, "code_interpreter": True, "bing_grounding": True},
+        "gpt-5-mini":  {"openapi": True, "mcp": True, "azure_ai_search": True, "sharepoint": None, "web_search": True, "file_search": True, "code_interpreter": True, "bing_grounding": True},
         "gpt-4o":      {"openapi": True, "mcp": True, "azure_ai_search": True, "sharepoint": True, "web_search": True, "file_search": True, "code_interpreter": True, "bing_grounding": True},
         "gpt-4o-mini": {"openapi": True, "mcp": True, "azure_ai_search": False, "sharepoint": True, "web_search": True, "file_search": True, "code_interpreter": True, "bing_grounding": True},
     },

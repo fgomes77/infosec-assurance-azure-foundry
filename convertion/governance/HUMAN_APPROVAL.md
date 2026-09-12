@@ -66,6 +66,7 @@ approval flow per `../team/approval-policy.json`. See `../workflows/README.md`.
 |---|---|---|
 | `report-delivery-pipeline.json` (the twelve deliverable pipelines in `workflows/pipelines.json`: deepsearch-report, ai-deepsearch-report, dpia-dpo-report, cyber-forum-pptx, cyber-forum-brief, ciso-global-pptx, ciso-exec-summary, tpa-evidence-analysis, soc-report-summary, pentest-report-summary, advisory-file-delivery, transcript-summary) | SharePoint upload to `Reports/<Supplier>/<Service>/` via the delivery Function (`functions/delivery`) — the only technical write path — after `output-verifier` PASS | P3D → auto-reject |
 | `defender-incident-brief.json`, `onetrust-assessment-intake.json`, `scheduled-deepsearch.json`, `jira-finding-sync.json` | report upload / Jira create / IAF submit (Jira and IAF writes exist ONLY here — Layer-3 exceptions, never in agents) | P3D |
+| **Promote agent version** (including Agent Optimizer candidates) | Activating a new immutable agent version so it serves traffic. Approver: platform owner `{upn:francisco.gomes}` (deputy review when owner-authored). Evidence: the eval run report URL, the instruction/tool diff, and the `<agent>:<version>` recorded in `build/agent-versions.json` by the deploy (finding C19). Agents are **never updated in place** on the GA runtime — every deploy saves a new immutable version, and rollback is re-activating the previous version number. | n/a (PR-based, `operations/CHANGE_MANAGEMENT.md` Tier C) |
 | `template-update-approval.json` | `scripts/update_templates.py` writes the template back, bumps `templates/registry.json` (logged in `templates/audit.log`) and re-runs convert → verify → create | **P7D** (template change = methodology change; owner-tier approval) |
 
 Documented exceptions inside Layer 3: (a) the template workflow uploads the
@@ -84,8 +85,12 @@ implemented).
   persists a note; agents cannot call it.
 - **Copilot surface:** the same agents answer in Copilot, so Layers 1–2
   apply unchanged; Copilot adds no write path.
-- **Orchestrator/advisor:** carry the same gate; a connected agent cannot
-  launder a write, because the specialist it hands off to is read-only too.
+- **Continuous evaluation, red-team scans and `learning_loop.py` proposals**
+  are INPUTS to a human decision. None of them may promote a version, change
+  a deployment or edit a template on its own.
+- **Orchestrator/advisor:** carry the same gate; a hand-off cannot launder a
+  write, because the specialist it hands off to (by `ROUTE:` table, A2A tool
+  or Agent Framework step) is read-only too.
 
 ## Compliance mapping
 

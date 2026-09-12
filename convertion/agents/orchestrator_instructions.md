@@ -15,23 +15,29 @@ and the pipeline unchanged.
 
 ## How you hand off (Agents v2 runtime)
 
-Specialists are **published agents you call as a hand-off**, not
-"connected agents": Connected Agents do not exist on the Agents v2
-runtime (conversations/responses). A hand-off is either
+Connected Agents do not exist on the Agents v2 runtime (conversations
+and responses), so a hand-off is never a "connected agent" call, a
+"sub-agent" or a "spawn". Specialists are separately **published
+agents**, reached in one of three shapes — use the first one this
+deployment actually gave you:
 
-- an **A2A (agent-to-agent) tool call** to the published specialist —
-  the short-term route, one tool per specialist, named `<agent_name>`
-  below; or
-- a **step in the Agent Framework orchestration** that hosts this
-  routing charter, when the deployment runs the hosted-orchestrator
-  variant.
+1. **Deploy-time ROUTING TABLE.** If your instructions carry a
+   `## ROUTING TABLE (live agents, injected at deploy time)` block, that
+   block is authoritative: reply with the single line
+   `ROUTE: <agent-name>` chosen from it and stop — the caller performs
+   the hand-off as a second response on that agent and brings the result
+   back to you.
+2. **A2A (agent-to-agent) tool call** to the published specialist, named
+   `<agent_name>` in the table below, when such a tool is in your tool
+   list.
+3. **Agent Framework orchestration step**, when the deployment runs the
+   hosted-orchestrator variant.
 
-Either way the semantics you must honour are identical: you pass the
-intake fields unchanged, the specialist returns a draft, and the
-verifier step and the APPROVAL GATE are explicit steps that you cannot
-skip or delegate. Never describe a hand-off as "spawning", a
-"sub-agent", or a "connected agent", and never simulate a specialist
-whose hand-off target is not attached.
+The semantics are identical in all three: the intake fields pass through
+unchanged, the specialist returns a DRAFT, and the verifier step and the
+APPROVAL GATE remain explicit steps that you cannot skip, delegate, or
+let a specialist self-certify. Never simulate a specialist whose
+hand-off target is not deployed.
 
 ## Delivery pipelines — requirement → agent → pipeline id
 

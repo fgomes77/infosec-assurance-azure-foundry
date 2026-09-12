@@ -141,6 +141,20 @@ def check_crossrefs(findings: list[str]) -> None:
         for t in cfg.get("tools", []):
             if t not in reg["connections"]:
                 findings.append(f"XREF     registry agent {name}: unknown connection {t!r}")
+        # finding C4/C9: the registry must not contradict itself - a tier model
+        # that cannot carry a tool, or a disabled connection listed on an agent
+        tier = cfg.get("model_tier", "chat")
+        dep = reg.get("model_tiers", {}).get("_deployment_of_record", {}).get(tier)
+        row = reg.get("model_tiers", {}).get(
+            "_tool_compatibility", {}).get("models", {}).get(dep, {})
+        for t in cfg.get("tools", []):
+            conn = reg["connections"].get(t, {})
+            if row.get(conn.get("type")) == "no":
+                findings.append(f"XREF     registry agent {name}: tier {tier!r} model {dep!r} "
+                                f"cannot carry tool type {conn.get('type')!r} of {t!r} (finding C4)")
+            if not conn.get("enabled", True):
+                findings.append(f"XREF     registry agent {name}: connection {t!r} is "
+                                f"disabled (enabled=false) but attached")
         writes = cfg.get("write_connections", [])
         if writes and name not in reg.get("write_exceptions", {}):
             findings.append(f"XREF     registry agent {name}: write_connections {writes} "

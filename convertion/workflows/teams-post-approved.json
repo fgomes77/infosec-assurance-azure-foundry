@@ -10,16 +10,26 @@
       },
       "apiVersion": {
         "type": "string",
-        "defaultValue": "2025-05-01",
-        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
       },
-      "internalCommsAgentId": {
+      "internalCommsAgentName": {
         "type": "string",
-        "defaultValue": "{internal-comms-agent-id}"
+        "defaultValue": "{internal-comms-agent-name}"
       },
-      "verifierAgentId": {
+      "internalCommsAgentVersion": {
         "type": "string",
-        "defaultValue": "{output-verifier-agent-id}"
+        "defaultValue": "{internal-comms-agent-version}",
+        "_comment": "Promoted agent version (build/agent-versions.json, C19)."
+      },
+      "verifierAgentName": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-name}"
+      },
+      "verifierAgentVersion": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-version}",
+        "_comment": "Promoted verifier version (build/agent-versions.json, C19)."
       },
       "approvalWebhookUrl": {
         "type": "securestring",
@@ -65,14 +75,12 @@
       }
     },
     "actions": {
-      "Run_internal_comms_agent": {
+      "Create_draft_conversation": {
+        "_comment": "One conversation per requested post.",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -81,14 +89,10 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "assistant_id": "@parameters('internalCommsAgentId')",
-            "thread": {
-              "messages": [
-                {
-                  "role": "user",
-                  "content": "Draft the following internal communication in ENX format '@{triggerBody()?['format']}' (agents/internal-comms_addendum.md): @{triggerBody()?['brief']}. Return the message text only, framed as DRAFT."
-                }
-              ]
+            "metadata": {
+              "owner": "@{triggerBody()?['requestedBy']}",
+              "source": "teams-post",
+              "runId": "@{workflow().run.name}"
             }
           },
           "retryPolicy": {
@@ -99,9 +103,39 @@
         },
         "runAfter": {}
       },
+      "Run_internal_comms_agent": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_draft_conversation')?['id']}",
+            "agent_reference": "@if(empty(parameters('internalCommsAgentVersion')), createObject('type','agent_reference','name',parameters('internalCommsAgentName')), createObject('type','agent_reference','name',parameters('internalCommsAgentName'),'version',parameters('internalCommsAgentVersion')))",
+            "input": "Draft the following internal communication in ENX format '@{triggerBody()?['format']}' (agents/internal-comms_addendum.md): @{triggerBody()?['brief']}. Return the message text only, framed as DRAFT.",
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Create_draft_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
       "Until_draft_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_draft_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_draft_status')?['status'])",
         "limit": {
           "count": 40,
           "timeout": "PT20M"
@@ -116,7 +150,7 @@
             "type": "Wait",
             "inputs": {
               "interval": {
-                "count": 15,
+                "count": 10,
                 "unit": "Second"
               }
             },
@@ -126,10 +160,7 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_internal_comms_agent')?['thread_id']}/runs/@{body('Run_internal_comms_agent')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_internal_comms_agent')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -144,15 +175,11 @@
         }
       },
       "Get_draft": {
+        "_comment": "Draft text is `output_text` of the response.",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_internal_comms_agent')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_internal_comms_agent')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -164,14 +191,12 @@
           ]
         }
       },
-      "Run_output_verifier": {
+      "Create_verifier_conversation": {
+        "_comment": "Separate conversation for the verifier turn - the draft is verified out of the producing agent's context (agents/verifier_instructions.md).",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -180,14 +205,9 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "assistant_id": "@parameters('verifierAgentId')",
-            "thread": {
-              "messages": [
-                {
-                  "role": "user",
-                  "content": "Deliverable type: Internal communication (Teams post). Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{first(body('Get_draft')?['data'])?['content']?[0]?['text']?['value']}"
-                }
-              ]
+            "metadata": {
+              "source": "output-verifier",
+              "runId": "@{workflow().run.name}"
             }
           },
           "retryPolicy": {
@@ -202,9 +222,39 @@
           ]
         }
       },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_verifier_conversation')?['id']}",
+            "agent_reference": "@if(empty(parameters('verifierAgentVersion')), createObject('type','agent_reference','name',parameters('verifierAgentName')), createObject('type','agent_reference','name',parameters('verifierAgentName'),'version',parameters('verifierAgentVersion')))",
+            "input": "Deliverable type: Internal communication (Teams post). Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{coalesce(body('Get_draft')?['output_text'], last(body('Get_draft')?['output'])?['content'][0]?['text'], '')}",
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Create_verifier_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
       "Until_verifier_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_verifier_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_verifier_status')?['status'])",
         "limit": {
           "count": 40,
           "timeout": "PT30M"
@@ -229,10 +279,7 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/runs/@{body('Run_output_verifier')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -247,15 +294,11 @@
         }
       },
       "Get_verifier_verdict": {
+        "_comment": "Verdict text is `output_text` of the verifier response.",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -270,7 +313,7 @@
       "Verifier_passed": {
         "_comment": "Charter format (agents/verifier_instructions.md): first line 'VERDICT: PASS|FAIL'; bare 'PASS' tolerated.",
         "type": "Compose",
-        "inputs": "@or(startsWith(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'VERDICT: PASS'), equals(trim(first(split(first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value'], '\n'))), 'PASS'))",
+        "inputs": "@or(startsWith(trim(first(split(coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], ''), '\n'))), 'VERDICT: PASS'), equals(trim(first(split(coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], ''), '\n'))), 'PASS'))",
         "runAfter": {
           "Get_verifier_verdict": [
             "Succeeded"
@@ -327,8 +370,8 @@
                   "requestedBy": "@{triggerBody()?['requestedBy']}",
                   "subject": "Post to Teams channel @{triggerBody()?['channelId']} as the assurance automation account",
                   "targetSystem": "Microsoft Teams (Graph chatMessage)",
-                  "draft": "@{first(body('Get_draft')?['data'])?['content']?[0]?['text']?['value']}",
-                  "verifierVerdict": "@{first(body('Get_verifier_verdict')?['data'])?['content']?[0]?['text']?['value']}"
+                  "draft": "@{coalesce(body('Get_draft')?['output_text'], last(body('Get_draft')?['output'])?['content'][0]?['text'], '')}",
+                  "verifierVerdict": "@{coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], '')}"
                 }
               },
               "unsubscribe": {}
@@ -372,7 +415,7 @@
                   "body": {
                     "body": {
                       "contentType": "html",
-                      "content": "@{replace(first(body('Get_draft')?['data'])?['content']?[0]?['text']?['value'], '\n', '<br/>')}<br/><i>Approved by @{body('Wait_for_approval_teams_post')?['approver']}; drafted by the InfoSec Assurance assistant on request of @{triggerBody()?['requestedBy']}.</i>"
+                      "content": "@{replace(coalesce(body('Get_draft')?['output_text'], last(body('Get_draft')?['output'])?['content'][0]?['text'], ''), '\n', '<br/>')}<br/><i>Approved by @{body('Wait_for_approval_teams_post')?['approver']}; drafted by the InfoSec Assurance assistant on request of @{triggerBody()?['requestedBy']}.</i>"
                     }
                   }
                 },

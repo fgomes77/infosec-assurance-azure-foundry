@@ -8,17 +8,35 @@ advisory_read_only_toolset:
      file-generation contract and the enterprise read-source charter.
   2. Ensure the code_interpreter tool is attached (python-docx, openpyxl,
      python-pptx run there), preserving all existing tools.
-  2b. Attach the combined knowledge store (vs-assurance-combined: every
-     skill's references + advisor-knowledge/ packs) as a SECOND
-     file_search store, so a framework advisor answering a cross-framework
-     question (DORA vs ISO 27005, NIS2 vs NIST CSF) is grounded in the
-     packs the export does not contain (governance/PERSONA-COVERAGE.md).
+  2b. Wire the COMBINED knowledge (every skill's references +
+     advisor-knowledge/ packs) so a framework advisor answering a
+     cross-framework question (DORA vs ISO 27005, NIS2 vs NIST CSF) is
+     grounded in the packs the export does not contain
+     (governance/PERSONA-COVERAGE.md).
+
+     The service allows exactly ONE vector store per agent (finding C3),
+     so the previous design — the agent's own vs-<agent> PLUS
+     vs-assurance-combined on the same file_search tool — is invalid and
+     has been removed. The agent keeps its single per-agent store and the
+     combined knowledge comes from KNOWLEDGE_SOURCE (setup/.env):
+
+       ai-search     Azure AI Search / Foundry IQ knowledge base
+                     KNOWLEDGE_INDEX_NAME over the project connection
+                     SEARCH_CONNECTION_NAME, attached as the GA Azure AI
+                     Search tool (the recommended target state)
+       vector-store  default / transition: nothing extra is attached;
+                     cross-framework questions are answered by ROUTE-ing
+                     to infosec-assurance-advisor, which holds
+                     vs-assurance-combined as its one store
+       none          no combined grounding (isolated environments)
   3. Report tier/toolset status (the tools themselves are attached by
      attach_integrations.py from the same registry — run it first).
 
 Run AFTER create_agents.py + create_delivery_agents.py +
 attach_integrations.py + create_orchestrator.py (the advisor must exist).
-Idempotent. --dry-run needs no Azure SDK.
+Idempotent; on the GA runtime each run saves a new immutable agent version
+recorded in build/agent-versions.json (finding C19). --dry-run needs no
+Azure SDK.
 """
 
 from __future__ import annotations
@@ -36,6 +54,12 @@ try:
     load_dotenv(CONV / "setup" / ".env")
 except ImportError:
     pass
+
+HEREPATH = Path(__file__).resolve().parent
+sys.path.insert(0, str(HEREPATH))
+from _foundry_runtime import (ai_search_tool, get_runtime,  # noqa: E402
+                              knowledge_source, record_version)
+from _azure_helpers import kit_metadata, tool_type  # noqa: E402
 
 ENDPOINT = os.environ.get("PROJECT_ENDPOINT")
 MARKER = "# Advisory-system addendum"
@@ -58,45 +82,63 @@ def main() -> int:
     if not targets:
         sys.exit(f"unknown advisory agent {args.only!r}")
 
+    ks = knowledge_source()
     if args.dry_run:
         for name in targets:
             tier = REGISTRY["agents"].get(name, {}).get("model_tier")
             tools = REGISTRY["agents"].get(name, {}).get("tools", [])
             print(f"[dry-run] {name}: tier={tier}, registry tools={len(tools)}, "
                   f"would append addendum ({len(ADDENDUM)} chars) + ensure "
-                  f"code_interpreter")
+                  f"code_interpreter; combined knowledge via "
+                  f"KNOWLEDGE_SOURCE={ks['mode']}"
+                  + (f" (index {ks['index']} over connection "
+                     f"{ks['connection']})" if ks["mode"] == "ai-search"
+                     else " (ROUTE to the advisor)"
+                     if ks["mode"] == "vector-store" else "")
+                  + "; ONE vector store per agent — finding C3")
         return 0
 
     if not ENDPOINT:
         sys.exit("Set PROJECT_ENDPOINT (setup/.env)")
-    from azure.ai.projects import AIProjectClient
-    from azure.identity import DefaultAzureCredential
     from azure.ai.agents.models import CodeInterpreterTool
 
-    agents_client = AIProjectClient(
-        endpoint=ENDPOINT, credential=DefaultAzureCredential()).agents
-    live = {a.name: a for a in agents_client.list_agents()}
-    combined = next((v.id for v in agents_client.vector_stores.list()
-                     if v.name == COMBINED_STORE), None)
-    if combined is None:
-        print(f"note: {COMBINED_STORE} not found (run create_orchestrator.py) "
-              f"- combined grounding not attached")
+    rt = get_runtime(ENDPOINT)
+    live = rt.list_agents()
+
+    # Combined knowledge source (finding C3) - resolved once.
+    search_defs: list = []
+    if ks["mode"] == "ai-search":
+        conn = rt.connection_id(ks["connection"])
+        search_defs = ai_search_tool(conn, ks["index"]) if conn else []
+        if not search_defs:
+            print(f"note: KNOWLEDGE_SOURCE=ai-search but connection "
+                  f"{ks['connection']!r} or the Azure AI Search tool is "
+                  f"unavailable - combined knowledge not attached; "
+                  f"cross-framework questions fall back to ROUTE-ing to "
+                  f"infosec-assurance-advisor (enterprise/"
+                  f"MEMORY_AND_LEARNING.md §2)")
+    elif ks["mode"] == "vector-store":
+        print(f"note: KNOWLEDGE_SOURCE=vector-store - the combined store "
+              f"{COMBINED_STORE} stays on infosec-assurance-advisor only "
+              f"(one vector store per agent, finding C3); advisory agents "
+              f"reach it by ROUTE-ing to the advisor")
 
     for name in targets:
         agent = live.get(name)
         if agent is None:
             print(f"skip {name}: not deployed (run the create scripts first)")
             continue
-        # second file_search store: the combined knowledge base
+        # ONE vector store per agent: keep the agent's own store exactly as
+        # create_agents.py built it; never append a second one.
         resources = agent.tool_resources
         res = (resources.as_dict() if hasattr(resources, "as_dict")
                else dict(resources or {}))
         fsr = dict(res.get("file_search") or {})
         ids = list(fsr.get("vector_store_ids") or [])
-        if combined and combined not in ids:
-            ids.append(combined)
-        stores_changed = combined is not None and ids != list(
-            fsr.get("vector_store_ids") or [])
+        if len(ids) > 1:
+            ids = ids[:1]          # repair an environment built before C3
+            print(f"  {name}: trimmed {len(fsr['vector_store_ids'])} attached "
+                  f"vector stores to 1 (service limit, finding C3)")
         if ids:
             fsr["vector_store_ids"] = ids
             res["file_search"] = fsr
@@ -106,24 +148,31 @@ def main() -> int:
             instructions = instructions.rstrip() + "\n\n---\n\n" + ADDENDUM
         # keep every existing tool; add code_interpreter if absent
         tools = list(agent.tools or [])
-        has_ci = any(getattr(t, "type", None) == "code_interpreter"
-                     or (isinstance(t, dict) and t.get("type") == "code_interpreter")
-                     for t in tools)
+        has_ci = any(tool_type(t) == "code_interpreter" for t in tools)
         if not has_ci:
             tools += CodeInterpreterTool().definitions
 
         expect = REGISTRY["agents"].get(name, {})
-        has_fs = any(getattr(t, "type", None) == "file_search"
-                     or (isinstance(t, dict) and t.get("type") == "file_search")
-                     for t in tools)
+        has_fs = any(tool_type(t) == "file_search" for t in tools)
         if ids and not has_fs:
             from azure.ai.agents.models import FileSearchTool
             tools += FileSearchTool(vector_store_ids=ids).definitions
-        agents_client.update_agent(agent.id, instructions=instructions,
-                                   tools=tools, tool_resources=res or None)
-        print(f"applied  {name}: addendum={'kept' if MARKER in (agent.instructions or '') else 'added'}, "
+        has_search = any(tool_type(t) == "azure_ai_search" for t in tools)
+        if search_defs and not has_search:
+            tools += search_defs
+
+        updated = rt.upsert_agent(
+            name=name, model=agent.model, description=agent.description,
+            instructions=instructions, tools=tools,
+            tool_resources=res or None, metadata=kit_metadata(),
+            existing=agent)
+        record_version(updated, note="advisory profile")
+        print(f"applied  {updated.ref}: "
+              f"addendum={'kept' if MARKER in (agent.instructions or '') else 'added'}, "
               f"code_interpreter={'kept' if has_ci else 'added'}, "
-              f"combined store={'added' if stores_changed else 'kept'}, "
+              f"vector stores={len(ids)}, "
+              f"combined knowledge={ks['mode']}"
+              f"{' (attached)' if search_defs else ''}, "
               f"registry tier={expect.get('model_tier')} "
               f"(tools attached by attach_integrations.py)")
     return 0

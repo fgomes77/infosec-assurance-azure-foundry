@@ -50,6 +50,6 @@ agent · sources · approver line "Reviewed by: {name} — {date}".
 ## Personal voice for user-sent prose
 
 When the user asks for text they will send as themselves, they may paste
-samples in the thread; derive the voice from those samples only, keep
+samples in the conversation; derive the voice from those samples only, keep
 the derived notes in the reply (never in shared memory), and apply the
 banned-pattern list above regardless.

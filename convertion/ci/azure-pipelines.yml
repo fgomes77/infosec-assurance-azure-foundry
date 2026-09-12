@@ -1,0 +1,193 @@
+# Azure DevOps equivalent of .github/workflows/ci.yml — same scripts, same
+# order, same gates, so whichever platform the team's repository lives on the
+# evidence is identical (operations/CHANGE_MANAGEMENT.md §6 step 6).
+#
+# Register it in Azure DevOps as: Pipelines → New → existing YAML file →
+# path `/convertion/ci/azure-pipelines.yml`.
+#
+# Two things differ from GitHub Actions, both by design:
+#   * the approval gate is an ADO **Environment** named `production` with a
+#     *Approvals and checks → Approvers* rule on the accountable owner
+#     (team/TEAM_MODEL.md F5);
+#   * the credential is an **Azure Resource Manager service connection using
+#     workload identity federation** (`azureSubscription: $(azureServiceConnection)`)
+#     — the ADO form of the OIDC federated credential; no secret is stored.
+#
+# Variables (pipeline variables, none secret): azureServiceConnection,
+# AZURE_RESOURCE_GROUP, PROJECT_ENDPOINT, FOUNDRY_ACCOUNT_NAME,
+# LOG_ANALYTICS_WORKSPACE_NAME, APP_INSIGHTS_NAME, BASE_NAME, OWNER_ALERT_EMAIL,
+# ACTION_GROUP_ID, BUDGET_START_DATE, DELIVERY_FUNCTION_APP_NAME,
+# FOUNDRY_API_VERSION, MEMORY_BACKEND, KNOWLEDGE_SOURCE.
+
+trigger:
+  branches:
+    include: [main]
+
+pr:
+  branches:
+    include: [main]
+
+variables:
+  pythonVersion: '3.12'
+  nodeVersion: '22'
+  bicepVersion: '0.47.16'
+  gitleaksVersion: '8.18.4'
+
+stages:
+  - stage: gates
+    displayName: Offline gates
+    jobs:
+      - job: offline
+        displayName: Convert, verify, syntax, evaluation, dry run
+        timeoutInMinutes: 30
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            fetchDepth: 0          # KIT_RELEASE is `git describe`
+
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+
+          - script: |
+              set -euo pipefail
+              python3 -m pip install --disable-pip-version-check --quiet PyYAML==6.0.2 jsonschema==4.23.0
+              curl -sSLf "https://github.com/Azure/bicep/releases/download/v$(bicepVersion)/bicep-linux-x64" -o "$(Agent.TempDirectory)/bicep"
+              sudo install -m 0755 "$(Agent.TempDirectory)/bicep" /usr/local/bin/bicep
+              bicep --version
+            displayName: Toolchain (no Azure SDK — the gates run without Azure)
+
+          - script: python3 convertion/scripts/convert_skills.py
+            displayName: '[1] Convert skills from the claude.ai export'
+
+          - script: python3 convertion/scripts/verify_conversion.py
+            displayName: '[2] Verify conversion fidelity'
+
+          - script: python3 convertion/scripts/verify_kit.py
+            displayName: '[3] Verify kit consistency'
+
+          - script: convertion/ci/syntax_check.sh
+            displayName: '[4] Syntax gate (python, json, yaml, js, bicep, shell)'
+
+          - script: convertion/infra/validate.sh
+            displayName: '[5] Infrastructure policy gate (EU residency, C5/C6/C11/C12/C22)'
+
+          - script: |
+              set -euo pipefail
+              python3 convertion/operations/evaluation/run_evals.py --dry-run \
+                --golden convertion/operations/evaluation/golden-set.example.json \
+                --out convertion/build/evals/ci
+              python3 -m py_compile convertion/operations/evaluation/run_evals.py
+              python3 convertion/operations/evaluation/run_evals.py --dry-run --emit-plans \
+                --out convertion/build/evals/plans
+            displayName: '[6] Evaluation gate G0 + continuous-eval / red-team plans (C18)'
+
+          - script: |
+              set -euo pipefail
+              python3 convertion/enterprise/upgrade/check_model_lifecycle.py --dry-run \
+                --horizon 180 --json convertion/build/lifecycle-report.json
+              python3 convertion/enterprise/memory/learning_loop.py --dry-run \
+                --out "$(Agent.TempDirectory)/learning"
+            displayName: '[7] Platform currency (C6/C25)'
+
+          - script: cd convertion && ./deploy.sh --dry-run
+            displayName: '[8] Offline dry-run chain'
+            env:
+              CI: 'true'
+
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: Publish gate evidence (ISMS change record)
+            inputs:
+              targetPath: convertion/build
+              artifact: gate-evidence
+
+      - job: secret_scan
+        displayName: Secret scan (gitleaks)
+        timeoutInMinutes: 10
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - script: |
+              set -euo pipefail
+              curl -sSLf "https://github.com/gitleaks/gitleaks/releases/download/v$(gitleaksVersion)/gitleaks_$(gitleaksVersion)_linux_x64.tar.gz" \
+                | tar -xz -C "$(Agent.TempDirectory)" gitleaks
+              sudo install -m 0755 "$(Agent.TempDirectory)/gitleaks" /usr/local/bin/gitleaks
+              gitleaks version
+            displayName: Install gitleaks $(gitleaksVersion)
+
+          - script: |
+              set -euo pipefail
+              gitleaks detect --no-git --source . --config .github/gitleaks.toml \
+                --redact --report-format sarif --report-path "$(Agent.TempDirectory)/gitleaks-tree.sarif"
+              gitleaks detect --source . --config .github/gitleaks.toml \
+                --redact --report-format sarif --report-path "$(Agent.TempDirectory)/gitleaks-history.sarif"
+            displayName: Scan working tree and history (placeholders allow-listed)
+
+          - task: PublishPipelineArtifact@1
+            condition: always()
+            displayName: Publish gitleaks reports (redacted)
+            inputs:
+              targetPath: $(Agent.TempDirectory)
+              artifact: gitleaks-reports
+
+  - stage: deploy
+    displayName: Deploy (production)
+    dependsOn: gates
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - deployment: deploy
+        displayName: deploy.sh with the federated deploy identity
+        timeoutInMinutes: 60
+        pool:
+          vmImage: ubuntu-latest
+        # The approval gate: the `production` environment carries the owner's
+        # approval check; the job waits for it before any step runs.
+        environment: production
+        variables:
+          STRICT_RUNTIME: '1'      # refuse the retiring classic runtime (C1)
+          CI: 'true'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  fetchDepth: 0
+
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: $(pythonVersion)
+
+                - task: NodeTool@0
+                  inputs:
+                    versionSpec: $(nodeVersion)
+
+                - script: |
+                    set -euo pipefail
+                    python3 -m pip install --disable-pip-version-check --quiet -r convertion/setup/requirements.txt
+                    curl -sSLf "https://github.com/Azure/bicep/releases/download/v$(bicepVersion)/bicep-linux-x64" -o "$(Agent.TempDirectory)/bicep"
+                    sudo install -m 0755 "$(Agent.TempDirectory)/bicep" /usr/local/bin/bicep
+                  displayName: Toolchain (data-plane SDK + bicep)
+
+                - task: AzureCLI@2
+                  displayName: Deploy (convert → verify → agents → integrations → checks)
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)   # workload identity federation
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: cd convertion && ./deploy.sh
+
+                - task: PublishPipelineArtifact@1
+                  condition: always()
+                  displayName: Publish the deployed agent versions (release evidence, C19)
+                  inputs:
+                    targetPath: convertion/build
+                    artifact: agent-versions-$(Build.SourceVersion)

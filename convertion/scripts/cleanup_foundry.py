@@ -31,14 +31,13 @@ except ImportError:
 
 PROTECTED_STORES = {"vs-assurance-memory"}
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _foundry_runtime import get_runtime  # noqa: E402
+
 
 def client():
-    from azure.ai.projects import AIProjectClient
-    from azure.identity import DefaultAzureCredential
-    endpoint = os.environ.get("PROJECT_ENDPOINT")
-    if not endpoint:
-        sys.exit("Set PROJECT_ENDPOINT (setup/.env)")
-    return AIProjectClient(endpoint=endpoint, credential=DefaultAzureCredential()).agents
+    """Data-plane handle on either runtime (see _foundry_runtime.py)."""
+    return get_runtime(os.environ.get("PROJECT_ENDPOINT"))
 
 
 def _res(agent) -> dict:
@@ -49,7 +48,7 @@ def _res(agent) -> dict:
 def referenced(ac) -> tuple[set[str], set[str]]:
     """(vector store ids, file ids) referenced by live agents."""
     stores, files = set(), set()
-    for a in ac.list_agents():
+    for a in ac.list_agents().values():
         res = _res(a)
         stores |= set((res.get("file_search") or {}).get("vector_store_ids") or [])
         files |= set((res.get("code_interpreter") or {}).get("file_ids") or [])
@@ -101,7 +100,13 @@ def main() -> int:
             if args.apply:
                 ac.files.delete(f.id)
 
-    if args.threads:
+    if args.threads and ac.mode == "responses":
+        print("note: --threads is a no-op on the GA runtime — classic threads "
+              "are replaced by conversations (finding C1); conversation "
+              "retention is a project/Cosmos DB setting, not a delete loop "
+              "(governance/DATA_PROTECTION_GUARDRAILS.md)")
+    elif args.threads:
+        ac = ac.project.agents
         cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=args.older_than)
         for th in ac.threads.list():
             created = getattr(th, "created_at", None)

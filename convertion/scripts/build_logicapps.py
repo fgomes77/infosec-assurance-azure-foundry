@@ -6,9 +6,14 @@ into build/logicapps/<name>/workflow.json.
 
 Substitutions (never hand-edited):
   - pipelines.json keys -> parameter defaultValue of the same meaning
-    (agent -> agentId, libraryRoot -> libraryRootItemId, ...)
-  - agent NAMES -> live Foundry agent ids (read-only list_agents), or from
-    --agents-json {name: id} for offline/CI builds
+    (agent -> agentName + agentVersion from build/agent-versions.json,
+    libraryRoot -> libraryRootItemId, shared.sensitivityLabel ->
+    sensitivityLabelId, ...)
+  - agent NAMES stay names: the Agents v2 runtime addresses an agent by name
+    plus an immutable VERSION (findings C1/C19), so a pipeline of record is
+    pinned to `<agent>:<version>` from the deploy ledger and never runs
+    "latest". --agents-json / agent_ids() remain only for the classic
+    (threads/runs) fallback runtime, which has no versions.
   - ${ENV_VAR} placeholders in pipelines.json "shared" -> environment
     (setup/.env); unresolved ones are left as-is and reported.
 
@@ -38,9 +43,12 @@ try:
 except ImportError:
     pass
 
-KEY_MAP = {"agent": "agentId", "libraryRoot": "libraryRootItemId"}
-SHARED_MAP = {"verifierAgent": "verifierAgentId", "sharepointDrive": "sharepointDriveId",
+KEY_MAP = {"agent": "agentName", "libraryRoot": "libraryRootItemId"}
+SHARED_MAP = {"verifierAgent": "verifierAgentName",
+              "sharepointDrive": "sharepointDriveId",
+              "sensitivityLabel": "sensitivityLabelId",
               "apiVersion": "apiVersion"}
+LEDGER = CONV / "build" / "agent-versions.json"
 ENV_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
 
@@ -68,6 +76,36 @@ def agent_ids(args) -> dict[str, str]:
     return {a.name: a.id for a in ac.list_agents()}
 
 
+def agent_versions() -> dict[str, str]:
+    """{name: promoted version} from build/agent-versions.json (finding C19).
+    The Agents v2 runtime addresses agents by name + immutable version; a
+    pipeline of record must never run 'latest'."""
+    try:
+        led = json.loads(LEDGER.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {n: (e or {}).get("version") or ""
+            for n, e in (led.get("agents") or {}).items()}
+
+
+def template_labels() -> dict[str, str]:
+    """{reportType-or-template-id: sensitivity_label} from
+    templates/registry.json (finding C16). A per-report-type label overrides
+    pipelines.json shared.sensitivityLabel."""
+    try:
+        reg = json.loads((CONV / "templates" / "registry.json")
+                         .read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    out = {}
+    for t in reg.get("templates", []):
+        label = t.get("sensitivity_label")
+        if label:
+            for pipe in t.get("pipelines", []) or []:
+                out[pipe] = label
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--agents-json", help="{name: id} map instead of the live listing")
@@ -76,7 +114,8 @@ def main() -> int:
 
     pipes = json.loads((WF / "pipelines.json").read_text(encoding="utf-8"))
     template = json.loads((WF / "report-delivery-pipeline.json").read_text(encoding="utf-8"))
-    ids = agent_ids(args)
+    versions = agent_versions()
+    labels = template_labels()
     unresolved: set[str] = set()
     missing_agents: set[str] = set()
     raw_shared = {k: resolve_env(v, unresolved)
@@ -84,10 +123,10 @@ def main() -> int:
     # only SHARED_MAP keys are workflow parameters; the *Root keys are the
     # lookup table for libraryRoot
     shared = {SHARED_MAP[k]: v for k, v in raw_shared.items() if k in SHARED_MAP}
-    if "verifierAgentId" in shared:
-        name = shared["verifierAgentId"]
-        shared["verifierAgentId"] = ids.get(name, f"{{agentId:{name}}}")
-        if name not in ids:
+    if "verifierAgentName" in shared:
+        name = shared["verifierAgentName"]
+        shared["verifierAgentVersion"] = versions.get(name, "")
+        if not versions.get(name):
             missing_agents.add(name)
 
     written = []
@@ -101,14 +140,18 @@ def main() -> int:
             key = KEY_MAP.get(k, k)
             if k == "agent":
                 if v == "TRIGGER":
-                    v = ""                       # caller passes agentId
+                    values["agentVersion"] = ""   # caller passes agentRef
                 else:
-                    if v not in ids:
+                    values["agentVersion"] = versions.get(v, "")
+                    if not versions.get(v):
                         missing_agents.add(v)
-                    v = ids.get(v, f"{{agentId:{v}}}")
+                # v stays the agent NAME - agentName parameter
             elif k == "libraryRoot":
                 v = raw_shared.get(v, v)
             values[key] = v
+        # finding C16: a per-report-type label beats the shared default
+        if name in labels:
+            values["sensitivityLabelId"] = labels[name]
         for key, v in values.items():
             if key in params:
                 params[key]["defaultValue"] = v
@@ -135,8 +178,8 @@ def main() -> int:
     print(f"{'[dry-run] ' if args.dry_run else ''}{len(written)} workflow "
           f"definitions -> {OUT}")
     if missing_agents:
-        print(f"note: agent ids left as placeholders (not deployed / offline): "
-              f"{sorted(missing_agents)}")
+        print(f"note: agent versions not pinned (no build/agent-versions.json "
+              f"entry - run deploy.sh): {sorted(missing_agents)}")
     if unresolved:
         print(f"note: unresolved environment placeholders: {sorted(unresolved)} "
               f"(setup/.env)")

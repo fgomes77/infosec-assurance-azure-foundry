@@ -1,8 +1,24 @@
 #!/usr/bin/env python3
-"""Manage the advisor's durable memory vector store (vs-assurance-memory).
+"""Manage the advisor's durable memory (MEMORY_BACKEND, setup/.env).
 
-Memory notes are small timestamped text files uploaded into the store —
-auditable, listable, and individually deletable (GDPR minimisation).
+Two backends, same commands and same privacy rules:
+
+  vector-store  (transition default) notes are small timestamped text files
+                in the vector store vs-assurance-memory — auditable,
+                listable, individually deletable (GDPR minimisation). The
+                service allows ONE vector store per agent (finding C3), so
+                this store is no longer attached to the advisor's
+                file_search tool; it is the staging area until the index
+                below is provisioned.
+  search-index  notes are documents in the Azure AI Search index
+                MEMORY_INDEX_NAME (default kb-assurance-memory) reached by
+                the advisor through the GA Azure AI Search tool
+                (enterprise/MEMORY_AND_LEARNING.md §2, delta D-ML-3).
+                Document shape: id, stamp, author, class, subject,
+                retain_until, text.
+
+Data-plane calls go through _foundry_runtime.py: the GA Responses-API
+runtime with the classic threads/runs fallback (finding C1).
 
 Usage:
     python3 memory_store.py add "2026-09-11 | Supplier X | Residual risk \
@@ -41,6 +57,11 @@ except ImportError:
 
 MEMORY_STORE = "vs-assurance-memory"
 MAX_BATCH = 50
+RETAIN_MONTHS = 24        # governance/MEMORY_POLICY.md §3
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _foundry_runtime import (get_runtime, knowledge_source,  # noqa: E402
+                              memory_backend)
 
 import re  # noqa: E402
 
@@ -87,13 +108,50 @@ def store_note(agents_client, store, text: str) -> str:
 
 
 def get_agents_client():
-    from azure.ai.projects import AIProjectClient
-    from azure.identity import DefaultAzureCredential
-    endpoint = os.environ.get("PROJECT_ENDPOINT")
-    if not endpoint:
-        sys.exit("Set PROJECT_ENDPOINT (setup/.env)")
-    return AIProjectClient(endpoint=endpoint,
-                           credential=DefaultAzureCredential()).agents
+    """Data-plane handle: .files / .vector_stores / .vector_store_files on
+    either runtime (see _foundry_runtime.py)."""
+    return get_runtime(os.environ.get("PROJECT_ENDPOINT"))
+
+
+class SearchBackend:
+    """MEMORY_BACKEND=search-index: the same add/list/delete over an Azure
+    AI Search index, so the advisor reads memory with the GA Azure AI
+    Search tool instead of a second vector store (finding C3)."""
+
+    def __init__(self):
+        ks = knowledge_source()
+        if not ks["endpoint"]:
+            sys.exit("MEMORY_BACKEND=search-index needs SEARCH_SERVICE_ENDPOINT "
+                     "(setup/.env)")
+        try:
+            from azure.search.documents import SearchClient
+        except ImportError:
+            sys.exit("MEMORY_BACKEND=search-index needs azure-search-documents "
+                     "— add it to setup/requirements.txt and pip install -r")
+        from azure.identity import DefaultAzureCredential
+        self.index = ks["memory_index"]
+        self.client = SearchClient(endpoint=ks["endpoint"],
+                                   index_name=self.index,
+                                   credential=DefaultAzureCredential())
+
+    def add(self, text: str, author: str = "") -> str:
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        doc = {"id": f"memory-{stamp}", "stamp": stamp, "author": author,
+               "class": "team-note", "subject": text.strip()[:120],
+               "retain_until": (dt.date.today() + dt.timedelta(
+                   days=30 * RETAIN_MONTHS)).isoformat(),
+               "text": text.strip()}
+        self.client.upload_documents(documents=[doc])
+        return f"{doc['id']} (index {self.index})"
+
+    def list(self) -> list[str]:
+        return [f"{d['id']}  {d.get('stamp', '')}  {d.get('subject', '')}"
+                for d in self.client.search(
+                    search_text="*", select="id,stamp,subject,retain_until",
+                    order_by=["stamp desc"], top=1000)]
+
+    def delete(self, doc_id: str) -> None:
+        self.client.delete_documents(documents=[{"id": doc_id}])
 
 
 def find_store(agents_client):
@@ -134,11 +192,37 @@ def main() -> int:
             print("nothing written" + ("" if args.dry_run else
                                       " - pass --approved-by <upn> to apply"))
             return 0
+        if memory_backend() == "search-index":
+            be = SearchBackend()
+            for line in kept[:MAX_BATCH]:
+                print("stored", be.add(
+                    f"{line} | imported, approved by {args.approved_by}",
+                    author=args.approved_by))
+            return 0
         agents_client = get_agents_client()
         store = find_store(agents_client)
         for line in kept[:MAX_BATCH]:
             print("stored", store_note(agents_client, store,
                                        f"{line} | imported, approved by {args.approved_by}"))
+        return 0
+
+    if memory_backend() == "search-index":
+        be = SearchBackend()
+        if args.cmd == "add":
+            text = (Path(args.from_file).read_text(encoding="utf-8")
+                    if args.from_file else args.note)
+            if not text:
+                sys.exit("Provide a note or --from-file")
+            if SPECIAL_CATEGORY.search(text):
+                sys.exit("rejected: special-category / personal data pattern in "
+                         "the note (governance/DATA_PROTECTION_GUARDRAILS.md)")
+            print("stored", be.add(text))
+        elif args.cmd == "list":
+            for row in be.list():
+                print(row)
+        elif args.cmd == "delete":
+            be.delete(args.file_id)
+            print(f"deleted {args.file_id}")
         return 0
 
     agents_client = get_agents_client()

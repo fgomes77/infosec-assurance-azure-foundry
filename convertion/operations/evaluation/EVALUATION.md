@@ -13,7 +13,8 @@ accuracy floor of `../../governance/MODEL_ROUTING.md` executable through
 |---|---|
 | `golden-set.schema.json` | JSON Schema (2020-12) of a golden set: cases, checks, budgets, floors |
 | `golden-set.example.json` | Starter set: 14 cases — a, b, c (deck + brief), d, d2, e, f, g ×2, h, i ×2 (routing, read-only), verifier-negative — with synthetic fixtures for offline runs |
-| `run_evals.py` | Runner: `--dry-run` (offline, CI), `--candidates DIR` (offline on downloaded outputs), live (`PROJECT_ENDPOINT`), `--model-override` (candidate tier via `<agent>-eval` clones); writes `eval-report.json` + `eval-report.md` |
+| `run_evals.py` | Runner: `--dry-run` (offline, CI), `--candidates DIR` (offline on downloaded outputs), live (`PROJECT_ENDPOINT`), `--model-override` (candidate tier via `<agent>-eval` clones); writes `eval-report.json` + `eval-report.md`. Platform-side hooks (finding C18): `--emit-plans` writes the continuous-evaluation rule plan (E3) and the AI Red Teaming Agent scan plan (E5) pinned to the promoted `<agent>:<version>`; `--redteam-report FILE` folds a downloaded scan into the run |
+| `../../.github/workflows/ci.yml`, `../../convertion/ci/` | Where G0 runs on every PR (job `gates`) — see `../../convertion/ci/README.md` |
 
 Control (whole document): ISO 42001 A.6.2.4 (verification and validation),
 A.6.2.5 (deployment), A.6.2.6 (operation and monitoring), A.8.4
@@ -101,6 +102,27 @@ inputs. An LLM-as-judge (reasoning tier, rubric prompt) may be added as an
 *advisory* column later; it never decides a gate by itself (EU AI Act Art.
 14 human oversight; ISO 42001 A.9.3).
 
+## 4b. Platform-side loop: continuous evaluation and red teaming (finding C18)
+
+`run_evals.py` is the **offline** half of the loop (golden set, fixtures,
+gates). The platform half runs in Foundry and is *planned* here so the two
+never disagree — this script only ever writes plans; it creates no rule,
+starts no scan and promotes nothing (§3 still holds).
+
+| # | Surface | Produced by | Applied / executed by | Note |
+|---|---|---|---|---|
+| E3 | Continuous evaluation rule per production agent: evaluators as in E2, `samplingPercent` 10, `maxRequestRate` 100/h, results to App Insights | `run_evals.py --emit-plans` → `build/evals/plans/continuous-eval-plan.json` | owner, portal *Operate → Evaluations → Continuous evaluation* (`../../enterprise/series/08-guardrails-observability-evaluation.md` §4 E3) | samples are personal-data records under the same RoPA entry and retention as conversations — the percentage is a DPO-informed decision |
+| E5 | AI Red Teaming Agent scan (preview): agentic categories `prohibited_actions`, `sensitive_data_leakage`, `task_adherence`, `xpia`; runs in `test`/purple, cloud runs in Sweden Central | `run_evals.py --emit-plans` → `build/evals/plans/redteam-plan.json` | `../../workflows/scheduled-evaluation-redteam.json` (weekly, read-only) or the owner on demand | findings are Tier C changes; a promotion is never automatic |
+| — | Scan results back into a gate | `run_evals.py --redteam-report <file>` | CI (G0) or the owner on the G1/G3 run | high/critical findings force gate `FAIL`; the report's red-team section is the evidence |
+
+Targets are the pinned `<agent>:<version>` of `build/agent-versions.json`
+(finding C19), so a score or a finding is always attributable to the
+version that served traffic. `build/` is git-ignored: restore the deploy
+artefact before the run, or the plans fall back to the bare agent name and
+say so. Preview surfaces (`api-version` `2025-11-15-preview`, override with
+`EVAL_API_VERSION`): confirm the request shape on the execution day and
+record it in the step-08 sign-off.
+
 ## 5. Gates
 
 | Gate | When | Scope | Command | Pass criterion | Evidence / approver |
@@ -149,7 +171,7 @@ Drift: …  Actions: {tickets}  New cases: {ids}  Next review {date}
 
 | Id | Target | Location | Literal text |
 |---|---|---|---|
-| D-EVAL-G1 | `.github/workflows/ci.yml` (delta D-OPS-G1 of `CHANGE_MANAGEMENT.md` §10) | job `gates`, after the `py_compile` step | `python3 convertion/operations/evaluation/run_evals.py --dry-run --golden convertion/operations/evaluation/golden-set.example.json && python3 -m py_compile convertion/operations/evaluation/run_evals.py && bicep build convertion/operations/cost-budget.bicep` |
+| D-EVAL-G1 **(applied)** — `.github/workflows/ci.yml` job `gates` step *Evaluation gate G0* and `convertion/ci/azure-pipelines.yml` | `.github/workflows/ci.yml` (delta D-OPS-G1 of `CHANGE_MANAGEMENT.md` §10) | job `gates`, after the `py_compile` step | `python3 convertion/operations/evaluation/run_evals.py --dry-run --golden convertion/operations/evaluation/golden-set.example.json && python3 -m py_compile convertion/operations/evaluation/run_evals.py && bicep build convertion/operations/cost-budget.bicep` |
 | D-EVAL-D1 | `deploy.sh` | inside the `--dry-run` branch of step `[7/7]` (replace the `echo "==> [7/7] Smoke test skipped (dry run)"` line) | `echo "==> [7/7] Offline evaluation gate G0 (operations/evaluation/EVALUATION.md)"` / `python3 ../operations/evaluation/run_evals.py --dry-run --out ../build/evals/dry-run` |
 | D-EVAL-C1 | `operations/CHANGE_MANAGEMENT.md` | §6 PR template, line `Comparison set:` | `Comparison set:    n/a \| attached (pipelines: …; eval reports: build/evals/{ticket}-control, -candidate — EVALUATION.md G1)` |
 | D-EVAL-R1 | `operations/RUNBOOK.md` | row M1, Input column | append `; operations/evaluation/run_evals.py full run (EVALUATION.md §6)` |

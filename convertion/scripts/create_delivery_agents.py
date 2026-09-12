@@ -30,7 +30,10 @@ byte-consistent with the previous environment):
   all analyzers           -> knowledge packs file-intake / pdf-reading /
                              enx-writing-style; research-pattern overlay
 
-Idempotent by name. --dry-run needs no Azure SDK.
+Idempotent by name: on the GA runtime each run saves a new immutable
+version `<name>:<n>` recorded in build/agent-versions.json (finding C19);
+on the classic fallback runtime the agent is updated in place.
+--dry-run needs no Azure SDK.
 """
 
 from __future__ import annotations
@@ -58,6 +61,7 @@ sys.path.insert(0, str(HERE))
 from create_orchestrator import persona  # noqa: E402
 from convert_skills import APPROVAL_GATE  # noqa: E402
 from _azure_helpers import file_map_block, kit_metadata  # noqa: E402
+from _foundry_runtime import get_runtime, record_version  # noqa: E402
 
 _PACKS = ["agents/knowledge-packs/file-intake-foundry.md",
           "agents/knowledge-packs/pdf-reading-foundry.md",
@@ -191,28 +195,25 @@ def main() -> int:
 
     if not ENDPOINT:
         sys.exit("Set PROJECT_ENDPOINT (setup/.env)")
-    from azure.ai.projects import AIProjectClient
-    from azure.identity import DefaultAzureCredential
     from azure.ai.agents.models import CodeInterpreterTool, FileSearchTool
     from _azure_helpers import UploadCache, upload_files
     from create_orchestrator import ensure_store
 
-    agents_client = AIProjectClient(
-        endpoint=ENDPOINT, credential=DefaultAzureCredential()).agents
-    live = {a.name: a for a in agents_client.list_agents()}
+    rt = get_runtime(ENDPOINT)
+    live = rt.list_agents()
     cache = UploadCache(BUILD / "upload-cache.json")
 
     for name, (spec, instructions, know, code) in plans.items():
         tools, resources = [], {}
         if know:
-            kids = upload_files(agents_client, know, cache,
+            kids = upload_files(rt, know, cache,
                                 label=f"{name} knowledge")
-            store = ensure_store(agents_client, f"vs-{name}", kids)
+            store = ensure_store(rt, f"vs-{name}", kids)
             fs = FileSearchTool(vector_store_ids=[store.id])
             tools += fs.definitions
             resources.update(fs.resources)
         if code:
-            cids = upload_files(agents_client, code, cache,
+            cids = upload_files(rt, code, cache,
                                 label=f"{name} code")
             ci = CodeInterpreterTool(file_ids=cids)
             tools += ci.definitions
@@ -222,14 +223,15 @@ def main() -> int:
             from _azure_helpers import integration_tools
             tools += integration_tools(live[name])   # keep attach_integrations work
 
-        kwargs = dict(model=spec["model"], name=name,
-                      description=spec["description"][:512],
-                      instructions=instructions,
-                      tools=tools or None, tool_resources=resources or None,
-                      metadata=kit_metadata())
-        agent = (agents_client.update_agent(live[name].id, **kwargs)
-                 if name in live else agents_client.create_agent(**kwargs))
-        print(f"{'updated' if name in live else 'created'}  {name} ({agent.id})")
+        agent = rt.upsert_agent(name=name, model=spec["model"],
+                                description=spec["description"][:512],
+                                instructions=instructions,
+                                tools=tools, tool_resources=resources,
+                                metadata=kit_metadata(),
+                                existing=live.get(name))
+        record_version(agent)
+        print(f"{'updated' if name in live else 'created'}  {agent.ref} "
+              f"({agent.id})")
     return 0
 
 

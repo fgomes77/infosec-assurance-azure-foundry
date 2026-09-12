@@ -77,3 +77,19 @@ read-only Graph tools (non-GET operations stripped by
 writes happen exclusively after the verifier PASS and the human approval
 gate in the Logic App pipelines. This is the same three-layer control as
 `../governance/HUMAN_APPROVAL.md`.
+
+The same managed identity also carries `InformationProtectionPolicy.Read.All`
+and the metered-API approval for `driveItem:assignSensitivityLabel`, so the
+Function's `/api/assign_label` endpoint can apply the per-report **Purview
+sensitivity label** right after the upload (finding C16). The per-file label
+supplements, and does not replace, the Reports library's default label: when
+no `sensitivity_label` is configured for the report type
+(`../templates/registry.json`) and `SHAREPOINT_SENSITIVITY_LABEL_ID` is empty,
+the pipeline skips the call and the library default stands. Labelling is a
+write, so it stays with the one writer — no agent and no Logic App connector
+ever labels a file.
+
+Per-user site roles for the five assurance users, the owner and the DPO, the
+custom "Contribute (no delete)" level, the unique permissions on `Reports/`,
+`Templates/` and `Governance/`, and the grant/list/revoke commands for the
+three `Sites.Selected` identities: `../team/sharepoint-permissions.md`.

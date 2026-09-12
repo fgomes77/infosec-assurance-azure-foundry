@@ -1,95 +1,193 @@
 {
-  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows. READ-ONLY RULE OF RECORD: attach_integrations.py keeps GET operations plus any operation carrying the OpenAPI vendor extension 'x-enx-read-only: true' (idempotent query POSTs: Jira JQL search, Jira Assets AQL, Defender advanced hunting, SharePoint /search/query); every other non-GET verb is stripped. MCP tools are allow-listed by name and must carry readOnlyHint=true in the gateway's tools/list (see mcp/enx-gateway.json). Connection provisioning (IaC/script) and least-privilege scopes: connections/ and README.md. Consumer connectors of the previous environment (Gmail, Google Drive, GitHub, Firecrawl, Slack, ...) and their ENX replacements/exclusions: CONNECTOR_DECISIONS.md.",
+  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows. READ-ONLY RULE OF RECORD: attach_integrations.py keeps GET operations plus any operation carrying the OpenAPI vendor extension 'x-enx-read-only: true' (idempotent query POSTs: Jira JQL search, Jira Assets AQL, Defender advanced hunting, SharePoint /search/query); every other non-GET verb is stripped. MCP tools are allow-listed by name and must carry readOnlyHint=true in the gateway's tools/list (see mcp/enx-gateway.json). Connection provisioning (IaC/script) and least-privilege scopes: connections/ and README.md. Consumer connectors of the previous environment (Gmail, Google Drive, GitHub, Firecrawl, Slack, ...) and their ENX replacements/exclusions: CONNECTOR_DECISIONS.md. IDENTITY (finding C7): every connection declares, in its 'identity' field, which principal actually calls the target system; the agent-level identity model (Entra Agent ID, agent blueprint, Conditional Access, re-applied role assignments) is in '_identity_model' below and inventoried in team/ACCESS_REGISTER.md. MODEL/TOOL COMPATIBILITY (finding C4): 'model_tiers._tool_compatibility' is the matrix of record - an agent may only be pinned to a tier whose model supports every tool type it carries; the reasoning deployment is a tool-capable model, never o3-mini. CONNECTION FLAGS: a connection carrying \"enabled\": false is provisioned/inventoried but NOT attached to any agent (today: sharepoint-grounding, finding C9); connections/create_connections.sh skips it.",
   "connections": {
     "jira-cloud": {
       "type": "openapi",
       "spec": "integrations/openapi/jira-cloud.yaml",
-      "foundry_connection": "conn-jira-cloud"
+      "foundry_connection": "conn-jira-cloud",
+      "identity": "project_connection_custom_keys (conn-jira-cloud; browse-only Jira service account - a named non-human identity in team/ACCESS_REGISTER.md)"
     },
     "jira-assets-cmdb": {
       "type": "openapi",
       "spec": "integrations/openapi/jira-assets-cmdb.yaml",
-      "foundry_connection": "conn-jira-assets"
+      "foundry_connection": "conn-jira-assets",
+      "identity": "project_connection_custom_keys (conn-jira-assets; Assets read + AQL only)"
     },
     "onetrust": {
       "type": "openapi",
       "spec": "integrations/openapi/onetrust.yaml",
-      "foundry_connection": "conn-onetrust"
+      "foundry_connection": "conn-onetrust",
+      "identity": "project_connection_custom_keys (conn-onetrust; OneTrust viewer role)"
     },
     "securityscorecard": {
       "type": "openapi",
       "spec": "integrations/openapi/securityscorecard.yaml",
-      "foundry_connection": "conn-securityscorecard"
+      "foundry_connection": "conn-securityscorecard",
+      "identity": "project_connection_custom_keys (conn-securityscorecard; read token)"
     },
     "defender-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/defender-graph.yaml",
-      "foundry_connection": "conn-defender-graph"
+      "foundry_connection": "conn-defender-graph",
+      "identity": "project_managed_identity (app-only Graph; SecurityIncident/SecurityAlert/ThreatHunting .Read.All)"
     },
     "sharepoint-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/sharepoint-graph.yaml",
-      "foundry_connection": "conn-sharepoint-graph"
+      "foundry_connection": "conn-sharepoint-graph",
+      "identity": "project_managed_identity (app-only Graph; Sites.Selected read grant on the one InfoSec Assurance site)"
     },
     "iaf-api": {
       "type": "openapi",
       "spec": "integrations/openapi/iaf-api.yaml",
-      "foundry_connection": "conn-iaf-api"
+      "foundry_connection": "conn-iaf-api",
+      "identity": "project_connection_custom_keys (conn-iaf-api; X-API-Key, read scopes)"
     },
     "confluence-cloud": {
       "type": "openapi",
       "spec": "integrations/openapi/confluence-cloud.yaml",
-      "foundry_connection": "conn-confluence"
+      "foundry_connection": "conn-confluence",
+      "identity": "project_connection_custom_keys (conn-confluence; read:content, read:space)"
     },
     "enx-gateway-mcp": {
       "type": "mcp",
-      "config": "integrations/mcp/enx-gateway.json"
+      "config": "integrations/mcp/enx-gateway.json",
+      "foundry_connection": "conn-enx-gateway",
+      "identity": "project_connection_custom_keys (conn-enx-gateway; bearer held in the connection, NOT in this repo and no longer passed as a run-time header - finding C10)"
     },
     "web-search": {
       "type": "bing_grounding",
-      "foundry_connection": "bing-grounding"
+      "foundry_connection": "bing-grounding",
+      "identity": "project_connection_api_key (bing-grounding, provisioned by infra/main.bicep); the outbound query itself is unauthenticated and leaves the tenant - finding C13",
+      "_comment": "RESIDUAL RISK, ACCEPTED (finding C13): Grounding with Bing / Web Search sends the query to a global Microsoft service OUTSIDE the Azure compliance boundary - the Azure Data Protection Addendum does NOT apply and EU residency is not guaranteed for the query text. Compensating controls: queries are sanitised before the call (no Euronext data, no supplier-confidential text, no personal data - governance/DATA_PROTECTION_GUARDRAILS.md section 1), the detective KQL egress alert fires on unsanitised patterns (operations/), and page reads go through osint-proxy instead. Acceptance owner: Francisco Gustavo Gomes (accountable owner) - recorded in the RoPA and in the DORA Art. 28 register; re-reviewed at every standing platform-currency review (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md). Domain-restricted alternative to evaluate in test before GA adoption: Bing Custom Search / Web Search with a domain allow-list (preview) - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools (GA, 2026-08-27)."
     },
     "entra-iam-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/entra-iam-graph.yaml",
-      "foundry_connection": "conn-entra-iam"
+      "foundry_connection": "conn-entra-iam",
+      "identity": "project_managed_identity (app-only Graph; User/Group/Application.Read.All, AccessReview.Read.All)"
     },
     "osint-proxy": {
       "type": "openapi",
       "spec": "integrations/openapi/osint-proxy.yaml",
       "foundry_connection": "conn-osint-proxy",
+      "identity": "project_connection_custom_keys (conn-osint-proxy; delivery Function key, fetch_public_page only)",
       "_comment": "Sanitised public-page fetch (delivery Function endpoint GET /api/fetch_public_page): public-host allow-list, outbound DLP on the URL, size cap, HTML->text. Replaces claude.ai web_fetch/Firecrawl page reads for OSINT (DeepSearch streams 2A-2G, tpsrca evidence validator URL accessibility). Not a generic HTTP tool - governance/DATA_PROTECTION_GUARDRAILS.md section 1."
     },
     "exchange-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/exchange-graph.yaml",
       "foundry_connection": "conn-exchange-graph",
+      "identity": "project_managed_identity (app-only Graph Mail.Read, narrowed by an Exchange application access policy to the one assurance shared mailbox)",
       "_comment": "Gmail connector replacement: read-only Graph mail surface on the ONE assurance shared mailbox (Exchange application access policy). Sending happens only inside approval-gated workflows."
     },
     "teams-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/teams-graph.yaml",
       "foundry_connection": "conn-teams-graph",
+      "identity": "delegated_obo (OAuth2 authorization-code on behalf of the signed-in assurance user; never app-only)",
       "_comment": "Slack connector replacement: read-only Teams chats/channels (delegated, on-behalf-of the calling user)."
     },
     "m365-personal-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/m365-personal-graph.yaml",
       "foundry_connection": "conn-m365-personal",
+      "identity": "delegated_obo (OAuth2 authorization-code on behalf of the signed-in user; /me scope only)",
       "_comment": "Gmail/Google Calendar (personal) replacement for the example skills: /me calendar + mail, delegated OBO only, never app-only."
     },
     "azure-devops": {
       "type": "openapi",
       "spec": "integrations/openapi/azure-devops.yaml",
       "foundry_connection": "conn-azure-devops",
+      "identity": "project_connection_custom_keys (conn-azure-devops; Project Reader service principal)",
       "_comment": "GitHub connector replacement: read-only Azure DevOps / GitHub Enterprise Git surface (repos, items, PRs, pipeline runs, code search). No agent can create/merge PRs or push - by design (CONNECTOR_DECISIONS.md)."
+    },
+    "sharepoint-grounding": {
+      "type": "sharepoint_grounding",
+      "foundry_connection": "conn-sharepoint-grounding",
+      "enabled": false,
+      "status": "preview",
+      "identity": "delegated_obo (the signed-in assurance user's own SharePoint permissions; no app-only path - finding C9)",
+      "_comment": "Finding C9: the native SharePoint grounding tool (preview) grounds INTERACTIVE advisory answers in the InfoSec Assurance site, on-behalf-of the signed-in user (OBO only - it cannot run app-only, so it is unusable from the scheduled Logic Apps). Registered here so the connection is provisioned and inventoried, but enabled=false: it is NOT in any agent's 'tools' list and create_connections.sh skips disabled entries. Pipelines and every unattended read keep the sharepoint-graph OpenAPI tool (project managed identity, Sites.Selected) and deliveries keep the delivery Function. Enable only after (a) the tool reaches GA, (b) the licence/entitlement decision in enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md, (c) attach_integrations.py gains a 'sharepoint_grounding' branch (shared delta) - today an unknown tool type is silently dropped by build_tools(). Doc: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/sharepoint (preview, 2026-09-02)."
     }
   },
   "model_tiers": {
-    "_comment": "Token-economy routing (governance/MODEL_ROUTING.md). Deployment names from setup/.env: LIGHT_MODEL_DEPLOYMENT_NAME (default gpt-4o-mini), MODEL_DEPLOYMENT_NAME (gpt-4o), REASONING_MODEL_DEPLOYMENT_NAME (o3-mini).",
+    "_comment": "Token-economy routing (governance/MODEL_ROUTING.md). Deployment NAMES come from setup/.env (LIGHT_MODEL_DEPLOYMENT_NAME, MODEL_DEPLOYMENT_NAME, REASONING_MODEL_DEPLOYMENT_NAME) and the deployments themselves from infra/main.bicep. FINDING C4 - the reasoning deployment is NO LONGER o3-mini: o3-mini supports none of the OpenAPI, MCP, Azure AI Search, SharePoint or Web Search tools, while every reasoning agent below carries that read-only surface, so a model pinned to o3-mini would silently answer without ever calling its tools (defeating requirements g/h/i). The tier contract (light/chat/reasoning) is unchanged; only the reasoning deployment of record moves. See _deployment_of_record and _tool_compatibility. Changing a tier model is a Tier-C change (operations/CHANGE_MANAGEMENT.md): re-validate the report agents against the comparison set and promote a new agent version (finding C19) before it serves traffic.",
     "light": "structured extraction, rendering hand-off, routing, folder/file bookkeeping",
     "chat": "standard report generation against fixed templates",
-    "reasoning": "OSINT research, risk scoring, evidence/SOC/pentest analysis, regulatory advisory"
+    "reasoning": "OSINT research, risk scoring, evidence/SOC/pentest analysis, regulatory advisory",
+    "_deployment_of_record": {
+      "light": "gpt-4o-mini",
+      "chat": "gpt-4o",
+      "reasoning": "o4-mini",
+      "_note": "Values of record for infra/main.bicep (lightModelName / modelName / reasoningModelName) and setup/.env.example. Alternate reasoning candidate if o4-mini is not offered in the chosen EU Data Zone region: gpt-5-mini (then gpt-4.1). Confirm the OpenAPI + MCP + Web Search columns for the chosen model in the tool-support table ON THE DAY of deployment and record the row in the step-02 sign-off (enterprise/series/02-foundry-account-project-models.md). Every deployment is version-pinned with versionUpgradeOption NoAutoUpgrade (finding C6)."
+    },
+    "_tool_compatibility": {
+      "_comment": "Finding C4 tool-compatibility matrix. RULE: an agent may only be pinned to a tier whose model supports EVERY tool type that agent carries in 'agents' below (plus file_search / code_interpreter added by create_agents.py and apply_advisory_profile.py). 'confirm' = not decided by this kit, read the source table on the day. Re-read the table at every model change and at the standing platform-currency review (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md).",
+      "source": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model (GA, read 2026-09-07)",
+      "tool_types_used_here": {
+        "openapi": "registry connections of type 'openapi' (the 12 read-only specs)",
+        "mcp": "enx-gateway-mcp",
+        "bing_grounding": "web-search",
+        "sharepoint_grounding": "sharepoint-grounding (registered, disabled - finding C9)",
+        "file_search": "per-agent vector store (create_agents.py)",
+        "code_interpreter": "advisory profile + document agents",
+        "azure_ai_search": "durable memory / combined knowledge base (finding C3) - not attached to any agent in this registry yet"
+      },
+      "models": {
+        "o3-mini": {
+          "openapi": "no",
+          "mcp": "no",
+          "bing_grounding": "no",
+          "sharepoint_grounding": "no",
+          "azure_ai_search": "no",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "REJECTED for the reasoning tier (finding C4) - keep it out of setup/.env and infra/main.bicep"
+        },
+        "o4-mini": {
+          "openapi": "yes",
+          "mcp": "yes",
+          "bing_grounding": "yes",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "yes",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "TIER OF RECORD for 'reasoning' - reasoning family, EU Data Zone"
+        },
+        "gpt-5-mini": {
+          "openapi": "yes",
+          "mcp": "yes",
+          "bing_grounding": "yes",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "yes",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "alternate for 'reasoning' if o4-mini is unavailable in region"
+        },
+        "gpt-4o": {
+          "openapi": "yes",
+          "mcp": "yes",
+          "bing_grounding": "yes",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "yes",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "'chat' tier - carries sharepoint-graph/onetrust/jira reads on the report agents"
+        },
+        "gpt-4o-mini": {
+          "openapi": "yes",
+          "mcp": "confirm",
+          "bing_grounding": "confirm",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "no",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "'light' tier - OK for the document agents (sharepoint-graph only) and the toolless router; NEVER attach azure_ai_search (finding C3 knowledge base) or the MCP gateway to a light-tier agent"
+        }
+      },
+      "tier_audit_2026_09_12": "Every agent below re-checked against this matrix: reasoning agents carry openapi+mcp+bing_grounding and are now on a model marked 'yes' for all three; chat agents carry openapi only (gpt-4o: yes); light agents carry openapi only or no tools (gpt-4o-mini: yes) and none carries mcp, bing_grounding or azure_ai_search. No agent is pinned to a model that cannot carry its tools."
+    }
   },
   "agents": {
     "deepsearch-protocol": {
@@ -437,6 +535,15 @@
     ],
     "unmanaged_ok": [
       "output-verifier"
+    ]
+  },
+  "_identity_model": {
+    "_comment": "Finding C7 (Entra Agent ID). Each connection above records the identity that actually calls the target system in its 'identity' field: project_managed_identity (app-only Graph, no secret), project_connection_custom_keys (secret held in the named Foundry connection, sourced from Key Vault - never in this repo), delegated_obo (on behalf of the signed-in assurance user) or project_connection_api_key. On top of those, the agents themselves are principals: the project's agent identity and each published agent's distinct Entra Agent ID are inventoried in team/ACCESS_REGISTER.md, data-plane read roles are assigned to the agent identity, MCP/A2A connections use AgenticIdentityToken, and a Conditional Access policy is applied to the agent blueprint. Role assignments must be RE-APPLIED after every publish and reviewed in operations/access-governance/QUARTERLY_ACCESS_REVIEW.md. Docs: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity (GA, 2026-08-25); https://learn.microsoft.com/en-us/entra/agent-id/whats-new-agent-id (GA, 2026-05-01).",
+    "connection_identity_values": [
+      "project_managed_identity",
+      "project_connection_custom_keys",
+      "project_connection_api_key",
+      "delegated_obo"
     ]
   }
 }

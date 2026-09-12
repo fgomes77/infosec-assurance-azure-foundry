@@ -1,50 +1,75 @@
-# Azure AI Foundry Conversion
+# Microsoft Foundry Conversion
 
 This folder converts the Claude account export in `../claude-account-export/`
-into a deployable **Azure AI Foundry** environment that replicates the same
-toolset: every skill becomes a Foundry **Agent** with its instructions,
-knowledge files, and scripts; the persona becomes a shared system-prompt
-preamble; the infrastructure is provisioned with Bicep.
+into a deployable **Microsoft Foundry (formerly Azure AI Foundry)**
+environment that replicates the same toolset: every skill becomes a Foundry
+**Agent** with its instructions, knowledge files, and scripts; the persona
+becomes a shared system-prompt preamble; the infrastructure is provisioned
+with Bicep. The rest of this file says "Foundry" for short; the Azure
+resource provider is still `Microsoft.CognitiveServices`.
+
+Runtime vocabulary follows the current Agent Service: a session is a
+**conversation** and a model call is a **response** (classic threads/runs
+retire 2027-03-31 — `enterprise/ENTERPRISE_BLUEPRINT.md` PRJ-2).
 
 ## Concept mapping
 
-| Claude concept | Azure AI Foundry equivalent |
+| Claude concept | Microsoft Foundry equivalent |
 |---|---|
 | Skill (`SKILL.md` instructions + trigger description) | Agent (Agent Service): `instructions`, with the trigger description kept as the agent description for routing |
-| Skill `references/` (knowledge, mappings, catalogues) | Files uploaded to a per-agent **vector store**, attached via the **file_search** tool (RAG) |
+| Skill `references/` (knowledge, mappings, catalogues) | Files uploaded to the agent's **vector store**, attached via the **file_search** tool (RAG). The service allows **one vector store per agent**, so shared/combined knowledge and durable memory move to an Azure AI Search index / Foundry IQ knowledge base — `enterprise/MEMORY_AND_LEARNING.md` §2 |
 | Skill `scripts/` (Python/JS generators) | Attached as files to the **code_interpreter** tool; the instructions tell the agent to run them |
 | Skill `assets/` (templates, constants) | code_interpreter files (consumed by the scripts) |
 | Persona / user preferences (`PERSONA.md`) | Shared system-prompt preamble prepended to every agent's instructions |
-| Router skill (`enx-tprm-control-center`) | **Connected agents**: a router agent that hands off to the worker agents |
-| Claude model | An Azure model deployment (default `gpt-4o` from the Foundry model catalog) — **Claude models are not available on Azure**; see Limitations |
+| Router skill (`enx-tprm-control-center`) | **A2A hand-offs**: a router agent that hands off to the published worker agents. Connected Agents do not exist on the current Agent Service; the production path is Microsoft Agent Framework orchestration with the verifier and the approval gate as explicit steps (`enterprise/ENTERPRISE_BLUEPRINT.md` ORC-1) |
+| Claude chat session / thread | Foundry **conversation** (+ `responses`); classic threads/runs retire 2027-03-31 |
+| Claude model | An Azure model deployment (default `gpt-4o` from the Foundry model catalog). Claude models **are** offered on Microsoft Foundry; they are excluded here by the **EU residency rule**, not by availability — see Limitations |
 | claude.ai skill sync | `scripts/convert_skills.py` + `scripts/create_agents.py` (re-run to re-sync) |
 
 ## Folder layout
 
 ```
 convertion/
-├── README.md                  ← this file
-├── MAPPING.md                 ← per-skill conversion table (all 35 skills)
-├── infra/
-│   ├── main.bicep             ← Foundry account + project + model deployment + storage
-│   └── main.parameters.json
-├── setup/
-│   ├── provision.sh           ← az CLI: resource group + Bicep deployment
-│   ├── requirements.txt       ← Python deps for the scripts
-│   └── .env.example           ← environment variables template
-├── agents/
-│   └── persona_system_prompt.md  ← shared persona preamble
-└── scripts/
-    ├── convert_skills.py      ← export → build/agents/ (instructions, knowledge, manifest)
-    ├── create_agents.py       ← build/agents/ → live Foundry agents (SDK)
-    └── smoke_test.py          ← sends a test prompt to one converted agent
+├── README.md · MAPPING.md · ARCHITECTURE.md · REQUIREMENTS.md   ← kit docs
+├── deploy.sh                  ← convert → verify → create → integrate → smoke
+├── infra/                     ← main.bicep (+ agent-stores, network, delivery,
+│                                monitoring, guard, cost, defender-ai, logicapp,
+│                                mcp-server, static-web-app, private-endpoint,
+│                                workload-rbac), main.parameters*.json,
+│                                validate.sh, kql/
+├── enterprise/                ← ENTERPRISE_BLUEPRINT, PORTAL_CONFIGURATION,
+│                                MEMORY_AND_LEARNING, UPDATE_AND_UPGRADE_REVIEW_POLICY,
+│                                IMPLEMENTATION_SERIES, landing-zone.bicep,
+│                                azure-policy-assignments.bicep, portal/, series/,
+│                                memory/, memory-learning/, upgrade/
+├── setup/                     ← provision.sh, requirements.txt, .env.example
+├── agents/                    ← persona_system_prompt.md, addenda, overlays/,
+│                                knowledge-packs/, advisor-knowledge/,
+│                                12 charters (`*_instructions.md`)
+├── scripts/                   ← 19 Python tools (convert, create, attach, verify,
+│                                update_templates, memory_store, …) + adapters/
+├── build/                     ← generated: agents/ (22), manifest.json,
+│                                instruction-hashes.json, learning/
+├── integrations/              ← registry.json, 14 OpenAPI specs (openapi/),
+│                                mcp/, connections/, copilot/, CONNECTOR_DECISIONS.md
+├── workflows/                 ← 16 Logic App definitions + pipelines.json
+├── functions/delivery/        ← renderer + SharePoint storage Function
+├── mcp-server/                ← MCP exposure of the platform (+ evals/)
+├── templates/                 ← registry.json, deck schema, themes/, assets/, samples/
+├── governance/                ← 9 governance docs + index README
+├── operations/                ← runbook, FinOps, monitoring, lifecycle, backup/DR,
+│                                evaluation/, access-governance/, kql/, *.bicep
+├── team/                      ← team model, RACI, RBAC, access register, onboarding
+├── evaluation/                ← golden/ and smoke/ sets
+├── orchestrator/              ← orchestrator + advisor + MCP layer README
+└── sharepoint/                ← `Reports/<Supplier>/<Service>/` storage rules
 ```
 
-## Deployment — five steps
+## Deployment — step by step (`deploy.sh` runs the same sequence)
 
 ```bash
 # 0. Prerequisites: Azure CLI (az login), Python 3.10+, an Azure subscription
-#    with access to Azure AI Foundry and the chosen model region.
+#    with access to Microsoft Foundry and the chosen model region.
 
 # 1. Provision infrastructure (resource group, Foundry account+project, model)
 cd convertion/setup
@@ -62,13 +87,16 @@ python3 convert_skills.py       # writes ../build/agents/ + manifest.json
 python3 create_agents.py        # uses PROJECT_ENDPOINT from .env / environment
 
 # 5. Attach integrations + model tiers (Jira, OneTrust, Defender, SharePoint,
-#    SecurityScorecard, IAF API, ENX gateway MCP, Bing web search, o3-mini
-#    reasoning) — after creating the conn-* Foundry connections; see
-#    integrations/README.md
+#    SecurityScorecard, IAF API, ENX gateway MCP, web search, and the
+#    tool-capable reasoning tier — governance/MODEL_ROUTING.md holds the
+#    tool-compatibility matrix) — after creating the conn-* Foundry
+#    connections; see integrations/README.md
 python3 attach_integrations.py
 
-# 6. Create the flagship layer: assurance advisor (reasoning + combined
-#    knowledge + durable memory) and orchestrator (routes across all agents)
+# 6. Create the flagship layer: assurance advisor (reasoning tier + the
+#    combined knowledge store; durable memory served from the
+#    kb-assurance-memory Azure AI Search index — one vector store per agent)
+#    and orchestrator (A2A hand-offs across all agents)
 python3 create_orchestrator.py
 
 # 7. Verify
@@ -79,7 +107,7 @@ python3 smoke_test.py --agent infosec-assurance-orchestrator \
 ## Delivery layer (requirements a–j)
 
 `REQUIREMENTS.md` traces the full business-requirement set to its
-components. In one paragraph: seven **report-delivery pipelines**
+components. In one paragraph: twelve **report-delivery pipelines**
 (`workflows/report-delivery-pipeline.json` + `workflows/pipelines.json`)
 take a supplier name + service name, run the producing agent, pass the
 draft through the output-verifier and the human approval gate, render the
@@ -87,7 +115,8 @@ file (HTML/DOCX/PPTX/XLSX) in the **delivery Function**
 (`functions/delivery/`), and store it in SharePoint under
 `Reports/<Supplier>/<Service>/` with the idempotent folder rule (reuse
 the supplier folder when it exists, create the service folder only when
-missing — `sharepoint/README.md`). Five **new agents** extend the 35:
+missing — `sharepoint/README.md`). Five **new agents** extend the
+converted set:
 `ciso-global-report` (Global CISO 9-slide deck), `tpa-evidence-analyzer`
 (TPA/Active evidence tree analysis), `soc-report-analyzer`,
 `pentest-report-analyzer`, and `template-manager` (approval-gated template
@@ -103,21 +132,27 @@ and token-economy model routing in `governance/MODEL_ROUTING.md`.
 The `integrations/` folder wires the agents into the Euronext toolchain —
 Jira Cloud, Jira Assets (CMDB), OneTrust, SecurityScorecard, Microsoft
 Defender (Graph security), SharePoint (Graph), the internal IAF API, the ENX
-gateway MCP server, Grounding-with-Bing web search, and an `o3-mini`
-reasoning tier for analytic agents (see `integrations/README.md` and
-`integrations/registry.json`). `workflows/` holds Logic Apps definitions
-replacing Claude Routines (OneTrust intake, Defender incident briefs,
-scheduled DeepSearch, Jira↔IAF sync), and `integrations/copilot/` documents
-surfacing the agents in Microsoft 365 Copilot.
+gateway MCP server, web search, and a reasoning tier for analytic agents
+(14 OpenAPI specs in `integrations/openapi/`; tiers, tools and connections
+in `integrations/registry.json`; the tool-compatibility matrix that decides
+which reasoning model may carry those tools is
+`governance/MODEL_ROUTING.md`). `workflows/` holds 16 Logic Apps
+definitions plus `pipelines.json`, replacing Claude Routines (OneTrust
+intake, Defender incident briefs, scheduled DeepSearch, Jira↔IAF sync,
+scheduled evaluation/red-team, approval and delivery pipelines), and
+`integrations/copilot/` documents the **native publish to Microsoft Teams
+and Microsoft 365 Copilot** (`enterprise/ENTERPRISE_BLUEPRINT.md` CP-1).
 
 ## Orchestrator, advisor with memory, MCP access
 
 `orchestrator/README.md` describes the flagship layer: the
-`infosec-assurance-orchestrator` (single entry point, reasoning model,
-connected to every agent), the `infosec-assurance-advisor` (reasoning
-generalist across all persona domains, grounded in a combined vector store
-of every skill's knowledge, with durable team memory in
-`vs-assurance-memory` managed by `scripts/memory_store.py`), and the MCP
+`infosec-assurance-orchestrator` (single entry point, reasoning tier, A2A
+hand-offs to every published agent), the `infosec-assurance-advisor`
+(reasoning generalist across all persona domains, grounded in the combined
+knowledge store — its single file_search store — with durable team memory
+served from the `kb-assurance-memory` Azure AI Search index, still written
+and deleted through `scripts/memory_store.py`; `vs-assurance-memory` is the
+transition backend, `enterprise/MEMORY_AND_LEARNING.md` §2), and the MCP
 server in `mcp-server/` that exposes the whole environment to any MCP
 client (Claude included) via `ask_orchestrator` / `ask_agent` /
 `save_memory` / `search_memory`.
@@ -128,42 +163,88 @@ in place (instructions and knowledge refreshed), new skills become new agents.
 ## What gets created in Azure
 
 - 1 resource group
-- 1 Azure AI Foundry account (`Microsoft.CognitiveServices`, kind `AIServices`)
+- 1 Microsoft Foundry account (`Microsoft.CognitiveServices`, kind `AIServices`)
   with 1 Foundry **project**
-- 1 model deployment (default `gpt-4o`; change in `main.parameters.json`)
-- 35 agents (18 custom GRC/TPRM + 4 document + 13 general), each with:
-  - the persona preamble + its skill's instructions
-  - a vector store with its `references/` files (where the skill has any)
+- 3 model deployments — chat (default `gpt-4o`), reasoning and light tiers;
+  names, pinned versions and capacity in `main.parameters.json`
+  (`governance/MODEL_ROUTING.md` decides which agent runs on which tier)
+- 22 converted agents by default (18 custom GRC/TPRM + 4 document skills);
+  the 13 Anthropic example skills convert only with `--include-examples`,
+  which takes the export's 35 skills to 35 agents. Each agent gets:
+  - the persona preamble + its skill's instructions (+ overlay/addendum)
+  - its vector store with the `references/` files (where the skill has any)
   - code_interpreter with its `scripts/` and `assets/` files (where present)
-- 1 router agent (`enx-tprm-control-center`) wired to its five worker agents
-  via connected-agent tools
+- 8 agents that exist only here: `infosec-assurance-orchestrator`,
+  `infosec-assurance-advisor`, `output-verifier`, and the delivery layer
+  (`ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`,
+  `pentest-report-analyzer`, `template-manager`) — `agents/README.md` also
+  charters `enterprise-explorer` and the three research agents
+- 1 router agent (`enx-tprm-control-center`) handing off to its five worker
+  agents through the A2A tool
 
 ## Limitations and honest deltas
 
-1. **Model:** Anthropic Claude models are not offered in the Azure model
-   catalog. Agents default to `gpt-4o`. Instruction-following and output
-   style will differ; validate the report-generating agents (ciso-reporting,
+1. **Model:** Anthropic Claude models **are** offered on Microsoft Foundry;
+   they are excluded from this deployment by the **EU residency rule** (no EU
+   Data Zone for them at the time of writing), not by availability. Re-check
+   the model region-availability page at the quarterly platform-currency
+   review; the `*ModelFormat` parameters in `infra/main.bicep` already accept
+   `Anthropic` for the day the residency position changes. Agents therefore
+   default to `gpt-4o`: instruction-following and output style differ from
+   claude.ai, so validate the report-generating agents (ciso-reporting,
    deepsearch, slide generators) against known-good outputs before relying on
    them. If Claude fidelity is mandatory, keep those workloads on claude.ai /
    Claude API and use Foundry for the rest — the converter lets you deploy a
    subset (`--only`).
 2. **Skill triggering:** Claude auto-selects skills from their descriptions.
    In Foundry, selection is explicit (you invoke an agent) or routed through
-   the router agent / your application layer.
+   the orchestrator / router agent (A2A hand-offs) or your application layer.
 3. **JS scripts:** code_interpreter executes Python only. Skills whose
    generators are Node.js (the pptx slide generators) have their JS attached
    as reference material; the converter flags them in the manifest
    (`"requires_external_runtime": true`) — run those generators in an Azure
    Function or container job if you need them server-side.
 4. **Local-hardware skills:** `whisperx-transcribe-diarize` targets local
-   Apple-Silicon execution; in Azure use AI Foundry Speech (batch
-   transcription + diarization) instead. It is converted as knowledge-only.
+   Apple-Silicon execution; in Azure use Foundry Speech batch transcription
+   + diarization instead (`workflows/speech-transcription.json`). It is
+   converted as knowledge-only.
 5. **Connectors:** Gmail/Drive/Adobe-style connectors have no direct
    equivalent inside an agent; use Azure Logic Apps or OpenAPI tools per
    integration (out of scope here, documented in MAPPING.md).
 6. **SDK drift:** `azure-ai-projects` evolves quickly; versions are pinned in
    `setup/requirements.txt`. If a call signature has moved, check the
-   migration notes for the pinned major version.
+   migration notes for the pinned major version. The runtime moves too: the
+   classic threads/runs data plane retires 2027-03-31, so scripts and
+   workflows target conversations/responses (`enterprise/ENTERPRISE_BLUEPRINT.md`
+   PRJ-2) — an SDK or API-version bump is a reviewed change, never a
+   convenience upgrade.
+
+## Platform currency
+
+Microsoft Foundry moves faster than this kit. Every change to the platform
+— model version, API/SDK version, preview→GA feature, instructions,
+registry, workflows, infrastructure, RBAC — is reviewed and approved by the
+accountable owner **before** it is implemented, and a **quarterly
+platform-currency review** re-checks API lifecycle, SDK cadence, portal GA
+status, preview exits, model retirements and region availability (including
+the Claude-on-Foundry residency position above). The binding rule, the
+per-change evidence table and the quarterly checklist are in
+`enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md`; the current platform
+decisions and their sources are in `enterprise/ENTERPRISE_BLUEPRINT.md`.
+Read both before changing anything here.
+
+## Cost (FinOps)
+
+Spend is governed, not incidental: `operations/FINOPS.md` holds the cost
+model per component, the cost per deliverable by tier, capacity sizing,
+budgets and anomaly alerts, and the monthly owner review;
+`operations/TOKEN_ECONOMY_PLAYBOOK.md` is the tuning procedure and
+`governance/MODEL_ROUTING.md` the tier rules. Two current planning points:
+deployments run in the **EU Data Zone**, which carries a premium over
+Global pricing from 2026-09-01, and the quota tier plus per-deployment
+capacity are re-checked quarterly with the platform-currency review (raise
+capacity on sustained 429s; move a tier to provisioned capacity only after
+three months above the break-even point).
 
 ## Governance note (ISO 42001 / EU AI Act)
 
@@ -172,5 +253,5 @@ for substantially modified systems potentially the provider) of the AI
 systems under the EU AI Act, and brings them into scope of your AIMS if you
 run ISO/IEC 42001. The exported `iso42001` and `eu-ai-act` agents themselves
 contain the reference material to run that assessment; do it before
-production use. Log and monitor via Azure AI Foundry's built-in tracing +
+production use. Log and monitor via Microsoft Foundry's built-in tracing +
 Azure Monitor.

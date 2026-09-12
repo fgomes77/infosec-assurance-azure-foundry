@@ -89,7 +89,7 @@ confidential data, and writes to systems of record).
 
 ## 4. Auditability
 
-Every run is traceable: Foundry thread + tracing (prompts, tool calls,
+Every run is traceable: the Foundry conversation + tracing (prompts, tool calls,
 tokens) in App Insights; Logic Apps run history evidences every approval
 decision, approver and timestamp; SharePoint versioning preserves every
 stored report version; the durable memory store is inspectable and

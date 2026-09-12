@@ -1,4 +1,6 @@
-# Reading PDFs in Azure AI Foundry (knowledge pack)
+# Reading PDFs in Microsoft Foundry (knowledge pack)
+
+*(Microsoft Foundry — formerly Azure AI Foundry.)*
 
 *Authored 2026-09-12; adapted from the claude.ai `pdf-reading` platform
 skill and its REFERENCE.md to the pure-Python `code_interpreter` sandbox.

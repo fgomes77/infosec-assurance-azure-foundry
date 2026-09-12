@@ -1,7 +1,9 @@
 """Copilot / Teams wrapper Function for the ENX InfoSec Assurance platform.
 
 Endpoints (integrations/copilot/openapi/ask.yaml):
-  POST /api/ask                    - thread/message/run dance against ONE advisory agent
+  POST /api/ask                    - one question to ONE advisory agent on the GA
+                                     conversations/responses data plane (finding C1),
+                                     with the ROUTE: hand-off of finding C2
   POST /api/request_report         - start the report-delivery Logic App (async)
   GET  /api/report_status/{runId}  - status of a requested report
   POST /api/approval/subscribe     - approval-gate subscribe target (workflows' approvalWebhookUrl)
@@ -24,6 +26,7 @@ import html
 import json
 import logging
 import os
+import re
 import time
 import uuid
 
@@ -36,8 +39,14 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)  # Easy Auth in
 _cred = DefaultAzureCredential()
 
 PROJECT_ENDPOINT = os.environ.get("PROJECT_ENDPOINT", "")
-API_VERSION = os.environ.get("FOUNDRY_API_VERSION", "2025-05-01")
-AGENT_IDS = json.loads(os.environ.get("ADVISORY_AGENT_IDS_JSON", "{}"))  # {"dora": "asst_..."}
+API_VERSION = os.environ.get("FOUNDRY_API_VERSION", "v1")
+# Finding C1/C19: the Agents v2 runtime addresses agents by NAME + immutable
+# VERSION, never by an assistant id. ADVISORY_AGENT_VERSIONS_JSON is the
+# deploy ledger build/agent-versions.json projected to {"<name>": "<version>"};
+# an empty version means "latest", which a production surface should not use.
+AGENT_VERSIONS = json.loads(os.environ.get("ADVISORY_AGENT_VERSIONS_JSON", "{}"))
+ALLOWED_AGENTS = set(AGENT_VERSIONS) or set(
+    json.loads(os.environ.get("ADVISORY_AGENT_NAMES_JSON", "[]")))
 DEFAULT_AGENT = os.environ.get("DEFAULT_ADVISORY_AGENT", "infosec-assurance-advisor")
 PIPELINE_TRIGGER_URLS = json.loads(os.environ.get("PIPELINE_TRIGGER_URLS_JSON", "{}"))  # {"deepsearch-report": "https://..."}
 USERS_GROUP_ID = os.environ.get("ENTRA_GROUP_USERS_OBJECT_ID", "")
@@ -101,6 +110,52 @@ def _table(name: str):
     return svc.get_table_client(name)
 
 
+def _agent_reference(name: str) -> dict:
+    """agent_reference body field of the Responses API, pinned to the promoted
+    version when the deploy ledger knows one (finding C19)."""
+    ref = {"type": "agent_reference", "name": name}
+    version = AGENT_VERSIONS.get(name)
+    if version:
+        ref["version"] = str(version)
+    return ref
+
+
+_ROUTE_RE = re.compile(r"^ROUTE:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def _route_target(answer: str) -> str:
+    m = _ROUTE_RE.search(answer or "")
+    return m.group(1) if m else ""
+
+
+def _respond(conv_id: str, agent: str, question: str, upn: str):
+    """One turn on the GA responses surface; returns (text, citations, usage)."""
+    resp = _foundry("POST", "/openai/v1/responses",
+                    json={"conversation": conv_id, "input": question,
+                          "agent_reference": _agent_reference(agent),
+                          "metadata": {"requestedBy": upn}})
+    deadline = time.time() + RUN_BUDGET_S
+    while resp.get("status") in ("queued", "in_progress", "requires_action"):
+        if time.time() > deadline:
+            raise TimeoutError(conv_id)
+        time.sleep(2)
+        resp = _foundry("GET", f"/openai/v1/responses/{resp['id']}")
+    if resp.get("status") not in (None, "completed"):
+        raise RuntimeError(f"response {resp.get('status')}")
+    answer = resp.get("output_text") or ""
+    cites = []
+    for item in resp.get("output", []) or []:
+        for part in item.get("content", []) or []:
+            if not answer and part.get("type") in ("output_text", "text"):
+                answer += part.get("text", "") if isinstance(part.get("text"), str) \
+                    else part.get("text", {}).get("value", "")
+            for a in part.get("annotations", []) or []:
+                url = a.get("url") or a.get("url_citation", {}).get("url", "")
+                if url:
+                    cites.append(url)
+    return answer, cites, resp.get("usage")
+
+
 # --------------------------------------------------------------------- /ask
 @app.route(route="ask", methods=["POST"])
 def ask(req: func.HttpRequest) -> func.HttpResponse:
@@ -113,31 +168,44 @@ def ask(req: func.HttpRequest) -> func.HttpResponse:
         return _json({"error": "invalid json"}, 400)
     agent = body.get("agent") or DEFAULT_AGENT
     question = (body.get("question") or "").strip()
-    if agent not in AGENT_IDS or not question or len(question) > MAX_QUESTION:
+    if agent not in ALLOWED_AGENTS or not question or len(question) > MAX_QUESTION:
         return _json({"error": "unknown agent or empty/oversized question"}, 400)
 
-    thread_id = body.get("threadId") or _foundry(
-        "POST", "/threads", json={"metadata": {"owner": upn, "channel": "copilot"}})["id"]
-    _foundry("POST", f"/threads/{thread_id}/messages", json={"role": "user", "content": question})
-    run = _foundry("POST", f"/threads/{thread_id}/runs",
-                   json={"assistant_id": AGENT_IDS[agent], "metadata": {"requestedBy": upn}})
-    deadline = time.time() + RUN_BUDGET_S
-    while run.get("status") in ("queued", "in_progress", "requires_action"):
-        if time.time() > deadline:
-            return _json({"error": "run still in progress", "threadId": thread_id}, 504)
-        time.sleep(2)
-        run = _foundry("GET", f"/threads/{thread_id}/runs/{run['id']}")
-    if run.get("status") != "completed":
-        return _json({"error": f"run {run.get('status')}", "threadId": thread_id}, 502)
-    msgs = _foundry("GET", f"/threads/{thread_id}/messages", params={"order": "desc", "limit": 1})
-    answer, cites = "", []
-    for part in (msgs.get("data") or [{}])[0].get("content", []):
-        if part.get("type") == "text":
-            answer += part["text"]["value"]
-            cites += [a.get("url_citation", {}).get("url", "") for a in part["text"].get("annotations", [])
-                      if a.get("type") == "url_citation"]
-    log.info("ask agent=%s user=%s thread=%s tokens=%s", agent, upn, thread_id, run.get("usage"))
-    return _json({"answer": answer, "threadId": thread_id, "agent": agent, "citations": [c for c in cites if c]})
+    # "threadId" is accepted for one release as a deprecated alias of
+    # "conversationId" (integrations/copilot/openapi/ask.yaml, finding C1).
+    conv_id = body.get("conversationId") or body.get("threadId") or _foundry(
+        "POST", "/openai/v1/conversations",
+        json={"metadata": {"owner": upn, "channel": "copilot"}})["id"]
+
+    try:
+        answer, cites, usage = _respond(conv_id, agent, question, upn)
+    except TimeoutError:
+        return _json({"error": "response still in progress",
+                      "conversationId": conv_id, "threadId": conv_id}, 504)
+    except RuntimeError as exc:
+        return _json({"error": str(exc), "conversationId": conv_id,
+                      "threadId": conv_id}, 502)
+
+    # Finding C2: Connected Agents no longer exist. The orchestrator answers with
+    # a single line `ROUTE: <agent-name>`; the CALLER performs the hand-off as a
+    # second response on that agent (orchestrator/README.md, mcp-server/server.py
+    # and workflows/agent-fanout.json implement the same contract).
+    route = _route_target(answer)
+    if route and route in ALLOWED_AGENTS and route != agent:
+        try:
+            r_answer, r_cites, _ = _respond(conv_id, route, question, upn)
+        except (TimeoutError, RuntimeError) as exc:
+            return _json({"error": f"routed response failed: {exc}",
+                          "conversationId": conv_id, "routedTo": route}, 502)
+        log.info("ask route agent=%s -> %s user=%s conversation=%s", agent, route, upn, conv_id)
+        return _json({"answer": r_answer, "conversationId": conv_id, "threadId": conv_id,
+                      "agent": route, "routedFrom": agent,
+                      "routing": answer.strip(),
+                      "citations": [c for c in (cites + r_cites) if c]})
+
+    log.info("ask agent=%s user=%s conversation=%s tokens=%s", agent, upn, conv_id, usage)
+    return _json({"answer": answer, "conversationId": conv_id, "threadId": conv_id,
+                  "agent": agent, "citations": [c for c in cites if c]})
 
 
 # ------------------------------------------------------------ /request_report

@@ -1,0 +1,217 @@
+# CI for the InfoSec Assurance Foundry conversion kit (delta D-OPS-G1 of
+# convertion/operations/CHANGE_MANAGEMENT.md §10, D-EVAL-G1 of
+# convertion/operations/evaluation/EVALUATION.md §8, D-UP-8 of
+# convertion/enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md §6).
+#
+# On every pull request the kit must prove, on a clean runner and entirely
+# OFFLINE, that it still converts the claude.ai export faithfully and that
+# nothing in it is inconsistent, unparsable or secret-bearing. On main the
+# same gates run again and a deploy job — OIDC only, no stored credential —
+# waits for the `production` environment approval of the accountable owner.
+#
+# Equivalent pipeline for Azure DevOps: convertion/ci/azure-pipelines.yml.
+# Both call the same scripts, so the two can never diverge.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '22'
+  BICEP_VERSION: '0.47.16'      # pinned: infra/main.bicep uses `!` non-null assertions
+  GITLEAKS_VERSION: '8.18.4'    # `detect --no-git` is the CLI surface of this line
+
+jobs:
+  gates:
+    name: Offline gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # KIT_RELEASE is `git describe`
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Toolchain (no Azure SDK — every gate below runs without Azure)
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet \
+            PyYAML==6.0.2 jsonschema==4.23.0
+          curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
+            -o "${RUNNER_TEMP}/bicep"
+          sudo install -m 0755 "${RUNNER_TEMP}/bicep" /usr/local/bin/bicep
+          bicep --version
+
+      - name: '[1] Convert skills from the claude.ai export'
+        run: python3 convertion/scripts/convert_skills.py
+
+      - name: '[2] Verify conversion fidelity (templates, rules, gates)'
+        run: python3 convertion/scripts/verify_conversion.py
+
+      - name: '[3] Verify kit consistency (secrets, syntax, cross-refs)'
+        run: python3 convertion/scripts/verify_kit.py
+
+      - name: '[4] Syntax gate (python, json, yaml, javascript, bicep, shell)'
+        run: convertion/ci/syntax_check.sh
+
+      - name: '[5] Infrastructure policy gate (EU residency, C5/C6/C11/C12/C22)'
+        run: convertion/infra/validate.sh
+
+      - name: '[6] Evaluation gate G0 + continuous-eval / red-team plans (C18)'
+        run: |
+          python3 convertion/operations/evaluation/run_evals.py --dry-run \
+            --golden convertion/operations/evaluation/golden-set.example.json \
+            --out convertion/build/evals/ci
+          python3 -m py_compile convertion/operations/evaluation/run_evals.py
+          python3 convertion/operations/evaluation/run_evals.py --dry-run --emit-plans \
+            --out convertion/build/evals/plans
+
+      - name: '[7] Platform currency: pinned model versions, lifecycle, learning loop (C6/C25)'
+        run: |
+          python3 convertion/enterprise/upgrade/check_model_lifecycle.py --dry-run \
+            --horizon 180 --json convertion/build/lifecycle-report.json
+          python3 convertion/enterprise/memory/learning_loop.py --dry-run \
+            --out "${RUNNER_TEMP}/learning"
+
+      - name: '[8] Offline dry-run chain (deploy.sh --dry-run)'
+        env:
+          CI: 'true'
+        run: cd convertion && ./deploy.sh --dry-run
+
+      - name: Publish gate evidence (ISMS change record)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            convertion/build/manifest.json
+            convertion/build/lifecycle-report.json
+            convertion/build/evals/**
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history: a secret removed in a later commit still counts
+
+      - name: Install gitleaks ${{ env.GITLEAKS_VERSION }}
+        run: |
+          curl -sSLf "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "${RUNNER_TEMP}" gitleaks
+          sudo install -m 0755 "${RUNNER_TEMP}/gitleaks" /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan the working tree (documented placeholders allow-listed)
+        run: |
+          gitleaks detect --no-git --source . --config .github/gitleaks.toml \
+            --redact --report-format sarif --report-path "${RUNNER_TEMP}/gitleaks-tree.sarif"
+
+      - name: Scan the git history
+        run: |
+          gitleaks detect --source . --config .github/gitleaks.toml \
+            --redact --report-format sarif --report-path "${RUNNER_TEMP}/gitleaks-history.sarif"
+
+      - name: Publish gitleaks reports (redacted)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-reports
+          if-no-files-found: warn
+          retention-days: 30
+          path: ${{ runner.temp }}/gitleaks-*.sarif
+
+  deploy:
+    name: Deploy (production)
+    needs: [gates, secret-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # The approval gate: `production` requires the accountable owner's review
+    # before this job starts (team/TEAM_MODEL.md F5, L11).
+    environment: production
+    permissions:
+      id-token: write           # OIDC federated credential — no stored secret
+      contents: read
+    env:
+      # Repository/environment VARIABLES (not secrets): none of these is
+      # confidential, and keeping them as variables keeps the rule "no secret
+      # in this repository" true end to end.
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      PROJECT_ENDPOINT: ${{ vars.PROJECT_ENDPOINT }}
+      FOUNDRY_ACCOUNT_NAME: ${{ vars.FOUNDRY_ACCOUNT_NAME }}
+      LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.LOG_ANALYTICS_WORKSPACE_NAME }}
+      APP_INSIGHTS_NAME: ${{ vars.APP_INSIGHTS_NAME }}
+      BASE_NAME: ${{ vars.BASE_NAME }}
+      OWNER_ALERT_EMAIL: ${{ vars.OWNER_ALERT_EMAIL }}
+      ACTION_GROUP_ID: ${{ vars.ACTION_GROUP_ID }}
+      BUDGET_START_DATE: ${{ vars.BUDGET_START_DATE }}
+      DELIVERY_FUNCTION_APP_NAME: ${{ vars.DELIVERY_FUNCTION_APP_NAME }}
+      FOUNDRY_API_VERSION: ${{ vars.FOUNDRY_API_VERSION }}
+      MEMORY_BACKEND: ${{ vars.MEMORY_BACKEND }}
+      KNOWLEDGE_SOURCE: ${{ vars.KNOWLEDGE_SOURCE }}
+      STRICT_RUNTIME: '1'       # refuse the retiring classic runtime (C1)
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Toolchain (data-plane SDK + bicep)
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet \
+            -r convertion/setup/requirements.txt
+          curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
+            -o "${RUNNER_TEMP}/bicep"
+          sudo install -m 0755 "${RUNNER_TEMP}/bicep" /usr/local/bin/bicep
+
+      - name: Azure login (OIDC federated credential, no secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy (convert → verify → agents → integrations → checks)
+        run: cd convertion && ./deploy.sh
+
+      - name: Publish the deployed agent versions (release evidence, C19)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-versions-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 365
+          path: |
+            convertion/build/agent-versions.json
+            convertion/build/manifest.json

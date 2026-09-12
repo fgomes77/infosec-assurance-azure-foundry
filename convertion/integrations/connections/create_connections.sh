@@ -13,7 +13,10 @@ API="2025-04-01-preview"
 BASE="https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID:?}/resourceGroups/${AZURE_RESOURCE_GROUP:?}/providers/Microsoft.CognitiveServices/accounts/${FOUNDRY_ACCOUNT_NAME:?}/projects/${FOUNDRY_PROJECT_NAME:?}/connections"
 VERIFY=0; [ "${1:-}" = "--verify" ] && VERIFY=1
 
-wanted=$(python3 -c "import json,sys;r=json.load(open('$HERE/../registry.json'));print(' '.join(sorted({c['foundry_connection'] for c in r['connections'].values() if 'foundry_connection' in c})))")
+# Connections carrying "enabled": false in the registry are provisioned later
+# (today: conn-sharepoint-grounding - preview tool, finding C9) and are skipped
+# here so --verify does not fail on a connection nothing is attached to.
+wanted=$(python3 -c "import json,sys;r=json.load(open('$HERE/../registry.json'));print(' '.join(sorted({c['foundry_connection'] for c in r['connections'].values() if 'foundry_connection' in c and c.get('enabled', True)})))")
 existing=$(az rest --method GET --url "${BASE}?api-version=${API}" --query "value[].name" -o tsv 2>/dev/null | tr '\n' ' ')
 missing=""
 for c in $wanted; do case " $existing " in *" $c "*) ;; *) missing="$missing $c";; esac; done
@@ -38,8 +41,12 @@ for c in $missing; do
     conn-iaf-api)            mk_keyed "$c" "${IAF_BASE_URL:?}" X-API-Key "${KV_SECRET_IAF:-iaf-api-key}" ;;
     conn-osint-proxy)        mk_keyed "$c" "${DELIVERY_FUNCTION_BASE_URL:?}" x-functions-key "${KV_SECRET_OSINT_PROXY:-delivery-function-key}" ;;
     conn-azure-devops)       mk_keyed "$c" "${AZURE_DEVOPS_ORG_URL:?}" Authorization "${KV_SECRET_ADO:-azure-devops-reader-token}" ;;
+    # finding C10: the ENX gateway MCP bearer lives in this connection, not in
+    # run-time tool_resources.mcp[].headers (../mcp/enx-gateway.json)
+    conn-enx-gateway)        mk_keyed "$c" "${ENX_GATEWAY_MCP_URL:?}" Authorization "${KV_SECRET_ENX_GATEWAY:-enx-gateway-token}" ;;
     conn-defender-graph|conn-sharepoint-graph|conn-entra-iam|conn-exchange-graph) mk_mi "$c" ;;
     conn-teams-graph|conn-m365-personal) echo "skip $c: delegated OAuth2 connection - create in the portal with the delegated app registration (README §Connections)";;
+    conn-sharepoint-grounding) echo "skip $c: SharePoint grounding tool is preview and OBO-only (finding C9) - registry entry has enabled=false; create in the portal only after GA + the licence decision";;
     bing-grounding)          echo "skip $c: provisioned by infra/main.bicep (enableWebSearch=true)";;
     *)                       echo "unknown connection $c - add a case here";;
   esac

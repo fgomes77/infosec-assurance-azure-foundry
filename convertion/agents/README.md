@@ -22,11 +22,11 @@ authored knowledge, and charters for agents that exist only here.
 
 | Source | Decision | Rationale |
 |---|---|---|
-| `product-self-knowledge` (Anthropic product docs) | **EXCLUDED**; principle kept in `knowledge-packs/platform-self-knowledge.md` | No Claude models/products on Azure; only the "never answer capability questions from memory" rule transfers (MCP client note stays in mcp-server/README.md) |
-| `setup-writing-style` (mailbox/Slack/Drive harvesting, per-user skill store) | **EXCLUDED** mechanism; **INCLUDED** house style `knowledge-packs/enx-writing-style.md` and the "paste samples in the thread" mode | Reading users' sent mail is a personal-data processing activity without a documented basis; Foundry has no per-user skill store; shared memory bans PII |
+| `product-self-knowledge` (Anthropic product docs) | **EXCLUDED**; principle kept in `knowledge-packs/platform-self-knowledge.md` | This deployment uses no Anthropic models — note that Claude models ARE offered on Microsoft Foundry and are excluded here by the EU residency rule, not by availability (re-check quarterly); only the "never answer capability questions from memory" rule transfers (MCP client note stays in mcp-server/README.md) |
+| `setup-writing-style` (mailbox/Slack/Drive harvesting, per-user skill store) | **EXCLUDED** mechanism; **INCLUDED** house style `knowledge-packs/enx-writing-style.md` and the "paste samples in the conversation" mode | Reading users' sent mail is a personal-data processing activity without a documented basis; Foundry has no per-user skill store; shared memory bans PII |
 | `frontend-design` | **INCLUDED as constrained pack** `knowledge-packs/enx-html-design-guide.md` | Quality floor kept; distinctive palettes conflict with template governance (requirement j) and ENX brand |
 | `file-reading`, `pdf-reading` | **INCLUDED, rewritten** as `knowledge-packs/file-intake-foundry.md`, `pdf-reading-foundry.md` | Their CLIs/paths do not exist in code_interpreter |
-| `deep-research` | **INCLUDED, adapted** as research-coordinator/worker/writer charters + `overlays/research-pattern.md` | Method kept; sub-agents → connected agents; WebFetch → grounding; notes → reply |
+| `deep-research` | **INCLUDED, adapted** as research-coordinator/worker/writer charters + `overlays/research-pattern.md` | Method kept; sub-agents → A2A hand-offs to published agents (Connected Agents do not exist on the Agents v2 runtime); WebFetch → grounding; notes → reply |
 | `doc-coauthoring`, `learn` | **DEPLOYED (adapted)** via overlays | Valuable for procedures/onboarding; Claude-only mechanics mapped |
 | alphaXiv / personal paper library | **REPLACED** by the `MEMORY:` block tagged `citation` in `vs-assurance-memory` | No per-user libraries on the platform |
 | Per-framework advisory systems (NIST CSF, CIS, 27005, 27002 attributes, GDPR Art. 28/27701, ITIL, COBIT, COSO, TOGAF, PMBOK, ISO 20000, agile/Lean, cloud) | `infosec-assurance-advisor` **IS** the advisory system for these frameworks, grounded by `advisor-knowledge/` and routed by keyword in `orchestrator_instructions.md` | One reasoning-tier advisor with the combined store beats eleven thin agents for cost and consistency; may be split later with the create_delivery_agents pattern |
@@ -39,6 +39,21 @@ light: enterprise-explorer, docx/pdf/pptx/xlsx · chat: research-worker,
 research-writer, template-manager, learn, doc-coauthoring · reasoning:
 advisor, verifier, orchestrator, research-coordinator, ciso-global-report,
 analyzers (governance/MODEL_ROUTING.md is authoritative).
+
+**Tool compatibility (tier ≠ tool support).** Every charter and overlay
+here assumes that an agent carrying OpenAPI, MCP, AI Search /
+`file_search`, SharePoint grounding or Web Search tools runs on a model
+that supports those tools. Reasoning models of the o3-mini class support
+none of them, so the reasoning-tier pin must be a tool-capable reasoning
+model for the advisors, the orchestrator, the analyzers and the research
+coordinator; `governance/MODEL_ROUTING.md` holds the authoritative
+tool-compatibility matrix.
+
+**Hand-off vocabulary.** Agent-facing text in this directory says
+*A2A hand-off to a published agent* (or an Agent Framework orchestration
+step), never "connected agent" or "sub-agent": Connected Agents do not
+exist on the Agents v2 runtime. Runtime vocabulary is likewise
+*conversation* / *response*, not thread / run.
 
 ## Placeholders
 

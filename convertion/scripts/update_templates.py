@@ -12,7 +12,11 @@ Steps (atomic: any failure rolls the source file back):
      code_interpreter files pick up the new template.
   5. Re-stage the delivery-function renderers (stage_renderers.py) when
      the template has a renderer.
-  6. Bump the registry version + last_approved and write the audit line.
+  6. Bump the registry version + last_approved and write the audit line,
+     recording the agent VERSIONS the propagation promoted
+     (build/agent-versions.json — finding C19). Pipelines pin
+     `<agent>:<version>`, so the audit line is what links an approved
+     template change to the versions now serving traffic.
 
 Usage:
     python3 update_templates.py --template <id> --file <new-content-file> \
@@ -30,10 +34,13 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 CONV = HERE.parent
 REPO = CONV.parent
 REGISTRY = CONV / "templates" / "registry.json"
 AUDIT = CONV / "templates" / "audit.log"
+
+from _foundry_runtime import pinned_ref  # noqa: E402
 
 
 def run(cmd: list[str]) -> None:
@@ -102,15 +109,20 @@ def main() -> int:
         shutil.copy2(backup, src)
         raise
 
+    promoted = [r for r in (pinned_ref(a) for a in consumers) if r]
     entry["version"] = bump(entry.get("version") or "1.0")
     entry["last_approved"] = dt.date.today().isoformat()
+    entry["promoted_agent_versions"] = promoted        # finding C19
     REGISTRY.write_text(json.dumps(reg, indent=2) + "\n", encoding="utf-8")
     with AUDIT.open("a", encoding="utf-8") as f:
         f.write(f"{dt.datetime.now().isoformat()} template={args.template} "
                 f"version={entry['version']} approved_by={args.approved_by} "
-                f"approval_run={args.approval_run}\n")
+                f"approval_run={args.approval_run} "
+                f"agent_versions={','.join(promoted) or 'not-versioned'}\n")
     backup.unlink(missing_ok=True)
-    print(f"applied: {args.template} -> v{entry['version']}")
+    print(f"applied: {args.template} -> v{entry['version']}"
+          + (f"; promoted {', '.join(promoted)}" if promoted else
+             "; runtime does not version agents (classic fallback)"))
     return 0
 
 

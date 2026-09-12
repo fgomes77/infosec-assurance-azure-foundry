@@ -1,0 +1,35 @@
+{
+  "name": "InfoSec Assurance Foundry kit",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" },
+    "ghcr.io/devcontainers/features/azure-cli:1": { "version": "latest", "installBicep": true },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteUser": "vscode",
+  "containerEnv": {
+    "BICEP_VERSION": "0.47.16",
+    "GITLEAKS_VERSION": "8.18.4",
+    "FUNC_CORE_TOOLS_VERSION": "4",
+    "PYTHONPYCACHEPREFIX": "/tmp/kit-pycache",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-bicep",
+        "ms-azuretools.vscode-azurefunctions",
+        "ms-azuretools.vscode-azurelogicapps",
+        "redhat.vscode-yaml",
+        "timonwong.shellcheck"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python3",
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true
+      }
+    }
+  }
+}

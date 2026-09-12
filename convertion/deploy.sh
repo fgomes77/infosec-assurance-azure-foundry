@@ -3,7 +3,8 @@
 # Each step must succeed (and the conversion must VERIFY against the
 # claude.ai export) before the next runs — accuracy gates the speed.
 #
-#   ./deploy.sh                convert -> verify -> agents -> delivery agents
+#   ./deploy.sh                runtime pre-flight -> model lifecycle ->
+#                              convert -> verify -> agents -> delivery agents
 #                              -> advisor/orchestrator -> integrations
 #                              -> advisory profile -> renderers -> checks
 #                              -> smoke test -> live drift check
@@ -17,6 +18,12 @@
 #                   or "--platform-skills docs" (deterministic CI builds)
 #   CI=true         strict mode: renderer staging failures abort
 #   KIT_RELEASE     release tag stamped on every agent (defaults to git describe)
+#   ALLOW_CLASSIC_RUNTIME=1
+#                   allow the deploy to proceed on the retiring classic
+#                   threads/runs SDK (azure-ai-projects 1.x). Default: the
+#                   pre-flight only warns; set STRICT_RUNTIME=1 to fail.
+#   STRICT_RUNTIME=1  fail the deploy unless azure-ai-projects is 2.x
+#   LIFECYCLE_HORIZON  days for the model-retirement warning (default 180)
 set -euo pipefail
 cd "$(dirname "$0")/scripts"
 
@@ -39,42 +46,75 @@ if [ -n "$INFRA" ] && [ -z "$DRY" ]; then
   ../setup/provision.sh
 fi
 
+# [0a] Runtime pre-flight (finding C1, shared delta S-10). The classic
+# threads/runs Agent Service retires 2027-03-31; scripts/_foundry_runtime.py
+# prefers the GA Responses API and falls back to the classic runtime, which
+# this gate makes visible instead of silent.
+echo "==> [0b/8] Runtime pre-flight (Foundry data-plane SDK + api-version)"
+python3 - <<'PYPRE' || { echo "runtime pre-flight failed"; exit 1; }
+import os, sys
+sys.path.insert(0, ".")          # deploy.sh runs from convertion/scripts
+from _foundry_runtime import API_VERSION, runtime_banner, runtime_mode, sdk_version
+print(runtime_banner())
+if runtime_mode() == "classic":
+    msg = ("classic threads/runs runtime in use (azure-ai-projects "
+           f"{sdk_version() or 'missing'}); upgrade setup/requirements.txt to "
+           "azure-ai-projects>=2.3.0,<3 — enterprise/series/06 §A")
+    if os.environ.get("STRICT_RUNTIME") == "1":
+        sys.exit("ERROR: " + msg)
+    print("WARNING: " + msg)
+elif API_VERSION != "v1":
+    print(f"WARNING: FOUNDRY_API_VERSION={API_VERSION} is not the GA 'v1' "
+          f"surface — setup/.env")
+PYPRE
+
+# [0c] Model lifecycle / platform currency (findings C6, C25). Offline; it
+# fails only when a deployed model version is inside the ticket window or a
+# tier has no pinned version — the reviewed compensating control for
+# NoAutoUpgrade (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md R1, R2).
+echo "==> [0c/8] Model lifecycle + pinned-version check (offline)"
+if [ -f ../enterprise/upgrade/check_model_lifecycle.py ]; then
+  python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run     --horizon "${LIFECYCLE_HORIZON:-180}"     --json ../build/lifecycle-report.json     || { echo "model lifecycle check FAILED: a pinned model version is empty, or a deployment retires within the ticket window. Open the change ticket (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md §4) or re-run with an updated retirement table."; exit 1; }
+else
+  echo "note: enterprise/upgrade/check_model_lifecycle.py not present - platform-currency check skipped"
+fi
+
 if [ -z "$DRY" ]; then
-  echo "==> [0/7] Pre-deploy export of vs-assurance-memory + vector-store inventory (read-only)"
+  echo "==> [0/8] Pre-deploy export of vs-assurance-memory + vector-store inventory (read-only)"
   python3 ../operations/backup_vector_stores.py --stores vs-assurance-memory \
     --out "../operations/backups/$(date -u +%Y-%m-%d)" \
     || { echo "backup failed — aborting (operations/BACKUP_DR.md §3)"; exit 1; }
 fi
 
-echo "==> [1/7] Converting skills from the claude.ai export ${CONVERT_FLAGS}"
+echo "==> [1/8] Converting skills from the claude.ai export ${CONVERT_FLAGS}"
 # shellcheck disable=SC2086
 python3 convert_skills.py $CONVERT_FLAGS
 
-echo "==> [2/7] Verifying conversion fidelity (templates, rules, gates) + kit consistency"
+echo "==> [2/8] Verifying conversion fidelity (templates, rules, gates) + kit consistency"
 python3 verify_conversion.py
 python3 verify_kit.py
 
-echo "==> [3/7] Creating/updating agents $DRY"
+echo "==> [3/8] Creating/updating agents $DRY"
 python3 create_agents.py $DRY
 
-echo "==> [4/7] Creating delivery-layer agents (ciso-global-report, analyzers, template-manager) $DRY"
+echo "==> [4/8] Creating delivery-layer agents (ciso-global-report, analyzers, template-manager) $DRY"
 python3 create_delivery_agents.py $DRY
 
-echo "==> [5/7] Creating advisor + verifier + orchestrator (+ memory store) $DRY"
+echo "==> [5/8] Creating advisor + verifier + orchestrator (+ memory store) $DRY"
 python3 create_orchestrator.py $DRY
 
 # Integrations run ONCE, after every agent exists (advisor included) —
 # earlier runs would skip the advisor as "not deployed".
-echo "==> [5b/7] Attaching integrations and model tiers to every agent $DRY"
+echo "==> [5b/8] Attaching integrations and model tiers to every agent $DRY"
 python3 attach_integrations.py $DRY
 
-echo "==> [6/7] Applying advisory profile (file generation + read-only enterprise charter + combined store) $DRY"
+echo "==> [6/8] Applying advisory profile (file generation + read-only enterprise charter + combined store) $DRY"
 python3 apply_advisory_profile.py $DRY
 
-echo "==> [6a/7] Re-wiring the orchestrator to the final agent set $DRY"
+echo "==> [6a/8] Re-wiring the orchestrator to the final agent set $DRY"
 python3 create_orchestrator.py $DRY
 
-echo "==> [6c/7] Staging delivery-function renderers"
+echo "==> [6c/8] Staging delivery-function renderers"
 if [ "${CI:-}" = "true" ]; then
   python3 stage_renderers.py --strict
 else
@@ -97,18 +137,18 @@ if [ -n "$WORKFLOWS" ]; then
 fi
 
 if [ -z "$DRY" ]; then
-  echo "==> [6d/7] Identity model check (read-only)"
+  echo "==> [6d/8] Identity model check (read-only)"
   ../team/least-privilege/scripts/provision_identity.sh --verify && ../team/access-review.sh --quick \
     || echo "note: identity drift detected - see team/TEAM_MODEL.md §15"
 
-  echo "==> [6e/7] Monitoring rules (what-if only; apply from the pipeline)"
+  echo "==> [6e/8] Monitoring rules (what-if only; apply from the pipeline)"
   az deployment group what-if -g "$AZURE_RESOURCE_GROUP" -f ../operations/alerts.bicep \
     -p logAnalyticsName="${LOG_ANALYTICS_WORKSPACE_NAME:-infosecfoundry-logs}" \
        foundryAccountName="${FOUNDRY_ACCOUNT_NAME:-infosecfoundry-aif}" \
        ownerAlertEmail="${OWNER_ALERT_EMAIL:?set OWNER_ALERT_EMAIL in setup/.env}" \
     || echo "note: alert what-if skipped (no az session or RG) - see operations/MONITORING.md §4"
 
-  echo "==> [6f/7] Component budgets (what-if only; apply from the pipeline)"
+  echo "==> [6f/8] Component budgets (what-if only; apply from the pipeline)"
   az deployment group what-if -g "$AZURE_RESOURCE_GROUP" -f ../operations/cost-budget.bicep \
     -p baseName="${BASE_NAME:-infosecfoundry}" foundryAccountName="${FOUNDRY_ACCOUNT_NAME:-infosecfoundry-aif}" \
        logAnalyticsName="${LOG_ANALYTICS_WORKSPACE_NAME:-infosecfoundry-logs}" \
@@ -116,14 +156,14 @@ if [ -z "$DRY" ]; then
        startDate="${BUDGET_START_DATE:-{yyyy-MM-01}}" actionGroupId="${ACTION_GROUP_ID:-}" \
     || echo "note: budget what-if skipped (no az session or RG) - see operations/FINOPS.md §4"
 
-  echo "==> [7/7] Smoke test via the orchestrator"
+  echo "==> [7/8] Smoke test via the orchestrator"
   python3 smoke_test.py --agent infosec-assurance-orchestrator \
     --prompt "One-line health check: name three DORA Art. 30(2) baseline contractual provisions."
 
-  echo "==> [7b/7] Live drift check (deployed state vs verified build, read-only)"
+  echo "==> [7b/8] Live drift check (deployed state vs verified build, read-only)"
   python3 verify_deployment.py
 else
-  echo "==> [7/7] Smoke test + live drift check skipped (dry run)"
+  echo "==> [7/8] Smoke test + live drift check skipped (dry run)"
 fi
 
 echo "==> Deployment pipeline completed (release ${KIT_RELEASE})."

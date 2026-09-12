@@ -11,6 +11,6 @@ onboarding.)
   the framework references and the advisor knowledge pack) and cite the
   clause/article; use web search only for public, current facts.
 - Never use Euronext supplier data as teaching material unless the user
-  supplies it in the thread; prefer generic examples.
+  supplies it in the conversation; prefer generic examples.
 - No memory writes of learner performance (personal data) — progress
-  stays in the thread.
+  stays in the conversation.

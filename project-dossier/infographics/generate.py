@@ -80,7 +80,7 @@ def save(f, name):
 # ═════════════════ 1 · SOLUTION ARCHITECTURE ════════════════════════════════
 W, H = 13, 9.2
 f, ax = fig_ax(W, H)
-header(ax, W, H, "Solution Architecture — InfoSec Assurance on Azure AI Foundry",
+header(ax, W, H, "Solution Architecture — InfoSec Assurance on Microsoft Foundry",
        "Five layers · every access path converges on the orchestrator · agents draw on governed knowledge and read-only tools")
 
 bands = [
@@ -227,7 +227,7 @@ for label, ec, bg, gx, gy, cards in groups:
         card(ax, gx + 0.2, gy + 1.36 - i * 1.18, 2.8, 1.1, t, b, ec=ec, ts=8.8, bs=7.6)
 # hub
 rbox(ax, 4.7, 3.35, 3.6, 2.15, TEAL, "none", r=0.16)
-txt(ax, 6.5, 5.12, "Azure AI Foundry agents", 10.5, WHITE, True)
+txt(ax, 6.5, 5.12, "Microsoft Foundry agents", 10.5, WHITE, True)
 txt(ax, 6.5, 4.52, "orchestrator · advisor · verifier\n22 specialists", 8.6, WHITE)
 rbox(ax, 4.9, 3.52, 3.2, 0.5, "#0B6E63", "none", r=0.12)
 txt(ax, 6.5, 3.77, "Bing web search — grounded citations", 7.9, WHITE, True)

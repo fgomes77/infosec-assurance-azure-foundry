@@ -39,6 +39,11 @@ def retry(fn, *args, what: str = "call", **kwargs):
 
 FILE_MAP_MARKER = "## FILE MAP (code_interpreter attachments)"
 ADVISORY_MARKER = "# Advisory-system addendum"
+# Routing table injected at deploy time by create_orchestrator.py /
+# create_agents.py in place of the retired ConnectedAgentTool (finding C2,
+# enterprise/series/06-agents-conversion-and-deploy.md §D). Stripped before
+# hashing so the offline charter hash stays stable.
+ROUTING_MARKER = "## ROUTING TABLE (live agents, injected at deploy time)"
 
 
 def kit_metadata() -> dict:
@@ -60,9 +65,10 @@ def file_map_block(pairs: list[tuple[str, str]]) -> str:
 
 
 def strip_deploy_blocks(instructions: str) -> str:
-    """Remove the deploy-time additions (FILE MAP, advisory addendum) so a
-    live agent's instructions can be compared with build/agents/*/instructions.md."""
-    for marker in (FILE_MAP_MARKER, ADVISORY_MARKER):
+    """Remove the deploy-time additions (FILE MAP, advisory addendum,
+    routing table) so a live agent's instructions can be compared with
+    build/agents/*/instructions.md."""
+    for marker in (FILE_MAP_MARKER, ADVISORY_MARKER, ROUTING_MARKER):
         i = instructions.find(marker)
         if i >= 0:
             instructions = instructions[:i].rstrip().removesuffix("---").rstrip()
@@ -169,8 +175,24 @@ def tool_type(t) -> str:
     return getattr(t, "type", None) or (t.get("type", "") if isinstance(t, dict) else "")
 
 
+def routing_table_block(rows: list[tuple[str, str]]) -> str:
+    """Deploy-time routing table replacing ConnectedAgentTool (C2): the
+    orchestrator answers with `ROUTE: <agent-name>` and the caller performs
+    the hand-off as a second responses.create on that agent."""
+    if not rows:
+        return ""
+    body = "\n".join(f"| `{n}` | {(d or '').replace('|', '/')[:300]} |"
+                      for n, d in rows)
+    return (f"\n\n{ROUTING_MARKER}\n\nWhen a specialist is needed, reply "
+            f"with a single line `ROUTE: <agent-name>` chosen from this "
+            f"table (the caller performs the hand-off), then stop.\n\n"
+            f"| agent-name | handles |\n|---|---|\n{body}\n")
+
+
 def integration_tools(agent) -> list:
-    """OpenAPI / MCP / Bing tools currently on a live agent - preserved by
-    the create scripts so a re-run never wipes attach_integrations.py work."""
+    """OpenAPI / MCP / Bing / AI Search tools currently on a live agent -
+    preserved by the create scripts so a re-run never wipes
+    attach_integrations.py or apply_advisory_profile.py work."""
     return [t for t in (agent.tools or [])
-            if tool_type(t) in ("openapi", "bing_grounding", "mcp")]
+            if tool_type(t) in ("openapi", "bing_grounding", "mcp",
+                                "azure_ai_search")]

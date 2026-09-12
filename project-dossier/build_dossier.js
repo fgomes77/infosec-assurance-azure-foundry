@@ -56,7 +56,7 @@ const children = [
   new Paragraph({ spacing: { before: 2800 }, children: [] }),
   new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "PROJECT DOSSIER", bold: true, size: 30, color: GREY })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200 }, children: [new TextRun({ text: "InfoSec Assurance Agent Platform", bold: true, size: 56, color: TEAL })] }),
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120 }, children: [new TextRun({ text: "Migration of the Claude AI GRC/TPRM toolset to Azure AI Foundry", size: 28, color: DARK })] }),
+  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120 }, children: [new TextRun({ text: "Migration of the Claude AI GRC/TPRM toolset to Microsoft Foundry", size: 28, color: DARK })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 600 }, children: [new TextRun({ text: "Information Security Assurance — TPRM · ISMS · GRC · ICT GRC", size: 22, color: GREY })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 1600 }, children: [new TextRun({ text: "Version 1.1  ·  11 September 2026  ·  Classification: Internal", size: 20, color: GREY })] }),
   new Paragraph({ children: [new PageBreak()] }),
@@ -64,7 +64,7 @@ const children = [
   // ---- Document control ----
   H1("Document Control"),
   table(["Item", "Detail"], [
-    ["Title", "Project Dossier — InfoSec Assurance Agent Platform on Azure AI Foundry"],
+    ["Title", "Project Dossier — InfoSec Assurance Agent Platform on Microsoft Foundry (formerly Azure AI Foundry)"],
     ["Version / Status", "1.1 — Draft for review"],
     ["Date", "11 September 2026"],
     ["Owner", "InfoSec Assurance & Third-Party Risk (F. Gomes)"],
@@ -79,7 +79,7 @@ const children = [
 
   // ---- 1 Executive summary ----
   H1("1. Executive Summary"),
-  P("The InfoSec Assurance team operates a mature toolset of 35 AI skills on claude.ai covering third-party risk management (TPRM), the information security management system (ISMS), and GRC / ICT GRC advisory: OSINT supplier assessments (DeepSearch), OneTrust-driven DPIA and CISO reporting, Form B questionnaire support, and regulatory advisors for DORA, NIS2, the EU AI Act, ISO/IEC 27001 and ISO/IEC 42001. This project replicates that capability, with equal or better assurance, on Microsoft Azure AI Foundry — the platform aligned with the wider Euronext technology estate (Entra ID, Microsoft Graph, Defender, SharePoint, Jira, OneTrust)."),
+  P("The InfoSec Assurance team operates a mature toolset of 35 AI skills on claude.ai covering third-party risk management (TPRM), the information security management system (ISMS), and GRC / ICT GRC advisory: OSINT supplier assessments (DeepSearch), OneTrust-driven DPIA and CISO reporting, Form B questionnaire support, and regulatory advisors for DORA, NIS2, the EU AI Act, ISO/IEC 27001 and ISO/IEC 42001. This project replicates that capability, with equal or better assurance, on Microsoft Foundry (formerly Azure AI Foundry) — the platform aligned with the wider Euronext technology estate (Entra ID, Microsoft Graph, Defender, SharePoint, Jira, OneTrust)."),
   P("The delivered solution converts every skill into a Foundry agent with its knowledge, templates and scripts intact (byte-verified against the claude.ai source), adds a reasoning orchestrator and a memory-backed assurance advisor, wires the surrounding toolchain through least-privilege integrations, and enforces a three-layer human-approval control so no agent submits anything of record without a person's explicit sign-off. A one-command, verification-gated pipeline deploys and re-synchronises the whole environment."),
 
   // ---- 2 Background ----
@@ -89,7 +89,7 @@ const children = [
 
   // ---- 3 Objectives ----
   H1("3. Objectives"),
-  BB("O1 — Functional parity", "Every claude.ai skill is available as an Azure AI Foundry agent producing the same deliverables from the same inputs (reports, dashboards, slides, questionnaire responses, advisory answers)."),
+  BB("O1 — Functional parity", "Every claude.ai skill is available as a Microsoft Foundry agent producing the same deliverables from the same inputs (reports, dashboards, slides, questionnaire responses, advisory answers)."),
   BB("O2 — Fidelity", "Agent knowledge, templates, rules and requirements are byte-identical to the claude.ai export, provably and repeatably (automated verification, not assertion)."),
   BB("O3 — Integration", "Agents work inside the Euronext toolchain — Jira Cloud, Jira Assets CMDB, OneTrust, SecurityScorecard, Microsoft Defender, SharePoint, the internal IAF API and ENX gateway — with web search and Microsoft 365 Copilot access for team members."),
   BB("O4 — Human control", "No agent submits anything of record without explicit human review and approval, enforced technically, behaviourally and procedurally."),
@@ -109,7 +109,7 @@ const children = [
   H2("5.1 Functional requirements"),
   table(["ID", "Requirement", "Where satisfied"], [
     ["FR-01", "Convert each exported skill into an agent: SKILL.md → instructions; references → RAG vector store; scripts/assets → code interpreter", "convertion/scripts/convert_skills.py"],
-    ["FR-02", "Single entry point that routes or decomposes any assurance request across specialists", "infosec-assurance-orchestrator (connected agents)"],
+    ["FR-02", "Single entry point that routes or decomposes any assurance request across specialists", "infosec-assurance-orchestrator (A2A hand-offs to published agents)"],
     ["FR-03", "Reasoning generalist covering all persona domains, grounded in the combined knowledge base, with durable team memory", "infosec-assurance-advisor + vs-assurance-memory"],
     ["FR-04", "Integrations: Jira Cloud, Jira Assets CMDB, OneTrust, SecurityScorecard, Defender (Graph), SharePoint (Graph), IAF API, ENX gateway MCP, Bing web search", "integrations/ registry + attach_integrations.py"],
     ["FR-05", "Scheduled/event workflows replacing claude.ai Routines (OneTrust intake, Defender briefs, weekly DeepSearch, Jira–IAF sync)", "workflows/ (Logic Apps definitions)"],
@@ -121,7 +121,7 @@ const children = [
   table(["ID", "Requirement", "Where satisfied"], [
     ["NFR-01", "Deployment is idempotent, gated on verification, and completes as one command", "deploy.sh (six gated steps)"],
     ["NFR-02", "Resilience: retries with backoff, parallel uploads, per-agent failure isolation, upload de-duplication", "scripts/_azure_helpers.py"],
-    ["NFR-03", "Cost efficiency: reasoning model (o3-mini) only for analytic agents; gpt-4o for deterministic pipelines; content-hash cache avoids duplicate uploads", "registry model tiers + upload cache"],
+    ["NFR-03", "Cost efficiency: the reasoning tier (a tool-capable reasoning model) only for analytic agents; gpt-4o for deterministic pipelines; light tier for extraction/rendering; content-hash cache avoids duplicate uploads", "registry model tiers + upload cache; governance/MODEL_ROUTING.md; operations/FINOPS.md"],
     ["NFR-04", "Observability: traces, token/latency metrics, approval audit trail, 90-day ISMS-aligned log retention", "App Insights + Log Analytics (Bicep)"],
     ["NFR-05", "Re-sync from a fresh claude.ai export is the standard pipeline run, with drift detection", "verify_conversion.py"],
   ], [900, 5060, 3400]),
@@ -155,13 +155,13 @@ const children = [
   ...image(IMG("01-solution-architecture.png"), "Figure 1 — Solution architecture: access, orchestration, agents, knowledge & tools, Azure foundation"),
   H2("7.1 Components"),
   table(["Component", "Role"], [
-    ["infosec-assurance-orchestrator", "Planner-executor entry point (o3-mini + web search); answers, routes, or decomposes across all connected agents; routes deliverable drafts through the verifier"],
+    ["infosec-assurance-orchestrator", "Planner-executor entry point (reasoning tier + web search); answers, routes, or decomposes across the published agents via A2A hand-offs; routes deliverable drafts through the verifier"],
     ["infosec-assurance-advisor", "Reasoning generalist across all persona domains; combined knowledge base (55 sources: every skill's knowledge + the advisor knowledge pack) + durable team memory + web search; cites sources"],
     ["output-verifier", "Independent verification layer; strict PASS/FAIL against deterministic rules; generates nothing"],
     ["18 GRC/TPRM specialists", "DeepSearch OSINT, DPIA, CISO reporting/summary, Form B, cyber forum, DORA, NIS2, EU AI Act, ISO 27001, ISO 42001, TPSRCA engine, PDF analyzer, slide generators, ENX router"],
     ["4 document agents", "docx, pdf, pptx, xlsx production toolkits (code interpreter)"],
-    ["Knowledge & memory stores", "Per-agent vector stores, the combined store, and vs-assurance-memory (timestamped, deletable notes)"],
-    ["Azure foundation", "Foundry project with gpt-4o and o3-mini deployments, Bing grounding, Key Vault-backed connections, App Insights/Log Analytics, deliverables storage"],
+    ["Knowledge & memory stores", "One vector store per agent (service limit), the advisor's combined knowledge store, and durable team memory in the kb-assurance-memory Azure AI Search index (timestamped, deletable notes)"],
+    ["Azure foundation", "Foundry project with chat, reasoning and light model deployments (EU Data Zone, pinned versions), web grounding, Key Vault-backed connections, App Insights/Log Analytics, deliverables storage"],
   ], [3200, 6160]),
   spacer(),
   H2("7.2 Repository layout"),
@@ -242,7 +242,7 @@ const children = [
     ["EU AI Act deployer duties", "Deploying these agents makes the organisation the deployer; run the (included) eu-ai-act agent's assessment before production and record it in the AIMS"],
     ["ISO/IEC 42001 (AIMS)", "This platform enters the AIMS scope; the approval policy, verifier rules and observability are the documented Annex A controls (A.6, A.9)"],
     ["GDPR minimisation", "Durable memory holds timestamped, individually deletable notes; verifier rule 5 blocks excess personal data in deliverables; memory store in RoPA/retention schedule"],
-    ["Model substitution risk", "Claude models are not available on Azure; agents run on gpt-4o/o3-mini. UAT against claude.ai baselines is the acceptance control (Phase 4); report agents carry self-check + verifier as compensating controls"],
+    ["Model substitution risk", "Claude models are offered on Microsoft Foundry but are excluded here by the EU residency rule (re-checked quarterly), so agents run on the OpenAI-family tiers. UAT against claude.ai baselines is the acceptance control (Phase 4); report agents carry self-check + verifier as compensating controls"],
   ], [3400, 5960]),
 
   // ---- 12 Implementation plan ----

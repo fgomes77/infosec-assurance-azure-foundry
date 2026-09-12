@@ -1,0 +1,78 @@
+{
+  "_comment": "Euronext house style tokens - the ONLY permitted theme (templates/registry.json id 'enx-theme'). Every renderer under functions/delivery/renderers-src/ and every HTML template under templates/assets/ reads its palette, typography and classification strings from this file, and the verifier's house-style rule checks delivered artefacts against it. Changing a value here is a TEMPLATE CHANGE: owner approval, scripts/update_templates.py, audit line, new agent version (operations/CHANGE_MANAGEMENT.md, finding C19). Ad-hoc themes (theme-factory, brand-guidelines) are NOT deployed - see templates/themes/euronext-house.md.",
+  "id": "enx-theme",
+  "version": "1.0",
+  "palette": {
+    "body_background": "#0a1a1f",
+    "surface": "#0f2429",
+    "surface_raised": "#123036",
+    "header_gradient_from": "#003530",
+    "header_gradient_to": "#005048",
+    "primary": "#008D7F",
+    "primary_rgb": "0,141,127",
+    "secondary": "#5ce0d2",
+    "highlight": "#00B5A3",
+    "text": "#ffffff",
+    "text_muted": "#b9d4d0",
+    "border": "rgba(92,224,210,0.25)",
+    "table_header_background": "#00463f",
+    "table_row_alt": "rgba(255,255,255,0.03)"
+  },
+  "risk_colours": {
+    "critical": "#d64545",
+    "high": "#e06c3c",
+    "medium": "#e0b23c",
+    "low": "#3cb371",
+    "not_found": "#8fa3a1"
+  },
+  "risk_glyphs": {
+    "_comment": "HTML entities only - never literal Unicode (PHASE 4B rule 3 of the DeepSearch protocol).",
+    "high": "&#x1F534;",
+    "medium": "&#x1F7E0;",
+    "low_medium": "&#x1F7E1;",
+    "low": "&#x1F7E2;",
+    "yes": "&#x2705;",
+    "no": "&#x274C;",
+    "link": "&#x1F517;",
+    "shield": "&#x1F6E1;&#xFE0F;",
+    "em_dash": "&mdash;"
+  },
+  "typography": {
+    "font_family": "Verdana, Geneva, 'DejaVu Sans', sans-serif",
+    "mono_family": "'DejaVu Sans Mono', Consolas, monospace",
+    "min_font_size_px": 11,
+    "base_font_size_px": 13,
+    "heading_font_size_px": 20,
+    "kpi_font_size_px": 28,
+    "line_height": 1.45
+  },
+  "layout": {
+    "target_resolution": "1920x1200",
+    "right_column_width_px": 420,
+    "radius_px": 10,
+    "gap_px": 16,
+    "max_content_width_px": 1800
+  },
+  "charts": {
+    "library": "Chart.js 4.x",
+    "cdn": "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js",
+    "_cdn_note": "Only cdnjs.cloudflare.com is permitted; renderers must not fetch any other host. No Euronext data is ever sent to the CDN - the script is fetched, nothing is posted (governance/DATA_PROTECTION_GUARDRAILS.md section 1).",
+    "radar_axes": 6,
+    "radar_scale_min": 1,
+    "radar_scale_max": 5
+  },
+  "classification": {
+    "default_label": "Confidential",
+    "footer_text": "Euronext - Information Security Assurance - {{CLASSIFICATION}}",
+    "_sensitivity_label_note": "The Purview sensitivity label applied to the stored file is NOT set here: it comes from templates/registry.json 'sensitivity_label' per template (or the library default) and is applied by the delivery Function /assign_label route (finding C16)."
+  },
+  "office": {
+    "docx_body_style": "Verdana 10pt",
+    "docx_heading_colour": "#008D7F",
+    "pptx_title_colour": "#FFFFFF",
+    "pptx_background": "#0a1a1f",
+    "pptx_accent": "#008D7F",
+    "xlsx_header_fill": "FF00463F",
+    "xlsx_header_font_colour": "FFFFFFFF"
+  }
+}

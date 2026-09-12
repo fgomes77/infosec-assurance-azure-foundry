@@ -3,8 +3,9 @@
 (Appended by `scripts/convert_skills.py` to EVERY converted agent, after the
 byte-verified SKILL.md body and before the APPROVAL GATE. It translates
 claude.ai platform references into their Microsoft Foundry (formerly
-Azure AI Foundry) / Euronext equivalents. It overrides ENVIRONMENT references only — never thresholds,
-templates, scoring rules, section lists or wording of the deliverable.)
+Azure AI Foundry) / Euronext equivalents. It overrides ENVIRONMENT
+references only — never thresholds, templates, scoring rules, section
+lists or wording of the deliverable.)
 
 ## Tool-name translation
 

@@ -40,7 +40,8 @@ paths:
                   enum: [infosec-assurance-advisor, cyber-forum, dora, nis2, eu-ai-act, iso27001, iso42001]
                   description: Advisory agent to ask (default infosec-assurance-advisor, which routes).
                 question: { type: string, maxLength: 8000 }
-                threadId: { type: string, description: Optional thread id from a previous answer to continue the conversation. }
+                conversationId: { type: string, description: Optional Foundry conversation id from a previous answer to continue the conversation (finding C1). }
+                threadId: { type: string, deprecated: true, description: Deprecated alias of conversationId, accepted for one release; classic threads/runs retire 2027-03-31. }
       responses:
         "200":
           description: The advisor's answer.
@@ -50,7 +51,9 @@ paths:
                 type: object
                 properties:
                   answer: { type: string }
-                  threadId: { type: string }
+                  conversationId: { type: string }
+                  threadId: { type: string, deprecated: true, description: Echo of conversationId for one release. }
+                  routedFrom: { type: string, description: "Set when the orchestrator answered a ROUTE line naming another agent and the wrapper performed the hand-off (finding C2)." }
                   agent: { type: string }
                   citations: { type: array, items: { type: string } }
         "403": { description: Caller not in the assurance users group. }

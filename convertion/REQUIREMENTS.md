@@ -1,8 +1,10 @@
 # Delivery-Layer Requirements — Traceability (a–j)
 
 This file maps each business requirement to the components that implement
-it. The base conversion (35 agents, orchestrator, advisor, verifier,
-integrations, governance) is documented in `README.md` / `MAPPING.md` /
+it on **Microsoft Foundry (formerly Azure AI Foundry)**. The base
+conversion (22 converted agents by default — 35 with
+`--include-examples` — plus orchestrator, advisor, verifier, integrations
+and governance) is documented in `README.md` / `MAPPING.md` /
 `ARCHITECTURE.md`; this layer adds **end-to-end delivery**: file rendering,
 SharePoint supplier/service folder storage, three new analyzer systems, the
 Global CISO deck, read-only enterprise access with egress guardrails, model
@@ -56,7 +58,7 @@ target path is created when absent.
 | Trigger | How it starts |
 |---|---|
 | a, c, d, b (with an already-registered OT assessment) | HTTP trigger of `report-delivery-pipeline` (Teams/Power Apps form, Copilot plugin, or curl) with `pipeline`, `supplierName`, `serviceName`, and input references |
-| b, c, d, e, f (user-uploaded PDF) | The user uploads the PDF in the Foundry playground / Copilot chat; the agent produces the verified draft; the pipeline is invoked with the thread/run id to render + store |
+| b, c, d, e, f (user-uploaded PDF) | The user uploads the PDF in the Foundry playground / Copilot chat; the agent produces the verified draft; the pipeline is invoked with the conversation/response id to render + store (classic threads/runs retire 2027-03-31) |
 | d2 | HTTP trigger with `supplierName` (+ optional `serviceName`); the agent enumerates the TPA Active tree itself |
 | g, h, i | Conversational — orchestrator or the specific advisor agent |
 | j | Conversational with `template-manager`, which fires the approval workflow |

@@ -233,6 +233,30 @@ def upload(req: func.HttpRequest) -> func.HttpResponse:
     return _json(out)
 
 
+@app.route(route="assign_label", methods=["POST"])
+@_guard
+def assign_label(req: func.HttpRequest) -> func.HttpResponse:
+    """Assign a Purview sensitivity label to a delivered file (finding C16).
+    Graph driveItem:assignSensitivityLabel is asynchronous, protected and
+    metered (pay-as-you-go); 202 + Location is the success case. When no
+    labelId is configured the pipeline skips this call and the library
+    default label applies. The per-file label SUPPLEMENTS the library
+    default, it does not replace it."""
+    b = req.get_json()
+    payload = {"sensitivityLabelId": b["labelId"],
+               "assignmentMethod": b.get("assignmentMethod", "standard")}
+    if b.get("justification"):
+        payload["justificationText"] = b["justification"]
+    r = _graph("POST",
+               f"{GRAPH}/drives/{b['driveId']}/items/{b['itemId']}"
+               f"/assignSensitivityLabel", json=payload)
+    r.raise_for_status()
+    return _json({"itemId": b["itemId"], "labelId": b["labelId"],
+                  "status": "accepted", "reportType": b.get("reportType", ""),
+                  "runId": b.get("runId", ""),
+                  "jobUrl": r.headers.get("Location", "")}, 202)
+
+
 def _list_upsert(list_name: str, match: dict, fields: dict) -> dict:
     """Create-or-update one SharePoint list item (Graph lists API) matched on
     the given fields — used for the TPRM Portfolio / TPSRCA History lists."""

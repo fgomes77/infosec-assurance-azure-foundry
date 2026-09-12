@@ -41,7 +41,7 @@ platform's control; **T** = transient, deliberately not backed up.
 | S12 | `deliverables` blob container (rendered artefacts in transit), Logic Apps runtime storage | Storage `{baseName}sa` (ZRS) | T | ZRS; blob soft delete 14 days (delta D-BDR-B1) — the same bytes exist in SharePoint once uploaded | re-run | — | R1 | owner |
 | S13 | Entra groups, PIM policies, CA policy, access packages | Entra ID | M | tenant-managed; definition of record `../team/least-privilege/entra/groups.json`, `rbac.bicep`, `entra-groups.md` | 0 | 1 business day (IAM team) | R7 | `{group:iam-admins}` |
 | S14 | Graph consents, `Sites.Selected` grants (three app identities) | Entra / SharePoint | M | recorded in `../team/ACCESS_REGISTER.md`; re-granted per `../team/sharepoint-permissions.md` §3 | 0 | 1 business day | R7 / R8 | IAM + owner |
-| S15 | Copilot Studio agent | `{env:infosec-foundry}` | B | solution export `Governance/Releases/infosec-foundry-copilot-{release}.zip` at every release (`LIFECYCLE.md` V14) | one release | 4 h | R5 | owner |
+| S15 | Copilot Studio agent | `{env:infosec-foundry}` | B | solution export `Governance/Releases/infosec-foundry-copilot-{release}.zip` at every release (`LIFECYCLE.md` V15) | one release | 4 h | R5 | owner |
 | S16 | Bing grounding resource + key, RAI policy, model deployments, diagnostic settings, alerts, budget | RG `rg-infosec-foundry` | G | Bicep (`infra/main.bicep`, `operations/alerts.bicep`) | 0 | 2 h | R7 | owner |
 | S17 | Comparison set (inputs + known-good baselines) | `Governance/ComparisonSet/` | M | as S6 | minutes | 4 h | R3 | owner |
 | S18 | Operations evidence, backups folder, releases | `Governance/Operations/`, `Governance/Backups/`, `Governance/Releases/` | M | as S6 | minutes | 4 h | R3 | owner |

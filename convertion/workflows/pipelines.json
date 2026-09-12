@@ -1,11 +1,12 @@
 {
-  "_comment": "Instantiation manifest for report-delivery-pipeline.json - deploy one Logic App per entry, fixing its parameters as below (agent ids come out of create_agents/create_delivery_agents; drive/root ids out of setup/.env; scripts/build_logicapps.py derives build/logicapps/<name>/workflow.json from this file). Every pipeline enforces the same storage rule: Reports/<Supplier>/<Service>/ (Advisory/<Topic>/<Subtopic>/ for advisoryRoot), supplier folder reused if present, service folder created only when missing. Keys map 1:1 to workflow parameters: agent->agentId, reportType, renderFormat, renderTemplate, libraryRoot->libraryRootItemId, approvalKind, supplierNameFallback, serviceNameFallback, portfolioStatusOnStore, appendScoreHistory (omitted = pipeline default).",
+  "_comment": "Instantiation manifest for report-delivery-pipeline.json - deploy one Logic App per entry, fixing its parameters as below (scripts/build_logicapps.py derives build/logicapps/<name>/workflow.json from this file). Every pipeline enforces the same storage rule: Reports/<Supplier>/<Service>/ (Advisory/<Topic>/<Subtopic>/ for advisoryRoot), supplier folder reused if present, service folder created only when missing. Keys map 1:1 to workflow parameters: agent->agentName (the Agents v2 runtime addresses agents by NAME, finding C1) PLUS agentVersion, which build_logicapps.py reads from build/agent-versions.json so every pipeline pins `<agent>:<version>` and never runs 'latest' (finding C19; shared.verifierAgent resolves the same way into verifierAgentName/verifierAgentVersion), reportType, renderFormat, renderTemplate, libraryRoot->libraryRootItemId, approvalKind, shared.sensitivityLabel->sensitivityLabelId (finding C16; a per-report-type override comes from templates/registry.json `sensitivity_label`), supplierNameFallback, serviceNameFallback, portfolioStatusOnStore, appendScoreHistory (omitted = pipeline default). Bind apiVersion to the FOUNDRY_API_VERSION app setting (setup/.env, default v1 - the classic threads/runs surface 2025-05-01 is the documented fallback and retires 2027-03-31).",
   "shared": {
     "verifierAgent": "output-verifier",
     "sharepointDrive": "${SHAREPOINT_REPORTS_DRIVE_ID}",
     "reportsRoot": "${SHAREPOINT_REPORTS_ROOT_ITEM_ID}",
     "dpoRoot": "${SHAREPOINT_DPO_ROOT_ITEM_ID}",
     "advisoryRoot": "${SHAREPOINT_ADVISORY_ROOT_ITEM_ID}",
+    "sensitivityLabel": "${SHAREPOINT_SENSITIVITY_LABEL_ID}",
     "apiVersion": "${FOUNDRY_API_VERSION}"
   },
   "pipelines": {

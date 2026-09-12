@@ -26,7 +26,10 @@ param secretNames object = {
 }
 
 @description('Foundry Agents REST api-version used by the HTTP actions')
-param foundryApiVersion string = '2025-05-01'
+// GA agents / conversations / responses data plane (finding C1); the classic
+// thread/run REST retires 2027-03-31. Kept identical to FOUNDRY_API_VERSION in
+// setup/.env and scripts/_foundry_runtime.py.
+param foundryApiVersion string = 'v1'
 
 param appsSubnetId string = ''
 @allowed(['Enabled', 'Disabled'])

@@ -10,7 +10,7 @@ top of the 22 converted agents:
                                                    ▼
                         ┌──────────────────────────────────┐
                         │  infosec-assurance-orchestrator  │  reasoning model
-                        │  (connected agents: ALL below)   │  + web search
+                        │  (A2A hand-offs: ALL below)      │  + web search
                         └───────┬──────────────────────────┘
                 ┌───────────────┼──────────────────────────┐
                 ▼               ▼                          ▼
@@ -22,12 +22,26 @@ top of the 22 converted agents:
 ## 1. `infosec-assurance-orchestrator`
 
 Single entry point. Runs on the **reasoning deployment** (`o3-mini` by
-default) with **web search** and **connected-agent tools to every deployed
-agent**, so it can answer directly, decompose a request across specialists,
+default; must be a tool-capable reasoning model — `../governance/MODEL_ROUTING.md`)
+with **web search** and **A2A hand-offs to every published agent** (Connected
+Agents do not exist on the current Agent Service; Microsoft Agent Framework
+orchestration is the production path — `../enterprise/ENTERPRISE_BLUEPRINT.md`
+ORC-1), so it can answer directly, decompose a request across specialists,
 or hand off wholesale (a OneTrust PDF → `dpia`; a supplier domain →
 `deepsearch-protocol`). Created by `scripts/create_orchestrator.py`, which
 discovers the live agents at run time — re-run it after adding agents and
 the wiring refreshes.
+
+**Routing contract.** Connected agents do not exist on the Agent Service
+(finding C2). `create_orchestrator.py` injects a deploy-time **ROUTING TABLE**
+(name + one-line description of every live agent) into the orchestrator's
+instructions; the orchestrator answers `ROUTE: <agent-name>` and the CALLER
+performs the hand-off as a second `responses.create` on that agent, in the
+same conversation. The three callers that implement it are
+`../mcp-server/server.py` (`ask_orchestrator`),
+`../integrations/copilot/function/function_app.py` (`/api/ask`) and
+`../workflows/agent-fanout.json`. The A2A tool (preview) is attached *in
+addition* when `ENABLE_A2A_TOOL=true` and the pinned SDK exposes it.
 
 ## 2. `infosec-assurance-advisor` — the reasoning generalist
 
@@ -41,16 +55,28 @@ ISO 42001, ITIL/COBIT/COSO/TOGAF/PMBOK, cloud and ICT service assurance.
   agents) — the advisor cites which source document grounds each answer.
 - **Web search:** Bing grounding for current threats/regulatory news.
 - **Memory:**
-  - *Thread memory* — native: keep one Foundry thread per team member or
-    engagement and the full context persists across sessions.
-  - *Durable memory* — a dedicated `vs-assurance-memory` vector store
-    attached alongside the knowledge store. The advisor's instructions tell
+  - *Session memory* — one Foundry **conversation** per (person, supplier,
+    service, engagement) (`../team/TEAM_MODEL.md` §13); the current Agent
+    Service runtime uses conversations and responses, and classic
+    threads/runs retire 2027-03-31.
+  - *Durable memory* — the Azure AI Search index `kb-assurance-memory`,
+    reached through the AI Search tool beside the single `file_search`
+    knowledge store (the service allows one vector store per agent — limits
+    page, 2026-09-07; `vs-assurance-memory` is the transition backend,
+    `../enterprise/MEMORY_AND_LEARNING.md` §2). The advisor's instructions tell
     it to consult memory first and to end substantive sessions by emitting a
     fenced `MEMORY:` block (decisions, supplier facts, positions taken);
     `scripts/memory_store.py add` writes those notes into the store (run
     manually, from a Logic App step, or from the MCP server's `save_memory`
     tool). Notes are timestamped files — auditable and deletable, which
     matters for GDPR minimisation.
+
+    The service allows one vector store per agent, so `vs-assurance-memory` is
+    no longer attached to the advisor: with `MEMORY_BACKEND=vector-store` it is
+    a staging store managed by `scripts/memory_store.py`, and with
+    `MEMORY_BACKEND=search-index` memory is served from the Azure AI Search
+    index `MEMORY_INDEX_NAME` (default `kb-assurance-memory`) through the GA
+    Azure AI Search tool (finding C3).
 
 Charter lives in `../agents/advisor_instructions.md` (persona preamble is
 prepended automatically, as for every agent).

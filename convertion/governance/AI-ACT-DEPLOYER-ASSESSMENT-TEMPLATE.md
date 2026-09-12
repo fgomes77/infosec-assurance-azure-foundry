@@ -6,7 +6,7 @@ SERIES gate) and at every material change (`operations/CHANGE_MANAGEMENT.md`
 
 | Field | Value |
 |---|---|
-| AI system | InfoSec Assurance agent platform on Azure AI Foundry (agents a–j, orchestrator, verifier, delivery pipelines, Copilot channel) |
+| AI system | InfoSec Assurance agent platform on Microsoft Foundry (formerly Azure AI Foundry) — agents a–j, orchestrator, verifier, delivery pipelines, Teams / M365 Copilot channel |
 | Deployer | Euronext — `{legal-entity}`; accountable owner `{upn:owner}` (Francisco Gustavo Gomes) |
 | Providers | Microsoft (Azure OpenAI / Foundry catalogue models); Anthropic (skill instruction sets, see `THIRD_PARTY_IP.md`) |
 | Assessment date / version | `{date}` / kit release `{release}` (`operations/LIFECYCLE.md` §2) |

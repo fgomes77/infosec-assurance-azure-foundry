@@ -8,10 +8,28 @@
 // validate first with infra/validate.sh). Every tenant value is a {placeholder}.
 //
 // Residency (requirement i): `location` is restricted to EU regions and model
-// deployments use the EU Data Zone SKU, so prompts/completions, threads, files
-// and vector stores are processed inside the EU. The only components outside
-// the EU boundary are Bing grounding (sanitised public queries only) and, by
-// design, nothing else — see README.md §Residency for the per-component table.
+// deployments use the EU Data Zone SKU, so prompts/completions, conversations,
+// files and vector stores are processed inside the EU. The only components
+// outside the EU boundary are Bing grounding (sanitised public queries only)
+// and, by design, nothing else — see README.md §Residency for the
+// per-component table.
+//
+// DECISIONS TAKEN HERE THAT CANNOT BE TAKEN LATER — all three bind at
+// account/project creation and require a rebuild afterwards; deploy prod with
+// them set from the first run (ENTERPRISE_BLUEPRINT.md §5 rollout order):
+//   1. Standard agent setup (`enableStandardAgentSetup`, finding C5) — the
+//      capability host that puts conversations, files and vector stores in the
+//      customer subscription ({baseName}-cosmos / -search / sa) is IMMUTABLE
+//      once the FIRST AGENT exists. See agent-stores.bicep.
+//   2. Agent egress VNet injection (`enableAgentVnetInjection`, finding C12) —
+//      `networkInjections` on the Foundry account cannot be added to an
+//      existing account. Private endpoints are INBOUND only and never cover
+//      the calls an agent's tools make (OpenAPI, MCP, A2A, web search).
+//   3. Customer-managed keys (`cmkKeyUri`, finding C22) — CMK can be enabled
+//      later on the account, but the Cosmos DB store must be created with it.
+// Preventive enforcement of the residency/SKU/private-link rules lives in
+// enterprise/azure-policy-assignments.bicep (finding C11, `enablePolicyAssignments`);
+// validate.sh remains the client-side gate, not the control.
 
 @description('Base name for all resources (letters/digits, 3-15 chars)')
 @minLength(3)
@@ -40,22 +58,22 @@ param environmentName string = 'dev'
 // ------------------------------------------------------------ model tiers
 @description('Chat-tier model (registry model_tier "chat")')
 param modelName string = 'gpt-4o'
-@description('Chat model version (empty = provider default)')
+@description('Chat model version — PINNED (finding C6). gpt-4o 2024-11-20 is Legacy and retires 2027-04-14; the six-phase migration to its replacement runs on dev with the comparison set before Q1 2027 (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md, MDL-2)')
 param modelVersion string = '2024-11-20'
 @description('Chat-tier capacity (thousands of tokens-per-minute)')
 param modelCapacity int = 50
 
-@description('Reasoning-tier model for analytic agents (regulatory interpretation, OSINT synthesis)')
-param reasoningModelName string = 'o3-mini'
-@description('Reasoning model version (empty = provider default)')
-param reasoningModelVersion string = ''
+@description('Reasoning-tier model for analytic agents (regulatory interpretation, OSINT synthesis). Finding C4 RESOLVED: o3-mini supports NO OpenAPI, MCP, AI Search, SharePoint or Web Search tools and every reasoning agent carries that read surface, so the tier of record is a tool-capable reasoning model. Matrix of record: integrations/registry.json model_tiers._tool_compatibility (alternate gpt-5-mini, then gpt-4.1). Confirm the OpenAPI + MCP + Web Search columns for the chosen model on the day of deployment and record the row in the step-02 sign-off.')
+param reasoningModelName string = 'o4-mini'
+@description('Reasoning model version — PINNED (finding C6): never leave empty in prod, an unpinned deployment follows the provider default and silently changes validated deliverables. Re-confirm with `az cognitiveservices model list -l <location> -o table` before the first deployment — this value must be a version of reasoningModelName, not of the rejected o3-mini')
+param reasoningModelVersion string = '2025-04-16'
 @description('Reasoning-tier capacity (thousands of tokens-per-minute)')
 param reasoningModelCapacity int = 30
 
-@description('Light-tier model (deterministic template/schema transformations: docx, pdf, pptx, xlsx agents)')
+@description('Light-tier model (deterministic template/schema transformations: docx, pdf, pptx, xlsx agents). gpt-4o-mini is DEPRECATED — plan the replacement with the comparison set (finding C6 / MDL-2)')
 param lightModelName string = 'gpt-4o-mini'
-@description('Light model version (empty = provider default)')
-param lightModelVersion string = ''
+@description('Light model version — PINNED (finding C6)')
+param lightModelVersion string = '2024-07-18'
 @description('Light-tier capacity (thousands of tokens-per-minute)')
 param lightModelCapacity int = 100
 
@@ -67,9 +85,13 @@ param reasoningModelFormat string = 'OpenAI'
 @allowed(['OpenAI', 'Anthropic'])
 param lightModelFormat string = 'OpenAI'
 
-@description('Deployment SKU: DataZoneStandard keeps inference inside the EU data zone (residency); Standard = single-region; GlobalStandard is NOT allowed (routes worldwide)')
+@description('Deployment SKU: DataZoneStandard keeps inference inside the EU data zone (residency); Standard = single-region; GlobalStandard is NOT allowed (routes worldwide) and is denied by Azure Policy, not only by this @allowed list (finding C11)')
 @allowed(['DataZoneStandard', 'Standard'])
 param deploymentSku string = 'DataZoneStandard'
+
+@description('Model auto-upgrade behaviour on all three deployments (finding C6). NoAutoUpgrade is mandatory in prod: report agents are validated against known-good outputs, so an upgrade would change deliverables without a change record. OnceCurrentVersionExpired is the dev convenience')
+@allowed(['NoAutoUpgrade', 'OnceNewDefaultVersionAvailable', 'OnceCurrentVersionExpired'])
+param modelVersionUpgradeOption string = 'NoAutoUpgrade'
 
 @description('Provision Grounding with Bing Search for agent web research (global service — sanitised queries only, README §Residency)')
 param enableWebSearch bool = true
@@ -95,6 +117,66 @@ param enableDocumentIntelligence bool = true
 
 @description('Provision Azure AI Speech (transcription skills) in the same EU region')
 param enableSpeech bool = false
+
+// ------------------------------------------- standard agent setup (C5, STO-1)
+@description('Standard agent setup: provision BYO Cosmos DB (conversations) + Azure AI Search (vector stores / knowledge base) and reuse {baseName}sa for files, bound to the project by an IMMUTABLE capability host (agent-stores.bicep). DECIDE BEFORE THE FIRST AGENT IS CREATED — changing it afterwards means recreating the project. false = basic setup (Microsoft-managed multitenant stores, still in-region)')
+param enableStandardAgentSetup bool = false
+
+@description('Cosmos DB total throughput limit in RU/s for the conversation store (>= 3000 for the three system containers)')
+@minValue(3000)
+param cosmosThroughputLimitRuPerSecond int = 4000
+
+@description('Conversation / run-state retention in days, applied as the Cosmos default TTL after the capability host creates its containers (governance/THREADS_MEMORY.md)')
+@minValue(1)
+param conversationRetentionDays int = 90
+
+@description('Azure AI Search SKU for the BYO vector store / knowledge base')
+@allowed(['basic', 'standard'])
+param searchSku string = 'standard'
+
+// ------------------------------------------------ agent egress (C12, NET-1)
+@description('Inject the Foundry account into snet-agents so AGENT TOOL EGRESS (OpenAPI, MCP, A2A, web search) leaves through the VNet the hub firewall sees. Private endpoints are inbound only. Set at ACCOUNT CREATION — it cannot be added later. Requires enablePrivateNetworking, or an explicit agentSubnetId')
+param enableAgentVnetInjection bool = false
+
+@description('Subnet id for agent egress. Empty = the snet-agents subnet created by network.bicep (requires enablePrivateNetworking). Provide an id to inject into a platform-team-owned VNet instead')
+param agentSubnetId string = ''
+
+// ----------------------------------------------------------- CMK (C22, CMK-1)
+@description('Customer-managed key URI in the existing {baseName}-kv, versionless so Key Vault rotation needs no redeploy (https://{baseName}-kv.{vaultSuffix}/keys/infosec-foundry-cmk). Empty = Microsoft-managed keys. Grant `Key Vault Crypto Service Encryption User` to the Foundry, storage, Cosmos DB and AI Search identities FIRST (enterprise/landing-zone.bicep CMK-1), then redeploy this template with the value set')
+param cmkKeyUri string = ''
+
+@description('Name of the CMK key inside {baseName}-kv (must match cmkKeyUri)')
+param cmkKeyName string = 'infosec-foundry-cmk'
+
+@description('Enforce CMK on every AI Search index. Enable only after the agent-created indexes carry a key, otherwise index creation fails')
+@allowed(['Unspecified', 'Enabled'])
+param searchCmkEnforcement string = 'Unspecified'
+
+// ------------------------------------------------- preventive policy (C11)
+@description('Deploy the resource-group Azure Policy assignments that ENFORCE EU residency, no-local-auth, network restriction, Key Vault protection and the Global* SKU denial (enterprise/azure-policy-assignments.bicep). validate.sh is a client-side check only and cannot stop a portal change')
+param enablePolicyAssignments bool = false
+
+@description('Policy effect: Deny in prod, Audit in dev (so what-if and dev experiments are not blocked)')
+@allowed(['Audit', 'Deny'])
+param policyEffectMode string = 'Audit'
+
+@description('Resource id of the custom subscription-scope definition "Foundry model deployments must not use Global SKUs" (created once by the platform team — see the CLI block in enterprise/azure-policy-assignments.bicep). Empty = that one assignment is skipped')
+param denyGlobalSkuDefinitionId string = ''
+
+// -------------------------------------------- Purview / audit wiring (C15)
+@description('Resource id of the tenant Purview account that governs Foundry interactions (DSPM for AI, audit, retention, eDiscovery). Recorded in the outputs as the evidence pointer; DSPM itself is enabled in the Purview portal by {group:purview-admins}, and every caller must pass user context (x-ms-user-*) so interactions are attributable')
+param purviewAccountId string = ''
+
+// --------------------------------------- Defender for Cloud AI alerts (C17)
+@description('Route Defender for Cloud AI threat-protection alerts (jailbreak, sensitive-data exposure, wallet abuse) to the SOC through an activity-log alert on the action group. The subscription-level Defender for AI plan itself is enabled by defender-ai.bicep')
+param enableDefenderAiAlerts bool = true
+
+@description('SOC mailbox for High-severity Defender for AI alerts ({placeholder}); owner takes Medium and below')
+param socEmail string = '{soc-mailbox}'
+
+// -------------------------------------------------- Entra Agent ID (C7, ID-2)
+@description('Object (principal) ids of the Entra Agent ID identities — the project shared agent identity and each PUBLISHED agent, which gets its OWN identity. They are inventoried in team/ACCESS_REGISTER.md and receive read-only data-plane roles here (workload-rbac.bicep). REPEAT this assignment after every publish: a republished agent is a new principal. Conditional Access on the agent blueprint is owned by {group:iam-admins}')
+param agentIdentityPrincipalIds array = []
 
 // ------------------------------------------------------------ workloads
 @description('Deploy the delivery Function App plan/apps (delivery.bicep)')
@@ -145,9 +227,17 @@ param sharepointReportsDriveId string = '{sharepoint-reports-drive-id}'
 // Fails validation/what-if (not only the build) when public access is
 // disabled without private endpoints — the platform would be unreachable.
 var publicAccessCheck = (publicNetworkAccess == 'Enabled' || enablePrivateNetworking) ? 'ok' : 'ERROR publicNetworkAccess=Disabled requires enablePrivateNetworking=true'
+// C12: injection needs a subnet — either the one network.bicep creates or an explicit id.
+var agentEgressCheck = (!enableAgentVnetInjection || enablePrivateNetworking || !empty(agentSubnetId)) ? 'ok' : 'ERROR enableAgentVnetInjection=true requires enablePrivateNetworking=true or an explicit agentSubnetId'
+// C22: a key URI without a key name (or the reverse) silently falls back to platform keys.
+var cmkCheck = (empty(cmkKeyUri) || !empty(cmkKeyName)) ? 'ok' : 'ERROR cmkKeyUri set without cmkKeyName'
 module guard 'guard.bicep' = {
   name: 'guard'
-  params: { publicAccessCheck: any(publicAccessCheck) }
+  params: {
+    publicAccessCheck: any(publicAccessCheck)
+    agentEgressCheck: any(agentEgressCheck)
+    cmkCheck: any(cmkCheck)
+  }
 }
 
 var roles = {
@@ -163,9 +253,12 @@ module network 'network.bicep' = if (enablePrivateNetworking) {
 }
 var peSubnetId = enablePrivateNetworking ? network!.outputs.privateEndpointSubnetId : ''
 var appsSubnetId = enablePrivateNetworking ? network!.outputs.appsSubnetId : ''
+// C12 — agent tool egress subnet (delegated Microsoft.App/environments).
+var effectiveAgentSubnetId = !empty(agentSubnetId) ? agentSubnetId : (enablePrivateNetworking ? network!.outputs.agentSubnetId : '')
+var injectAgentVnet = enableAgentVnetInjection && !empty(effectiveAgentSubnetId)
 
 // ---------------------------------------------------------------- Foundry
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   name: '${baseName}-aif'
   location: location
   kind: 'AIServices'
@@ -179,10 +272,28 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
     publicNetworkAccess: publicNetworkAccess
     networkAcls: { defaultAction: publicNetworkAccess == 'Disabled' ? 'Deny' : 'Allow' }
     disableLocalAuth: true          // Entra ID only; scripts use DefaultAzureCredential
+    // C12 / NET-1 — BYO VNet injection for AGENT TOOL EGRESS. Set at creation
+    // only: an existing account cannot be injected, and the account and the
+    // VNet must share the region. `useMicrosoftManagedNetwork: false` is what
+    // makes the egress traverse snet-agents instead of the platform network.
+    networkInjections: injectAgentVnet ? [
+      { scenario: 'agent', subnetArmId: effectiveAgentSubnetId, useMicrosoftManagedNetwork: false }
+    ] : null
+    // C22 / CMK-1 — customer-managed key from the existing {baseName}-kv. The
+    // account identity needs `Key Vault Crypto Service Encryption User` on the
+    // vault BEFORE this is set (enterprise/landing-zone.bicep grants it), so
+    // prod runs main.bicep once without cmkKeyUri, then again with it.
+    encryption: empty(cmkKeyUri) ? null : {
+      keySource: 'Microsoft.KeyVault'
+      keyVaultProperties: {
+        keyName: cmkKeyName
+        keyVaultUri: substring(cmkKeyUri, 0, indexOf(cmkKeyUri, '/keys/') + 1)
+      }
+    }
   }
 }
 
-resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
+resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   parent: foundry
   name: '${baseName}-proj'
   location: location
@@ -201,7 +312,7 @@ var annotateOnly = [for c in ['Hate', 'Sexual', 'Violence', 'Selfharm']: [
   { name: c, severityThreshold: 'High', blocking: false, enabled: true, source: 'Prompt' }
   { name: c, severityThreshold: 'High', blocking: false, enabled: true, source: 'Completion' }
 ]]
-resource raiPolicy 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-04-01-preview' = {
+resource raiPolicy 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' = {
   parent: foundry
   name: 'infosec-security-analysis'
   properties: {
@@ -215,7 +326,7 @@ resource raiPolicy 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-04-01-
   }
 }
 
-resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: modelName
   sku: { name: deploymentSku, capacity: modelCapacity }
@@ -225,11 +336,12 @@ resource modelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
       name: modelName
       version: empty(modelVersion) ? null : modelVersion
     }
+    versionUpgradeOption: modelVersionUpgradeOption   // C6: pin, never drift
     raiPolicyName: raiPolicy.name
   }
 }
 
-resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: reasoningModelName
   dependsOn: [modelDeployment] // deployments must be created serially
@@ -240,11 +352,12 @@ resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
       name: reasoningModelName
       version: empty(reasoningModelVersion) ? null : reasoningModelVersion
     }
+    versionUpgradeOption: modelVersionUpgradeOption   // C6
     raiPolicyName: raiPolicy.name
   }
 }
 
-resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: lightModelName
   dependsOn: [reasoningDeployment]
@@ -255,6 +368,7 @@ resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
       name: lightModelName
       version: empty(lightModelVersion) ? null : lightModelVersion
     }
+    versionUpgradeOption: modelVersionUpgradeOption   // C6
     raiPolicyName: raiPolicy.name
   }
 }
@@ -272,7 +386,7 @@ resource bing 'Microsoft.Bing/accounts@2020-06-10' = if (enableWebSearch) {
   sku: { name: 'G1' }
 }
 
-resource bingConnection 'Microsoft.CognitiveServices/accounts/connections@2025-04-01-preview' = if (enableWebSearch) {
+resource bingConnection 'Microsoft.CognitiveServices/accounts/connections@2025-06-01' = if (enableWebSearch) {
   parent: foundry
   name: 'bing-grounding'
   properties: {
@@ -306,7 +420,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   }
 }
 
-resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/connections@2025-04-01-preview' = {
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/connections@2025-06-01' = {
   parent: foundry
   name: 'app-insights'
   properties: {
@@ -323,6 +437,22 @@ resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/connections
 resource foundryDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'to-log-analytics'
   scope: foundry
+  properties: {
+    workspaceId: logAnalytics.id
+    logs: [{ categoryGroup: 'audit', enabled: true }, { categoryGroup: 'allLogs', enabled: true }]
+    metrics: [{ category: 'AllMetrics', enabled: true }]
+  }
+}
+
+// C15 / PUR-1 + LOG-1 — project-scope diagnostics. Foundry interactions are
+// also governed in Purview (DSPM for AI, audit, retention, eDiscovery, Insider
+// Risk "Risky AI usage"): Purview is enabled tenant-side by
+// {group:purview-admins}; the platform side of the contract is (a) these logs
+// and (b) every caller passing user context so an interaction is attributable
+// to one of the five named users (see governance/DATA_PROTECTION_GUARDRAILS.md).
+resource projectDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
+  name: 'to-log-analytics'
+  scope: project
   properties: {
     workspaceId: logAnalytics.id
     logs: [{ categoryGroup: 'audit', enabled: true }, { categoryGroup: 'allLogs', enabled: true }]
@@ -379,6 +509,9 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   location: location
   kind: 'StorageV2'
   sku: { name: storageSku }
+  // System-assigned identity: required to wrap with the CMK (C22) and read by
+  // enterprise/landing-zone.bicep when it grants the encryption-user role.
+  identity: { type: 'SystemAssigned' }
   properties: {
     minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
@@ -386,6 +519,20 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
     supportsHttpsTrafficOnly: true
     publicNetworkAccess: publicNetworkAccess
     networkAcls: { defaultAction: publicNetworkAccess == 'Disabled' ? 'Deny' : 'Allow', bypass: 'AzureServices' }
+    // C22 — CMK for the deliverables/evidence archive and the agent file store.
+    // The storage system-assigned identity (declared above) is the one that
+    // wraps with the key; no `identity` block is needed for that case.
+    encryption: empty(cmkKeyUri) ? null : {
+      keySource: 'Microsoft.Keyvault'
+      keyvaultproperties: {
+        keyname: cmkKeyName
+        keyvaulturi: substring(cmkKeyUri, 0, indexOf(cmkKeyUri, '/keys/') + 1)
+      }
+      services: {
+        blob: { enabled: true, keyType: 'Account' }
+        file: { enabled: true, keyType: 'Account' }
+      }
+    }
   }
 }
 
@@ -419,7 +566,7 @@ resource storageDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-pr
 // Reached ONLY by the delivery Function (/api/extract_pdf) with managed
 // identity — never attached to agents as an OpenAPI tool, so the
 // "strip every non-GET" rule of attach_integrations.py needs no exception.
-resource docIntel 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = if (enableDocumentIntelligence) {
+resource docIntel 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (enableDocumentIntelligence) {
   name: '${baseName}-docintel'
   location: location
   kind: 'FormRecognizer'
@@ -433,7 +580,7 @@ resource docIntel 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = if
   }
 }
 
-resource speech 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = if (enableSpeech) {
+resource speech 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (enableSpeech) {
   name: '${baseName}-speech'
   location: location
   kind: 'SpeechServices'
@@ -449,6 +596,30 @@ resource speech 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = if (
 
 // ------------------------------------------------------------ workloads
 var projectEndpoint = 'https://${foundry.properties.customSubDomainName}.services.ai.azure.com/api/projects/${project.name}'
+
+// ------------------------------------------- standard agent setup (C5, STO-1)
+// Conversations, uploaded files and vector stores in the customer subscription
+// instead of Microsoft-managed multitenant storage. The capability host this
+// module creates is IMMUTABLE once the first agent exists — deploy it in the
+// SAME run that creates the project, before scripts/deploy.sh.
+module agentStores 'agent-stores.bicep' = if (enableStandardAgentSetup) {
+  name: 'agent-stores'
+  params: {
+    baseName: baseName
+    location: location
+    foundryAccountName: foundry.name
+    projectName: project.name
+    projectPrincipalId: project.identity.principalId
+    storageAccountName: storage.name
+    logAnalyticsId: logAnalytics.id
+    publicNetworkAccess: publicNetworkAccess
+    cosmosThroughputLimitRuPerSecond: cosmosThroughputLimitRuPerSecond
+    conversationRetentionDays: conversationRetentionDays
+    searchSku: searchSku
+    cmkKeyUri: cmkKeyUri
+    searchCmkEnforcement: searchCmkEnforcement
+  }
+}
 
 module delivery 'delivery.bicep' = if (enableDelivery) {
   name: 'delivery'
@@ -514,6 +685,8 @@ module monitoring 'monitoring.bicep' = if (enableMonitoring) {
     ownerEmail: ownerEmail
     webhookUrl: alertWebhookUrl
     deployServicePrincipalAppId: deployServicePrincipalAppId
+    socEmail: socEmail
+    enableDefenderAiAlerts: enableDefenderAiAlerts
   }
 }
 
@@ -545,6 +718,21 @@ module workloadRbac 'workload-rbac.bicep' = {
     officeToolsPrincipalId: enableDelivery ? delivery!.outputs.officeToolsPrincipalId : ''
     logicAppPrincipalId: enableLogicApps ? logicApps!.outputs.logicAppPrincipalId : ''
     mcpPrincipalId: enableMcpHosting ? mcp!.outputs.mcpPrincipalId : ''
+    agentIdentityPrincipalIds: agentIdentityPrincipalIds
+  }
+}
+
+// ----------------------------------------------- preventive policy (C11, POL-1)
+// Deny/Audit assignments at resource-group scope: a portal or CLI change can no
+// longer create a non-EU resource, a key-authenticated account or a Global* SKU
+// deployment. Deployed by the workload owner; the platform team may lift the
+// same assignments to the subscription or management group.
+module policyAssignments '../enterprise/azure-policy-assignments.bicep' = if (enablePolicyAssignments) {
+  name: 'policy-assignments'
+  params: {
+    effectMode: policyEffectMode
+    denyGlobalSkuDefinitionId: denyGlobalSkuDefinitionId
+    auditCmk: empty(cmkKeyUri)
   }
 }
 
@@ -565,6 +753,33 @@ module privateEndpoints 'private-endpoint.bicep' = [for t in peTargets: if (enab
     privateDnsZoneIds: [for z in t.zones: network!.outputs.zoneIds[z]]
   }
 }]
+// C5 / NET-2 — the BYO conversation and vector stores hold Euronext-derived
+// content and must not stay reachable from the internet when public access is
+// off. (enterprise/landing-zone.bicep covers the same two stores when they are
+// created outside this template — set its cosmosAccountName/searchServiceName
+// to empty while enableStandardAgentSetup is true here.)
+module peCosmos 'private-endpoint.bicep' = if (enablePrivateNetworking && enableStandardAgentSetup) {
+  name: 'pe-cosmos'
+  params: {
+    name: '${baseName}-pe-cosmos'
+    location: location
+    targetResourceId: enableStandardAgentSetup ? agentStores!.outputs.cosmosAccountId : ''
+    groupId: 'Sql'
+    subnetId: peSubnetId
+    privateDnsZoneIds: [network!.outputs.zoneIds.documents]
+  }
+}
+module peSearch 'private-endpoint.bicep' = if (enablePrivateNetworking && enableStandardAgentSetup) {
+  name: 'pe-search'
+  params: {
+    name: '${baseName}-pe-search'
+    location: location
+    targetResourceId: enableStandardAgentSetup ? agentStores!.outputs.searchServiceId : ''
+    groupId: 'searchService'
+    subnetId: peSubnetId
+    privateDnsZoneIds: [network!.outputs.zoneIds.search]
+  }
+}
 module peDelivery 'private-endpoint.bicep' = if (enablePrivateNetworking && enableDelivery) {
   name: 'pe-delivery'
   params: {
@@ -634,10 +849,27 @@ output logicAppName string = enableLogicApps ? logicApps!.outputs.logicAppName :
 output mcpFqdn string = enableMcpHosting ? mcp!.outputs.mcpFqdn : ''
 output staticWebAppHostname string = enableStaticWebApp ? staticWebApp!.outputs.defaultHostname : ''
 output environmentName string = environmentName
+output cosmosAccountName string = enableStandardAgentSetup ? agentStores!.outputs.cosmosAccountName : ''
+output searchServiceName string = enableStandardAgentSetup ? agentStores!.outputs.searchServiceName : ''
+output agentStoreConnections object = enableStandardAgentSetup ? agentStores!.outputs.connectionNames : {}
+output agentEgressSubnetId string = injectAgentVnet ? effectiveAgentSubnetId : ''
+output socActionGroupId string = enableMonitoring ? monitoring!.outputs.socActionGroupId : ''
+output policyAssignmentNames array = enablePolicyAssignments ? policyAssignments!.outputs.assignmentNames : []
 output dataResidency object = {
   region: location
   modelDeploymentSku: deploymentSku
+  modelVersionUpgradeOption: modelVersionUpgradeOption
   publicNetworkAccess: publicNetworkAccess
   privateNetworking: enablePrivateNetworking
-  outsideEuBoundary: enableWebSearch ? ['bing-grounding (sanitised public queries only)'] : []
+  // C5 — where conversations, uploaded files and vector stores actually live.
+  agentStateCustody: enableStandardAgentSetup ? 'standard agent setup — customer subscription (cosmos/search/storage, ${location})' : 'basic agent setup — Microsoft-managed, in-region'
+  // C12 — agent tool egress path.
+  agentEgress: injectAgentVnet ? 'VNet-injected (snet-agents → hub firewall)' : 'platform-managed egress (dev only)'
+  // C22 — encryption at rest.
+  customerManagedKey: empty(cmkKeyUri) ? 'Microsoft-managed keys' : 'CMK ${cmkKeyName} in ${baseName}-kv'
+  // C11 — preventive enforcement, not only the validate.sh client-side check.
+  preventivePolicy: enablePolicyAssignments ? policyEffectMode : 'none (validate.sh only)'
+  // C15 — Purview governance pointer (DSPM for AI, audit, retention, eDiscovery).
+  purviewAccountId: purviewAccountId
+  outsideEuBoundary: enableWebSearch ? ['bing-grounding / web search — leaves the Azure compliance boundary, the DPA does not apply; sanitised public queries only, accepted residual risk (owner: platform owner)'] : []
 }

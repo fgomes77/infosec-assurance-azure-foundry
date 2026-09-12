@@ -1,5 +1,5 @@
 {
-  "_comment": "Generic report-delivery pipeline (requirements a,b,c,d,d2,e,f + advisory/brief pipelines). Deploy ONE Logic App per entry in pipelines.json - each instantiation fixes agentId, renderFormat, template, libraryRoot and approvalKind via parameters. Flow: HTTP trigger -> immediate 202 ACCEPTED {runId} -> resolve Supplier/Service segments (fallbacks only where pipelines.json allows) -> run the producing agent (uploaded files attached for file_search + code_interpreter) -> run output-verifier (charter format 'VERDICT: PASS|FAIL' on the first line) -> on PASS raise the human approval gate (subscribe body carries 'kind' for team/approval-policy.json) -> on approved: extract the fenced JSON contract (or the HTML document) -> render (delivery Function) -> ensure Supplier/Service folders (reuse-if-exists) -> upload + org share link -> optional portfolio/history record -> Teams notification -> optional callback to the requester (callbackUrl). Outcome is never returned synchronously (approval can take days): poll workflows/report-status.json or receive the callback. Nothing is stored without verifier PASS and human approval.",
+  "_comment": "Generic report-delivery pipeline (requirements a,b,c,d,d2,e,f + advisory/brief pipelines). Deploy ONE Logic App per entry in pipelines.json - each instantiation fixes agentName/agentVersion, renderFormat, template, libraryRoot, approvalKind and sensitivityLabelId via parameters. Agent invocation runs on the GA conversations/responses data plane (finding C1) and pins `<agent>:<version>` (finding C19). Flow: HTTP trigger -> immediate 202 ACCEPTED {runId} -> resolve Supplier/Service segments (fallbacks only where pipelines.json allows) -> create a conversation -> run the producing agent (uploaded files attached as input_file parts) -> run output-verifier (charter format 'VERDICT: PASS|FAIL' on the first line) -> on PASS raise the human approval gate (subscribe body carries 'kind' for team/approval-policy.json) -> on approved: extract the fenced JSON contract (or the HTML document) -> render (delivery Function) -> ensure Supplier/Service folders (reuse-if-exists) -> upload + org share link -> assign the sensitivity label through the delivery Function (finding C16) -> optional portfolio/history record -> Teams notification -> optional callback to the requester (callbackUrl). Outcome is never returned synchronously (approval can take days): poll workflows/report-status.json or receive the callback. Nothing is stored without verifier PASS and human approval.",
   "definition": {
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
@@ -10,16 +10,27 @@
       },
       "apiVersion": {
         "type": "string",
-        "defaultValue": "2025-05-01",
-        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so all workflows and scripts pin the same Foundry data-plane version."
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
       },
-      "agentId": {
+      "agentName": {
         "type": "string",
-        "defaultValue": "{producing-agent-id}"
+        "defaultValue": "{producing-agent-name}",
+        "_comment": "Agent NAME on the Agents v2 runtime ('TRIGGER' = the advisory-file-delivery instance, which takes agentRef from the trigger body)."
       },
-      "verifierAgentId": {
+      "agentVersion": {
         "type": "string",
-        "defaultValue": "{output-verifier-agent-id}"
+        "defaultValue": "{producing-agent-version}",
+        "_comment": "Promoted agent version - build/agent-versions.json `ref` = `<agent>:<version>` (finding C19). Empty runs the agent's latest version, which a pipeline of record must not do; scripts/build_logicapps.py fills it from the ledger."
+      },
+      "verifierAgentName": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-name}"
+      },
+      "verifierAgentVersion": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-version}",
+        "_comment": "Promoted verifier version (build/agent-versions.json, C19)."
       },
       "reportType": {
         "type": "string",
@@ -48,6 +59,11 @@
       "libraryRootItemId": {
         "type": "string",
         "defaultValue": "{item-id-of-Reports-root-or-Reports-DPO-root}"
+      },
+      "sensitivityLabelId": {
+        "type": "string",
+        "defaultValue": "",
+        "_comment": "Purview sensitivity label id assigned to the delivered file (finding C16; Graph driveItem:assignSensitivityLabel from the delivery Function - the only SharePoint writer). Per report type from templates/registry.json `sensitivity_label`, otherwise pipelines.json `shared.sensitivityLabel`. Empty leaves the library default label in force."
       },
       "approvalWebhookUrl": {
         "type": "securestring",
@@ -116,9 +132,9 @@
               "requestedBy": {
                 "type": "string"
               },
-              "agentId": {
+              "agentRef": {
                 "type": "string",
-                "description": "advisory-file-delivery only: id of the advisory agent that produced/produces the deliverable (ignored by the fixed report pipelines - see If_agent_override_allowed)."
+                "description": "advisory-file-delivery only: `<agent-name>:<version>` of the advisory agent that produces the deliverable (build/agent-versions.json `ref`, finding C19; a bare name runs the latest version). Ignored by the fixed report pipelines - see Resolve_agent_ref."
               },
               "callbackUrl": {
                 "type": "string",
@@ -201,47 +217,48 @@
           "actions": {}
         }
       },
-      "Resolve_agent_id": {
-        "_comment": "Only the advisory-file-delivery instance (agentId parameter = 'TRIGGER') accepts the agent id from the caller; every report pipeline ignores it.",
+      "Resolve_agent_ref": {
+        "_comment": "Only the advisory-file-delivery instance (agentName parameter = 'TRIGGER') accepts the agent from the caller; every report pipeline pins its own `<agent>:<version>`.",
         "type": "Compose",
-        "inputs": "@if(equals(parameters('agentId'),'TRIGGER'), triggerBody()?['agentId'], parameters('agentId'))",
+        "inputs": "@if(equals(parameters('agentName'),'TRIGGER'), coalesce(triggerBody()?['agentRef'],''), if(empty(parameters('agentVersion')), parameters('agentName'), concat(parameters('agentName'), ':', parameters('agentVersion'))))",
         "runAfter": {
           "Terminate_if_segments_missing": [
             "Succeeded"
           ]
         }
       },
-      "Select_attachments": {
-        "_comment": "Foundry threads API expects [{file_id, tools:[...]}], not bare ids.",
-        "type": "Select",
-        "inputs": {
-          "from": "@coalesce(triggerBody()?['inputFileIds'], createArray())",
-          "select": {
-            "file_id": "@item()",
-            "tools": [
-              {
-                "type": "file_search"
-              },
-              {
-                "type": "code_interpreter"
-              }
-            ]
-          }
-        },
+      "Agent_reference": {
+        "_comment": "agent_reference body field of the Responses API; the version key is present only when the pipeline pins one (finding C19).",
+        "type": "Compose",
+        "inputs": "@if(contains(outputs('Resolve_agent_ref'), ':'), createObject('type','agent_reference','name', first(split(outputs('Resolve_agent_ref'), ':')), 'version', last(split(outputs('Resolve_agent_ref'), ':'))), createObject('type','agent_reference','name', outputs('Resolve_agent_ref')))",
         "runAfter": {
-          "Resolve_agent_id": [
+          "Resolve_agent_ref": [
             "Succeeded"
           ]
         }
       },
-      "Run_producing_agent": {
+      "Select_attachments": {
+        "_comment": "Responses API input parts: user-uploaded Foundry files become `input_file` content parts. The per-attachment tools[] list of the classic thread API no longer exists - file_search / code_interpreter come from the agent definition (finding C1).",
+        "type": "Select",
+        "inputs": {
+          "from": "@coalesce(triggerBody()?['inputFileIds'], createArray())",
+          "select": {
+            "type": "input_file",
+            "file_id": "@item()"
+          }
+        },
+        "runAfter": {
+          "Agent_reference": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Create_conversation": {
+        "_comment": "One conversation per report run; `owner` + `runId` metadata carry the user context Purview records (finding C15) and tie the Foundry trace to this Logic Apps run.",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -250,15 +267,10 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "assistant_id": "@outputs('Resolve_agent_id')",
-            "thread": {
-              "messages": [
-                {
-                  "role": "user",
-                  "content": "Supplier name: @{outputs('Resolve_supplier_name')}. Service name: @{outputs('Resolve_service_name')}. Task: @{triggerBody()?['requestText']}. Emit the final deliverable as your output contract specifies (a single ```json fenced block, or the full single-file HTML document).",
-                  "attachments": "@body('Select_attachments')"
-                }
-              ]
+            "metadata": {
+              "owner": "@{coalesce(triggerBody()?['requestedBy'],'')}",
+              "reportType": "@{parameters('reportType')}",
+              "runId": "@{workflow().run.name}"
             }
           },
           "retryPolicy": {
@@ -273,12 +285,58 @@
           ]
         }
       },
+      "Agent_input": {
+        "_comment": "Single user message: instruction part + one input_file part per uploaded file.",
+        "type": "Compose",
+        "inputs": "@concat(createArray(createObject('type','input_text','text', concat('Supplier name: ', outputs('Resolve_supplier_name'), '. Service name: ', outputs('Resolve_service_name'), '. Task: ', coalesce(triggerBody()?['requestText'],''), '. Emit the final deliverable as your output contract specifies (a single ```json fenced block, or the full single-file HTML document).'))), body('Select_attachments'))",
+        "runAfter": {
+          "Create_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Run_producing_agent": {
+        "_comment": "Background response: long report runs are polled, never held open.",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_conversation')?['id']}",
+            "agent_reference": "@outputs('Agent_reference')",
+            "input": [
+              {
+                "role": "user",
+                "content": "@outputs('Agent_input')"
+              }
+            ],
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Agent_input": [
+            "Succeeded"
+          ]
+        }
+      },
       "Until_agent_run_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_agent_run_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_agent_run_status')?['status'])",
         "limit": {
-          "count": 60,
-          "timeout": "PT1H"
+          "count": 240,
+          "timeout": "PT2H"
         },
         "runAfter": {
           "Run_producing_agent": [
@@ -286,11 +344,11 @@
           ]
         },
         "actions": {
-          "Delay_15s": {
+          "Delay_30s": {
             "type": "Wait",
             "inputs": {
               "interval": {
-                "count": 15,
+                "count": 30,
                 "unit": "Second"
               }
             },
@@ -300,17 +358,14 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_producing_agent')?['thread_id']}/runs/@{body('Run_producing_agent')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_producing_agent')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
               }
             },
             "runAfter": {
-              "Delay_15s": [
+              "Delay_30s": [
                 "Succeeded"
               ]
             }
@@ -318,15 +373,11 @@
         }
       },
       "Get_agent_output": {
+        "_comment": "Final read of the response object; the deliverable is `output_text` (fallback: the last output[].content[].text).",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_producing_agent')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_producing_agent')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -340,21 +391,19 @@
       },
       "Agent_draft_text": {
         "type": "Compose",
-        "inputs": "@body('Get_agent_output')?['data'][0]['content'][0]['text']['value']",
+        "inputs": "@coalesce(body('Get_agent_output')?['output_text'], last(body('Get_agent_output')?['output'])?['content'][0]?['text'], '')",
         "runAfter": {
           "Get_agent_output": [
             "Succeeded"
           ]
         }
       },
-      "Run_output_verifier": {
+      "Create_verifier_conversation": {
+        "_comment": "Separate conversation for the verifier turn - the draft is verified out of the producing agent's context (agents/verifier_instructions.md).",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -363,14 +412,10 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "assistant_id": "@parameters('verifierAgentId')",
-            "thread": {
-              "messages": [
-                {
-                  "role": "user",
-                  "content": "Deliverable type: @{parameters('reportType')}. Supplier: @{outputs('Resolve_supplier_name')}. Service: @{outputs('Resolve_service_name')}. Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{outputs('Agent_draft_text')}"
-                }
-              ]
+            "metadata": {
+              "source": "output-verifier",
+              "reportType": "@{parameters('reportType')}",
+              "runId": "@{workflow().run.name}"
             }
           },
           "retryPolicy": {
@@ -385,9 +430,39 @@
           ]
         }
       },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_verifier_conversation')?['id']}",
+            "agent_reference": "@if(empty(parameters('verifierAgentVersion')), createObject('type','agent_reference','name',parameters('verifierAgentName')), createObject('type','agent_reference','name',parameters('verifierAgentName'),'version',parameters('verifierAgentVersion')))",
+            "input": "Deliverable type: @{parameters('reportType')}. Supplier: @{outputs('Resolve_supplier_name')}. Service: @{outputs('Resolve_service_name')}. Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{outputs('Agent_draft_text')}",
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Create_verifier_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
       "Until_verifier_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_verifier_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_verifier_status')?['status'])",
         "limit": {
           "count": 40,
           "timeout": "PT30M"
@@ -412,10 +487,7 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/runs/@{body('Run_output_verifier')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -430,15 +502,11 @@
         }
       },
       "Get_verifier_verdict": {
+        "_comment": "Verdict text is `output_text` of the verifier response.",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -452,7 +520,7 @@
       },
       "Verifier_verdict_text": {
         "type": "Compose",
-        "inputs": "@body('Get_verifier_verdict')?['data'][0]['content'][0]['text']['value']",
+        "inputs": "@coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], '')",
         "runAfter": {
           "Get_verifier_verdict": [
             "Succeeded"
@@ -635,13 +703,67 @@
                   ]
                 }
               },
+              "If_sensitivity_label_set": {
+                "_comment": "Finding C16 / ENTERPRISE_BLUEPRINT PUR-1: every delivered report of record carries a Purview sensitivity label. The delivery Function (the only SharePoint writer) calls Graph driveItem:assignSensitivityLabel with its managed identity; the call is asynchronous and metered. Skipped when no label id is configured - the library default label then applies (sharepoint/README.md).",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('sensitivityLabelId')",
+                          ""
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Upload_and_share": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Assign_sensitivity_label": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/assign_label",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "driveId": "@{parameters('sharepointDriveId')}",
+                        "itemId": "@{body('Upload_and_share')?['itemId']}",
+                        "labelId": "@{parameters('sensitivityLabelId')}",
+                        "assignmentMethod": "standard",
+                        "reportType": "@{parameters('reportType')}",
+                        "runId": "@{workflow().run.name}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
               "Overall_score": {
                 "_comment": "Scoring deliverables (DeepSearch dashboard) carry the composite score as a data-overall-score=\"NN\" attribute in the HTML (agent addendum). Empty when absent - never inferred.",
                 "type": "Compose",
                 "inputs": "@if(contains(outputs('Agent_draft_text'), 'data-overall-score=\"'), trim(first(split(last(split(outputs('Agent_draft_text'), 'data-overall-score=\"')), '\"'))), '')",
                 "runAfter": {
-                  "Upload_and_share": [
-                    "Succeeded"
+                  "If_sensitivity_label_set": [
+                    "Succeeded",
+                    "Failed"
                   ]
                 }
               },
@@ -768,7 +890,7 @@
                     "Content-Type": "application/json"
                   },
                   "body": {
-                    "text": "✅ @{parameters('reportType')} for @{outputs('Resolve_supplier_name')} / @{outputs('Resolve_service_name')} approved by @{body('Human_approval_gate')?['approver']} and stored: @{body('Upload_and_share')?['shareUrl']}"
+                    "text": "✅ @{parameters('reportType')} for @{outputs('Resolve_supplier_name')} / @{outputs('Resolve_service_name')} approved by @{body('Human_approval_gate')?['approver']} and stored: @{body('Upload_and_share')?['shareUrl']} | sensitivity label: @{if(equals(parameters('sensitivityLabelId'),''),'library default', if(equals(actions('If_sensitivity_label_set')?['status'],'Succeeded'), parameters('sensitivityLabelId'), 'ASSIGNMENT FAILED - apply manually'))}"
                   }
                 },
                 "runAfter": {

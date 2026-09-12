@@ -1,5 +1,5 @@
 {
-  "_comment": "Replaces Claude Code Remote send_later / run_once_at Routines: schedule a one-shot follow-up that re-opens an EXISTING Foundry thread (e.g. 're-check supplier remediation in 30 days'). Read-only outcome: the agent answers in the thread and the owner is notified on Teams; nothing is written to any system of record (documented exception in governance/HUMAN_APPROVAL.md: scheduling a run is not a submission). Exposed to agents via integrations/openapi/followup-scheduler.yaml / MCP schedule_followup.",
+  "_comment": "Replaces Claude Code Remote send_later / run_once_at Routines: schedule a one-shot follow-up that re-opens an EXISTING Foundry conversation (e.g. 're-check supplier remediation in 30 days'). Read-only outcome: the agent answers in the conversation and the owner is notified on Teams; nothing is written to any system of record (documented exception in governance/HUMAN_APPROVAL.md: scheduling a run is not a submission). Exposed to agents via integrations/openapi/followup-scheduler.yaml / MCP schedule_followup.",
   "definition": {
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
@@ -10,8 +10,8 @@
       },
       "apiVersion": {
         "type": "string",
-        "defaultValue": "2025-05-01",
-        "_comment": "Bind to the FOUNDRY_API_VERSION app setting (setup/.env)."
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
       },
       "teamsWebhookUrl": {
         "type": "securestring",
@@ -27,18 +27,24 @@
           "schema": {
             "type": "object",
             "required": [
-              "threadId",
-              "agentId",
+              "conversationId",
+              "agentRef",
               "fireAt",
               "prompt",
               "requestedBy"
             ],
             "properties": {
-              "threadId": {
-                "type": "string"
+              "conversationId": {
+                "type": "string",
+                "description": "Foundry conversation of the engagement (the conversations/responses runtime replaced the classic thread object, finding C1); `threadId` is accepted for one release."
               },
-              "agentId": {
-                "type": "string"
+              "threadId": {
+                "type": "string",
+                "description": "Deprecated alias of conversationId."
+              },
+              "agentRef": {
+                "type": "string",
+                "description": "`<agent-name>:<version>` of the agent to run (build/agent-versions.json `ref`, finding C19); a bare name runs the latest version."
               },
               "fireAt": {
                 "type": "string",
@@ -82,15 +88,12 @@
           ]
         }
       },
-      "Post_followup_message_to_thread": {
-        "_comment": "Re-opens the SAME Foundry thread (engagement context is preserved) - the Claude 'fire into an existing session' semantics.",
+      "Run_followup_response": {
+        "_comment": "Re-opens the SAME Foundry conversation (engagement context is preserved) - the Claude 'fire into an existing session' semantics. One Responses call replaces the classic post-message + create-run pair (finding C1).",
         "type": "Http",
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{triggerBody()?['threadId']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
           "headers": {
             "Content-Type": "application/json"
           },
@@ -99,8 +102,10 @@
             "audience": "https://ai.azure.com"
           },
           "body": {
-            "role": "user",
-            "content": "[Scheduled follow-up requested by @{triggerBody()?['requestedBy']} on @{utcNow()}] @{triggerBody()?['prompt']}"
+            "conversation": "@{coalesce(triggerBody()?['conversationId'], triggerBody()?['threadId'])}",
+            "agent_reference": "@if(contains(triggerBody()?['agentRef'], ':'), createObject('type','agent_reference','name', first(split(triggerBody()?['agentRef'], ':')), 'version', last(split(triggerBody()?['agentRef'], ':'))), createObject('type','agent_reference','name', triggerBody()?['agentRef']))",
+            "input": "[Scheduled follow-up requested by @{triggerBody()?['requestedBy']} on @{utcNow()}] @{triggerBody()?['prompt']}",
+            "background": true
           },
           "retryPolicy": {
             "type": "exponential",
@@ -114,45 +119,15 @@
           ]
         }
       },
-      "Run_agent_on_thread": {
-        "type": "Http",
-        "inputs": {
-          "method": "POST",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{triggerBody()?['threadId']}/runs",
-          "queries": {
-            "api-version": "@parameters('apiVersion')"
-          },
-          "headers": {
-            "Content-Type": "application/json"
-          },
-          "authentication": {
-            "type": "ManagedServiceIdentity",
-            "audience": "https://ai.azure.com"
-          },
-          "body": {
-            "assistant_id": "@{triggerBody()?['agentId']}"
-          },
-          "retryPolicy": {
-            "type": "exponential",
-            "count": 4,
-            "interval": "PT10S"
-          }
-        },
-        "runAfter": {
-          "Post_followup_message_to_thread": [
-            "Succeeded"
-          ]
-        }
-      },
       "Until_run_completes": {
         "type": "Until",
-        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_run_status')?['status'])",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_run_status')?['status'])",
         "limit": {
           "count": 60,
           "timeout": "PT1H"
         },
         "runAfter": {
-          "Run_agent_on_thread": [
+          "Run_followup_response": [
             "Succeeded"
           ]
         },
@@ -171,10 +146,7 @@
             "type": "Http",
             "inputs": {
               "method": "GET",
-              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_agent_on_thread')?['thread_id']}/runs/@{body('Run_agent_on_thread')?['id']}",
-              "queries": {
-                "api-version": "@parameters('apiVersion')"
-              },
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_followup_response')?['id']}?api-version=@{parameters('apiVersion')}",
               "authentication": {
                 "type": "ManagedServiceIdentity",
                 "audience": "https://ai.azure.com"
@@ -189,15 +161,11 @@
         }
       },
       "Get_answer": {
+        "_comment": "Final read of the response object; the answer is `output_text`.",
         "type": "Http",
         "inputs": {
           "method": "GET",
-          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_agent_on_thread')?['thread_id']}/messages",
-          "queries": {
-            "api-version": "@parameters('apiVersion')",
-            "order": "desc",
-            "limit": "1"
-          },
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_followup_response')?['id']}?api-version=@{parameters('apiVersion')}",
           "authentication": {
             "type": "ManagedServiceIdentity",
             "audience": "https://ai.azure.com"
@@ -218,7 +186,7 @@
             "Content-Type": "application/json"
           },
           "body": {
-            "text": "⏰ Follow-up for @{triggerBody()?['requestedBy']} (thread @{triggerBody()?['threadId']}): @{triggerBody()?['prompt']}\n\n@{first(body('Get_answer')?['data'])?['content']?[0]?['text']?['value']}\n\nNo submission of record was made - continue in the thread; any write still goes through a report/ticket pipeline with approval."
+            "text": "⏰ Follow-up for @{triggerBody()?['requestedBy']} (conversation @{coalesce(triggerBody()?['conversationId'], triggerBody()?['threadId'])}): @{triggerBody()?['prompt']}\n\n@{coalesce(body('Get_answer')?['output_text'], last(body('Get_answer')?['output'])?['content'][0]?['text'], '')}\n\nNo submission of record was made - continue in the conversation; any write still goes through a report/ticket pipeline with approval."
           }
         },
         "runAfter": {

@@ -21,7 +21,8 @@ tool, and which model tier) and attached by
 | `exchange-graph` | OpenAPI (`openapi/exchange-graph.yaml`) | tpa-evidence-analyzer, advisor | Gmail replacement: read-only shared assurance mailbox (supplier evidence by mail); sending only via gated workflow |
 | `teams-graph` / `m365-personal-graph` | OpenAPI (delegated OBO) | example agents (internal-comms, morning, doc-coauthoring) | Slack / personal Gmail+Calendar replacement: the user's own Teams chats, channels, calendar and mail, read-only, on-behalf-of the user |
 | `azure-devops` | OpenAPI (`openapi/azure-devops.yaml`) | advisor, cyber-forum, template-manager | GitHub replacement: read-only repos, items, PRs, threads, pipeline runs, code search — no PR/push/merge tools by design |
-| `web-search` | Grounding with Bing Search | deepsearch, cyber-forum, regulatory advisors | Live web research with citations (provisioned by `infra/main.bicep` when `enableWebSearch=true`) |
+| `web-search` | Grounding with Bing Search | deepsearch, cyber-forum, regulatory advisors | Live web research with citations (provisioned by `infra/main.bicep` when `enableWebSearch=true`). **Leaves the Azure compliance boundary — the DPA does not apply**; accepted residual risk recorded on the connection (finding C13) |
+| `sharepoint-grounding` | Native SharePoint grounding tool (**preview, OBO-only**) | *none yet — `enabled: false`* | Finding C9: interactive advisory grounding in the InfoSec Assurance site on behalf of the signed-in user. Registered and inventoried but not attached: pipelines and every unattended read keep `sharepoint-graph`; enable after GA + the licence decision + an `attach_integrations.py` handler |
 | MS Copilot | See `copilot/README.md` | user-facing Q&A agents | Surfacing agents inside Microsoft 365 Copilot / Teams |
 | Workflows | See `../workflows/` | scheduled/event pipelines | Logic Apps replacing Claude Routines (OneTrust intake, Defender briefs, scheduled DeepSearch, Jira↔IAF sync) |
 
@@ -31,10 +32,14 @@ tool, and which model tier) and attached by
 `x-enx-read-only: true` (idempotent query POSTs: `searchIssuesJql`,
 `aqlSearchObjects`, `runHuntingQuery`, SharePoint `searchContent`, Azure
 DevOps `codeSearch`); every other verb is stripped unless the connection is
-in the agent's `write_connections` (no agent has any). MCP tools: the
-`allowed_tools` list of `mcp/enx-gateway.json` is checked against the
-gateway's `tools/list` annotations — a tool without `readOnlyHint=true` is
-refused. The verify step prints the retained operations per agent
+in the agent's `write_connections` (no agent has any). MCP tools
+(finding C10): the `allowed_tools` list of `mcp/enx-gateway.json` is a closed
+allow-list checked against the gateway's `tools/list` annotations — a tool
+without `readOnlyHint=true` is refused; `require_approval` uses the object
+form `{"never": {"tool_names": [...]}}` so the approval waiver covers exactly
+those read tools and **any other tool the gateway exposes still requires
+human approval**; and the gateway bearer is held by the project connection
+`conn-enx-gateway`, not by run-time headers. The verify step prints the retained operations per agent
 (`attach_integrations.py --dry-run` lists kept POSTs; `verify_conversion.py`
 audits them).
 
@@ -45,8 +50,22 @@ MODEL_ROUTING.md): `light` (`LIGHT_MODEL_DEPLOYMENT_NAME`, default
 `gpt-4o-mini`: docx/pdf/pptx/xlsx document agents, the
 enx-tprm-control-center router, morning), `chat` (`MODEL_DEPLOYMENT_NAME`,
 `gpt-4o`: template-driven report generation) and `reasoning`
-(`REASONING_MODEL_DEPLOYMENT_NAME`, `o3-mini`: OSINT synthesis, risk
-scoring, evidence/SOC/pentest analysis, advisors). All three deployments
+(`REASONING_MODEL_DEPLOYMENT_NAME`, **`o4-mini` — no longer `o3-mini`**:
+OSINT synthesis, risk scoring, evidence/SOC/pentest analysis, advisors).
+
+**Tool compatibility (finding C4).** `o3-mini` supports *none* of the
+OpenAPI, MCP, Azure AI Search, SharePoint or Web Search tools, yet every
+reasoning agent carries the read-only OpenAPI/MCP/Bing surface — an agent
+pinned to it would answer without ever calling its tools. The tier contract
+is unchanged; only the reasoning **deployment** moves to a tool-capable
+reasoning model (`o4-mini`, EU Data Zone; alternate `gpt-5-mini`).
+`registry.json` → `model_tiers._tool_compatibility` is the matrix of record
+(per-model yes/no per tool type, with the Microsoft tool-support table as
+source) and `_deployment_of_record` names the deployment per tier. The rule
+it encodes: **an agent may only be pinned to a tier whose model supports
+every tool type it carries** — re-check it whenever a tier model or an
+agent's tool list changes, and confirm the table columns on the day of
+deployment. All three deployments
 are created by `infra/main.bicep`; `attach_integrations.py` maps
 `TIER_MAP = {light, chat, reasoning}` and fails for any live agent absent
 from the registry (except `example_agents.unmanaged_ok`). Example skills
@@ -76,9 +95,19 @@ converted with `--include-examples` have explicit entries (`example: true`).
   SDK does not accept bare names.
 - The Bing grounding key is wired into the `bing-grounding` connection by
   the Bicep; Logic Apps use managed identity + the Azure AI User role.
-- The ENX gateway MCP token is NOT part of the tool definition: it is read
-  from Key Vault at run time and passed as `tool_resources.mcp[].headers`
-  by the caller (`_azure_helpers.mcp_run_headers()`); see `mcp/enx-gateway.json`.
+- The ENX gateway MCP token is NOT part of the tool definition: it is held
+  by the project connection `conn-enx-gateway` (CustomKeys, value sourced
+  from Key Vault by `connections/connections.bicep` /
+  `create_connections.sh`) and referenced from `mcp/enx-gateway.json` by
+  name (finding C10) — it no longer travels in
+  `tool_resources.mcp[].headers`.
+- Every connection declares the principal that actually calls the target in
+  its `identity` field (finding C7): `project_managed_identity` (app-only
+  Graph), `project_connection_custom_keys`, `project_connection_api_key` or
+  `delegated_obo`. The agent-level identity (Entra Agent ID / agent
+  blueprint, Conditional Access, data-plane roles re-applied after every
+  publish) is described in `registry.json` → `_identity_model` and
+  inventoried in `../team/ACCESS_REGISTER.md`.
 - Consumer connectors of the previous environment (Gmail, Google Drive,
   GitHub, Firecrawl, Slack, Google Calendar, Adobe/Canva/Gamma…) and their
   ENX replacement or exclusion: `CONNECTOR_DECISIONS.md`.

@@ -21,10 +21,10 @@
       "value": 50
     },
     "reasoningModelName": {
-      "value": "o3-mini"
+      "value": "o4-mini"
     },
     "reasoningModelVersion": {
-      "value": ""
+      "value": "2025-04-16"
     },
     "reasoningModelCapacity": {
       "value": 30
@@ -33,7 +33,7 @@
       "value": "gpt-4o-mini"
     },
     "lightModelVersion": {
-      "value": ""
+      "value": "2024-07-18"
     },
     "lightModelCapacity": {
       "value": 100
@@ -49,6 +49,9 @@
     },
     "deploymentSku": {
       "value": "DataZoneStandard"
+    },
+    "modelVersionUpgradeOption": {
+      "value": "NoAutoUpgrade"
     },
     "enableWebSearch": {
       "value": true
@@ -70,6 +73,54 @@
     },
     "enableSpeech": {
       "value": false
+    },
+    "enableStandardAgentSetup": {
+      "value": true
+    },
+    "cosmosThroughputLimitRuPerSecond": {
+      "value": 4000
+    },
+    "conversationRetentionDays": {
+      "value": 90
+    },
+    "searchSku": {
+      "value": "standard"
+    },
+    "enableAgentVnetInjection": {
+      "value": true
+    },
+    "agentSubnetId": {
+      "value": ""
+    },
+    "cmkKeyUri": {
+      "value": ""
+    },
+    "cmkKeyName": {
+      "value": "infosec-foundry-cmk"
+    },
+    "searchCmkEnforcement": {
+      "value": "Unspecified"
+    },
+    "enablePolicyAssignments": {
+      "value": true
+    },
+    "policyEffectMode": {
+      "value": "Deny"
+    },
+    "denyGlobalSkuDefinitionId": {
+      "value": "{policy-definition-id:infosec-foundry-deny-global-sku}"
+    },
+    "purviewAccountId": {
+      "value": "{purview-account-resource-id}"
+    },
+    "enableDefenderAiAlerts": {
+      "value": true
+    },
+    "socEmail": {
+      "value": "{soc-mailbox}"
+    },
+    "agentIdentityPrincipalIds": {
+      "value": []
     },
     "enableDelivery": {
       "value": true
