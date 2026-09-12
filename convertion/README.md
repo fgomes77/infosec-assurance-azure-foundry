@@ -46,13 +46,13 @@ convertion/
 ├── agents/                    ← persona_system_prompt.md, addenda, overlays/,
 │                                knowledge-packs/, advisor-knowledge/,
 │                                12 charters (`*_instructions.md`)
-├── scripts/                   ← 21 Python tools (convert, create, attach, verify,
+├── scripts/                   ← 22 Python tools (convert, create, attach, verify,
 │                                update_templates, memory_store, …) + adapters/
 ├── build/                     ← generated: agents/ (22), manifest.json,
 │                                instruction-hashes.json, learning/
-├── integrations/              ← registry.json, 14 OpenAPI specs (openapi/),
+├── integrations/              ← registry.json, 15 OpenAPI specs (openapi/),
 │                                mcp/, connections/, copilot/, CONNECTOR_DECISIONS.md
-├── workflows/                 ← 16 Logic App definitions + pipelines.json
+├── workflows/                 ← 17 Logic App definitions + pipelines.json
 ├── ci/                        ← CI/CD: the gate script syntax_check.sh shared by
 │                                both pipelines, the Azure DevOps pipeline
 │                                azure-pipelines.yml, deploy_logicapps.sh, and
@@ -190,10 +190,10 @@ The `integrations/` folder wires the agents into the Euronext toolchain —
 Jira Cloud, Jira Assets (CMDB), OneTrust, SecurityScorecard, Microsoft
 Defender (Graph security), SharePoint (Graph), the internal IAF API, the ENX
 gateway MCP server, web search, and a reasoning tier for analytic agents
-(14 OpenAPI specs in `integrations/openapi/`; tiers, tools and connections
+(15 OpenAPI specs in `integrations/openapi/`; tiers, tools and connections
 in `integrations/registry.json`; the tool-compatibility matrix that decides
 which reasoning model may carry those tools is
-`governance/MODEL_ROUTING.md`). `workflows/` holds 16 Logic Apps
+`governance/MODEL_ROUTING.md`). `workflows/` holds 17 Logic Apps
 definitions plus `pipelines.json`, replacing Claude Routines (OneTrust
 intake, Defender incident briefs, scheduled DeepSearch, Jira↔IAF sync,
 scheduled evaluation/red-team, approval and delivery pipelines), and
