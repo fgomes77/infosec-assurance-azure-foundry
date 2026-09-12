@@ -1,0 +1,74 @@
+{
+  "_comment": "Instantiation manifest for report-delivery-pipeline.json - deploy one Logic App per entry, fixing its parameters as below (agent ids come out of create_agents/create_delivery_agents; drive/root ids out of setup/.env). Every pipeline enforces the same storage rule: Reports/<Supplier>/<Service>/, supplier folder reused if present, service folder created only when missing.",
+  "shared": {
+    "verifierAgent": "output-verifier",
+    "sharepointDrive": "${SHAREPOINT_REPORTS_DRIVE_ID}",
+    "reportsRoot": "${SHAREPOINT_REPORTS_ROOT_ITEM_ID}",
+    "dpoRoot": "${SHAREPOINT_DPO_ROOT_ITEM_ID}"
+  },
+  "pipelines": {
+    "deepsearch-report": {
+      "requirement": "a",
+      "agent": "deepsearch-protocol",
+      "reportType": "DeepSearch",
+      "renderFormat": "html",
+      "renderTemplate": "",
+      "libraryRoot": "reportsRoot",
+      "notes": "Agent gathers public info via Bing grounding and Euronext tooling (SecurityScorecard, Defender Graph, IAF, Jira Assets CMDB, ENX gateway MCP - read-only) and emits the finished single-file HTML dashboard per the V17.02.11 template."
+    },
+    "dpia-dpo-report": {
+      "requirement": "b",
+      "agent": "dpia",
+      "reportType": "InfoSecTPA-DPO",
+      "renderFormat": "docx",
+      "renderTemplate": "dpia",
+      "libraryRoot": "dpoRoot",
+      "notes": "OT PDF uploaded by the user (inputFileIds). Stored under Reports/DPO/<Supplier>/<Service>/ and share link sent to the DPO channel."
+    },
+    "cyber-forum-pptx": {
+      "requirement": "c",
+      "agent": "ciso-reporting",
+      "reportType": "CyberForum",
+      "renderFormat": "pptx",
+      "renderTemplate": "ciso-reporting",
+      "libraryRoot": "reportsRoot",
+      "notes": "OT PDF(s) -> Infosec Cyber Forum deck for CISOs/stakeholders using the verified 8-slide governance template."
+    },
+    "ciso-global-pptx": {
+      "requirement": "d",
+      "agent": "ciso-global-report",
+      "reportType": "CISOGlobal",
+      "renderFormat": "pptx",
+      "renderTemplate": "ciso-global",
+      "libraryRoot": "reportsRoot",
+      "notes": "9-slide Global CISO deck: contract owner, impacted ENX entities, service/supplier description, risk & controls resume, internal/external exposure diagram, ICT inherent+residual scores, ENX actions to the Contract Owner."
+    },
+    "tpa-evidence-analysis": {
+      "requirement": "d2",
+      "agent": "tpa-evidence-analyzer",
+      "reportType": "EvidenceAnalysis",
+      "renderFormat": "docx",
+      "renderTemplate": "evidence-summary",
+      "libraryRoot": "reportsRoot",
+      "notes": "Agent enumerates Infosec Assurance/GRC/TPA/Active/<Supplier> itself via read-only Graph tools; serviceName optional at trigger but required for storage - the pipeline asks for it."
+    },
+    "soc-report-summary": {
+      "requirement": "e",
+      "agent": "soc-report-analyzer",
+      "reportType": "SOCSummary",
+      "renderFormat": "docx",
+      "renderTemplate": "evidence-summary",
+      "libraryRoot": "reportsRoot",
+      "notes": "User-uploaded SOC 1/2/3 report -> full findings/exceptions/CUEC summary."
+    },
+    "pentest-report-summary": {
+      "requirement": "f",
+      "agent": "pentest-report-analyzer",
+      "reportType": "PentestSummary",
+      "renderFormat": "docx",
+      "renderTemplate": "evidence-summary",
+      "libraryRoot": "reportsRoot",
+      "notes": "User-uploaded pentest report -> normalised findings register and reliance verdict."
+    }
+  }
+}

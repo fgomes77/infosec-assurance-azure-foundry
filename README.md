@@ -7,7 +7,7 @@ conversion of the Claude skill toolset into Foundry agents.
 
 | Path | What it is |
 |---|---|
-| `convertion/` | The conversion kit — Bicep infrastructure, provisioning, agent and verifier instructions, MCP server, seven OpenAPI integrations (OneTrust, SecurityScorecard, Defender Graph, Jira Cloud, Jira Assets CMDB, SharePoint Graph, IAF), four workflows, orchestrator, human-approval governance |
+| `convertion/` | The conversion kit — Bicep infrastructure, provisioning, agent and verifier instructions, MCP server, seven OpenAPI integrations (OneTrust, SecurityScorecard, Defender Graph, Jira Cloud, Jira Assets CMDB, SharePoint Graph, IAF), four workflows, orchestrator, human-approval governance — plus the delivery layer (`convertion/REQUIREMENTS.md`): supplier/service SharePoint storage pipelines, Global CISO deck, evidence/SOC/pentest analyzers, read-only Confluence access, egress guardrails, model routing, template change control |
 | `claude-account-export/` | The conversion source — 35 account-synced skills (18 custom GRC/TPRM), 41 Anthropic platform skills (8 public, 33 examples), the advisor knowledge pack, `PERSONA.md`, `CAPABILITIES.md`, `environment/` |
 | `project-dossier/` | Project dossier for the InfoSec Assurance Agent Platform — `.docx`, infographics and their generators |
 

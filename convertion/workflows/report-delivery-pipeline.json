@@ -1,0 +1,279 @@
+{
+  "_comment": "Generic report-delivery pipeline (requirements a,b,c,d,d2,e,f). Deploy ONE Logic App per entry in pipelines.json - each instantiation fixes agentId, renderFormat, template and libraryRoot via parameters. Flow: HTTP trigger (supplierName + serviceName mandatory) -> run the producing agent -> run output-verifier -> on PASS raise the human approval gate -> on APPROVED render the file (delivery Function) -> ensure Supplier/Service folders (reuse-if-exists) -> upload + org share link -> Teams notification -> respond with the SharePoint URL. Nothing is stored without verifier PASS and human approval.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": { "type": "string", "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}" },
+      "apiVersion": { "type": "string", "defaultValue": "{foundry-api-version}" },
+      "agentId": { "type": "string", "defaultValue": "{producing-agent-id}" },
+      "verifierAgentId": { "type": "string", "defaultValue": "{output-verifier-agent-id}" },
+      "reportType": { "type": "string", "defaultValue": "{ReportType-for-file-name}" },
+      "renderFormat": { "type": "string", "defaultValue": "{html|docx|pptx|xlsx}" },
+      "renderTemplate": { "type": "string", "defaultValue": "{renderer-folder-or-empty}" },
+      "deliveryFunctionBaseUrl": { "type": "string", "defaultValue": "https://{delivery-function}.azurewebsites.net/api" },
+      "deliveryFunctionKey": { "type": "securestring", "defaultValue": "{function-key-from-key-vault}" },
+      "sharepointDriveId": { "type": "string", "defaultValue": "{reports-library-drive-id}" },
+      "libraryRootItemId": { "type": "string", "defaultValue": "{item-id-of-Reports-root-or-Reports-DPO-root}" },
+      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "{human-approval-subscribe-endpoint}" },
+      "teamsWebhookUrl": { "type": "securestring", "defaultValue": "{teams-incoming-webhook-url}" }
+    },
+    "triggers": {
+      "When_a_report_is_requested": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [ "supplierName", "serviceName", "requestText" ],
+            "properties": {
+              "supplierName": { "type": "string", "description": "Asked of the user - drives Reports/<Supplier>/ folder (reused if it exists)" },
+              "serviceName": { "type": "string", "description": "Asked of the user - drives <Supplier>/<Service>/ folder (created only if missing)" },
+              "requestText": { "type": "string", "description": "The task, incl. references to uploaded OT/SOC/pentest file ids where applicable" },
+              "inputFileIds": { "type": "array", "items": { "type": "string" }, "description": "Foundry file ids of user-uploaded PDFs (b,c,d,e,f)" },
+              "requestedBy": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Run_producing_agent": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+          "queries": { "api-version": "@parameters('apiVersion')" },
+          "headers": { "Content-Type": "application/json" },
+          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" },
+          "body": {
+            "assistant_id": "@parameters('agentId')",
+            "thread": {
+              "messages": [ {
+                "role": "user",
+                "content": "Supplier name: @{triggerBody()?['supplierName']}. Service name: @{triggerBody()?['serviceName']}. Task: @{triggerBody()?['requestText']}. Emit the final deliverable as your output contract specifies (JSON block or full HTML).",
+                "attachments": "@triggerBody()?['inputFileIds']"
+              } ]
+            }
+          },
+          "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" }
+        },
+        "runAfter": {}
+      },
+      "Until_agent_run_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_agent_run_status')?['status'])",
+        "limit": { "count": 60, "timeout": "PT1H" },
+        "runAfter": { "Run_producing_agent": [ "Succeeded" ] },
+        "actions": {
+          "Delay_15s": { "type": "Wait", "inputs": { "interval": { "count": 15, "unit": "Second" } }, "runAfter": {} },
+          "Get_agent_run_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_producing_agent')?['thread_id']}/runs/@{body('Run_producing_agent')?['id']}",
+              "queries": { "api-version": "@parameters('apiVersion')" },
+              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+            },
+            "runAfter": { "Delay_15s": [ "Succeeded" ] }
+          }
+        }
+      },
+      "Get_agent_output": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_producing_agent')?['thread_id']}/messages",
+          "queries": { "api-version": "@parameters('apiVersion')", "order": "desc", "limit": "1" },
+          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+        },
+        "runAfter": { "Until_agent_run_completes": [ "Succeeded" ] }
+      },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/threads/runs",
+          "queries": { "api-version": "@parameters('apiVersion')" },
+          "headers": { "Content-Type": "application/json" },
+          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" },
+          "body": {
+            "assistant_id": "@parameters('verifierAgentId')",
+            "thread": { "messages": [ {
+              "role": "user",
+              "content": "Deliverable type: @{parameters('reportType')}. Verify this draft and answer with a first line of exactly PASS or FAIL, then findings. Draft: @{body('Get_agent_output')?['data'][0]['content'][0]['text']['value']}"
+            } ] }
+          },
+          "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" }
+        },
+        "runAfter": { "Get_agent_output": [ "Succeeded" ] }
+      },
+      "Until_verifier_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','cancelled','expired'), body('Get_verifier_status')?['status'])",
+        "limit": { "count": 40, "timeout": "PT30M" },
+        "runAfter": { "Run_output_verifier": [ "Succeeded" ] },
+        "actions": {
+          "Delay_10s": { "type": "Wait", "inputs": { "interval": { "count": 10, "unit": "Second" } }, "runAfter": {} },
+          "Get_verifier_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/runs/@{body('Run_output_verifier')?['id']}",
+              "queries": { "api-version": "@parameters('apiVersion')" },
+              "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+            },
+            "runAfter": { "Delay_10s": [ "Succeeded" ] }
+          }
+        }
+      },
+      "Get_verifier_verdict": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/threads/@{body('Run_output_verifier')?['thread_id']}/messages",
+          "queries": { "api-version": "@parameters('apiVersion')", "order": "desc", "limit": "1" },
+          "authentication": { "type": "ManagedServiceIdentity", "audience": "https://ai.azure.com" }
+        },
+        "runAfter": { "Until_verifier_completes": [ "Succeeded" ] }
+      },
+      "If_verifier_passed": {
+        "type": "If",
+        "expression": { "and": [ { "startsWith": [ "@{body('Get_verifier_verdict')?['data'][0]['content'][0]['text']['value']}", "PASS" ] } ] },
+        "runAfter": { "Get_verifier_verdict": [ "Succeeded" ] },
+        "actions": {
+          "Human_approval_gate": {
+            "_comment": "HttpWebhook: subscribes the approval app (Teams adaptive card / Power App per governance/HUMAN_APPROVAL.md); the run BLOCKS here until the approver calls back APPROVED/REJECTED. Expires P3D -> auto-reject.",
+            "type": "HttpWebhook",
+            "inputs": {
+              "subscribe": {
+                "method": "POST",
+                "uri": "@parameters('approvalWebhookUrl')",
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}",
+                  "reportType": "@{parameters('reportType')}",
+                  "supplier": "@{triggerBody()?['supplierName']}",
+                  "service": "@{triggerBody()?['serviceName']}",
+                  "requestedBy": "@{triggerBody()?['requestedBy']}",
+                  "draft": "@{body('Get_agent_output')?['data'][0]['content'][0]['text']['value']}",
+                  "verifierVerdict": "@{body('Get_verifier_verdict')?['data'][0]['content'][0]['text']['value']}"
+                }
+              },
+              "unsubscribe": {}
+            },
+            "limit": { "timeout": "P3D" },
+            "runAfter": {}
+          },
+          "If_approved": {
+            "type": "If",
+            "expression": { "and": [ { "equals": [ "@{body('Human_approval_gate')?['decision']}", "APPROVED" ] } ] },
+            "runAfter": { "Human_approval_gate": [ "Succeeded" ] },
+            "actions": {
+              "Render_report_file": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/render",
+                  "queries": { "code": "@parameters('deliveryFunctionKey')" },
+                  "headers": { "Content-Type": "application/json" },
+                  "body": {
+                    "format": "@{parameters('renderFormat')}",
+                    "template": "@{parameters('renderTemplate')}",
+                    "fileName": "@{parameters('reportType')}_@{triggerBody()?['supplierName']}_@{triggerBody()?['serviceName']}_@{formatDateTime(utcNow(),'yyyy-MM-dd')}.@{parameters('renderFormat')}",
+                    "content": "@{body('Get_agent_output')?['data'][0]['content'][0]['text']['value']}",
+                    "data": "@{body('Get_agent_output')?['data'][0]['content'][0]['text']['value']}"
+                  },
+                  "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" }
+                },
+                "runAfter": {}
+              },
+              "Ensure_supplier_service_folders": {
+                "_comment": "The requirement rule: reuse Supplier folder if it exists, create Service folder under it only if missing. Idempotent + race-safe in the Function.",
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/ensure_folder",
+                  "queries": { "code": "@parameters('deliveryFunctionKey')" },
+                  "headers": { "Content-Type": "application/json" },
+                  "body": {
+                    "driveId": "@{parameters('sharepointDriveId')}",
+                    "rootItemId": "@{parameters('libraryRootItemId')}",
+                    "segments": [ "@{triggerBody()?['supplierName']}", "@{triggerBody()?['serviceName']}" ]
+                  },
+                  "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" }
+                },
+                "runAfter": { "Render_report_file": [ "Succeeded" ] }
+              },
+              "Upload_and_share": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/upload",
+                  "queries": { "code": "@parameters('deliveryFunctionKey')" },
+                  "headers": { "Content-Type": "application/json" },
+                  "body": {
+                    "driveId": "@{parameters('sharepointDriveId')}",
+                    "folderId": "@{body('Ensure_supplier_service_folders')?['folderId']}",
+                    "fileName": "@{body('Render_report_file')?['fileName']}",
+                    "contentBase64": "@{body('Render_report_file')?['contentBase64']}",
+                    "share": true
+                  },
+                  "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" }
+                },
+                "runAfter": { "Ensure_supplier_service_folders": [ "Succeeded" ] }
+              },
+              "Notify_team": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@parameters('teamsWebhookUrl')",
+                  "headers": { "Content-Type": "application/json" },
+                  "body": { "text": "✅ @{parameters('reportType')} for @{triggerBody()?['supplierName']} / @{triggerBody()?['serviceName']} approved and stored: @{body('Upload_and_share')?['shareUrl']}" }
+                },
+                "runAfter": { "Upload_and_share": [ "Succeeded" ] }
+              },
+              "Respond_stored": {
+                "type": "Response",
+                "kind": "Http",
+                "inputs": { "statusCode": 200, "body": {
+                  "status": "STORED",
+                  "webUrl": "@{body('Upload_and_share')?['webUrl']}",
+                  "shareUrl": "@{body('Upload_and_share')?['shareUrl']}"
+                } },
+                "runAfter": { "Notify_team": [ "Succeeded" ] }
+              }
+            },
+            "else": { "actions": {
+              "Respond_rejected": {
+                "type": "Response",
+                "kind": "Http",
+                "inputs": { "statusCode": 200, "body": { "status": "REJECTED_BY_APPROVER", "comment": "@{body('Human_approval_gate')?['comment']}" } },
+                "runAfter": {}
+              }
+            } }
+          }
+        },
+        "else": { "actions": {
+          "Notify_verifier_fail": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('teamsWebhookUrl')",
+              "headers": { "Content-Type": "application/json" },
+              "body": { "text": "❌ @{parameters('reportType')} draft for @{triggerBody()?['supplierName']} / @{triggerBody()?['serviceName']} FAILED verification: @{body('Get_verifier_verdict')?['data'][0]['content'][0]['text']['value']}" }
+            },
+            "runAfter": {}
+          },
+          "Respond_verifier_fail": {
+            "type": "Response",
+            "kind": "Http",
+            "inputs": { "statusCode": 422, "body": { "status": "VERIFIER_FAIL", "findings": "@{body('Get_verifier_verdict')?['data'][0]['content'][0]['text']['value']}" } },
+            "runAfter": { "Notify_verifier_fail": [ "Succeeded" ] }
+          }
+        } }
+      }
+    },
+    "outputs": {}
+  }
+}

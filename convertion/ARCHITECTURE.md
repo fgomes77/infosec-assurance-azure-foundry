@@ -58,6 +58,21 @@ bypassed.
 | Observability | Application Insights wired to the Foundry project (Bicep): traces, tokens, latency per run; Logic Apps run history evidences approvals |
 | Human oversight | Three-layer approval control — see governance/HUMAN_APPROVAL.md |
 
+## Delivery pipelines (release path made executable)
+
+The combined release path above is implemented end-to-end by
+`workflows/report-delivery-pipeline.json` (one Logic App per entry in
+`workflows/pipelines.json`): producing agent → output-verifier →
+HttpWebhook human approval (P3D) → delivery Function renders the file →
+`ensure_folder` (idempotent `Reports/<Supplier>/<Service>/`) → upload +
+organisation-scoped share link → Teams notification. Template changes run
+the same shape through `workflows/template-update-approval.json` with a
+visual before/after review page and `scripts/update_templates.py`
+propagation. The only SharePoint writer is the delivery Function's
+managed identity; agents stay read-only
+(`governance/DATA_PROTECTION_GUARDRAILS.md`), and model tiers per agent
+are governed by `governance/MODEL_ROUTING.md`.
+
 ## Evaluation and success metrics
 
 Track per agent in App Insights / Foundry tracing: task success (verifier

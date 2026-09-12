@@ -2,3 +2,5 @@ build/
 setup/.env
 setup/provision-outputs.json
 __pycache__/
+functions/delivery/renderers/
+templates/audit.log

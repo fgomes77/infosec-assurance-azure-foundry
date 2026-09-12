@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ciso_global_deck",
+  "description": "Output contract of the ciso-global-report agent (requirement d). Rendered to the 9-slide Global CISO PPTX by functions/delivery/renderers/ciso-global/generate_slide.js. Verified by output-verifier before rendering.",
+  "type": "object",
+  "required": ["meta", "contract_owner", "enx_entities", "service_description",
+               "supplier_description", "risk_resume", "exposure", "scores",
+               "enx_actions"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["supplier", "service", "assessment_id", "assessment_date", "report_date"],
+      "properties": {
+        "supplier": { "type": "string" },
+        "service": { "type": "string" },
+        "assessment_id": { "type": "string" },
+        "assessment_date": { "type": "string", "format": "date" },
+        "report_date": { "type": "string", "format": "date" },
+        "criticality": { "type": "string", "enum": ["Critical", "Non-critical", "TO CONFIRM"] },
+        "classification": { "type": "string", "default": "Euronext Internal — CISO" }
+      }
+    },
+    "contract_owner": {
+      "type": "object",
+      "required": ["name", "entity"],
+      "properties": {
+        "name": { "type": "string", "description": "'TO CONFIRM — Contract Owner' when not evidenced" },
+        "entity": { "type": "string" },
+        "role": { "type": "string" },
+        "source": { "type": "string", "description": "OT field or CMDB object the identification traces to" }
+      }
+    },
+    "enx_entities": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["entity", "usage"],
+        "properties": {
+          "entity": { "type": "string" },
+          "usage": { "type": "string", "enum": ["user", "impacted", "user+impacted"] },
+          "data_types": { "type": "string" }
+        }
+      }
+    },
+    "service_description": {
+      "type": "object",
+      "required": ["summary", "delivery_model"],
+      "properties": {
+        "summary": { "type": "string" },
+        "delivery_model": { "type": "string" },
+        "data_processed": { "type": "string" },
+        "connectivity": { "type": "string" }
+      }
+    },
+    "supplier_description": {
+      "type": "object",
+      "required": ["profile"],
+      "properties": {
+        "profile": { "type": "string" },
+        "certifications": { "type": "array", "items": { "type": "string" } },
+        "sub_outsourcing": { "type": "string" }
+      }
+    },
+    "risk_resume": {
+      "type": "object",
+      "required": ["posture_bullets", "risk_counts", "controls_status"],
+      "properties": {
+        "posture_bullets": { "type": "array", "maxItems": 5, "items": { "type": "string" } },
+        "risk_counts": {
+          "type": "object",
+          "properties": { "high": { "type": "integer" }, "medium": { "type": "integer" }, "low": { "type": "integer" } }
+        },
+        "controls_status": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["domain", "implemented", "partial", "missing"],
+            "properties": {
+              "domain": { "type": "string" },
+              "implemented": { "type": "integer" },
+              "partial": { "type": "integer" },
+              "missing": { "type": "integer" }
+            }
+          }
+        },
+        "key_gaps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "exposure": {
+      "type": "object",
+      "required": ["internal", "external"],
+      "properties": {
+        "internal": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node", "risk"],
+            "properties": {
+              "node": { "type": "string", "description": "e.g. network segment, IAM integration, data repository, privileged access" },
+              "risk": { "type": "string", "enum": ["red", "amber", "green"] },
+              "note": { "type": "string" }
+            }
+          }
+        },
+        "external": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node", "risk"],
+            "properties": {
+              "node": { "type": "string", "description": "e.g. public endpoint, supplier hosting, fourth party" },
+              "risk": { "type": "string", "enum": ["red", "amber", "green"] },
+              "note": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "required": ["inherent", "residual"],
+      "properties": {
+        "inherent": { "type": "number", "minimum": 0, "maximum": 10 },
+        "residual": { "type": "number", "minimum": 0, "maximum": 10 },
+        "driver_note": { "type": "string" }
+      },
+      "$comment": "verifier rule: residual <= inherent; band colours High>=7.0 Medium>=4.0"
+    },
+    "enx_actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "action", "priority", "owner"],
+        "properties": {
+          "id": { "type": "string" },
+          "action": { "type": "string" },
+          "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
+          "target_date": { "type": "string" },
+          "owner": { "type": "string", "description": "the Contract Owner (control owner) from contract_owner.name" }
+        }
+      }
+    },
+    "recommendation": { "type": "string", "enum": ["Proceed", "Proceed with conditions", "Remediate first"] }
+  }
+}

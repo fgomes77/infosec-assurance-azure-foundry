@@ -59,6 +59,20 @@ deploy with `--include-examples` only if you want them.
 | Artifacts (published HTML) | Azure Static Web Apps / Blob static hosting for generated HTML dashboards |
 | `verify_sync.py` | Not applicable — in Foundry, re-running convert+create IS the sync |
 
+## Delivery-layer agents (5) — new, not converted from a skill
+
+Created by `scripts/create_delivery_agents.py`; instructions in
+`agents/<name>_instructions.md`; tools/tiers in
+`integrations/registry.json`; requirement mapping in `REQUIREMENTS.md`.
+
+| Agent | Requirement | Tools | Knowledge reused (fidelity anchor) |
+|---|---|---|---|
+| `ciso-global-report` | d | OneTrust, Jira Assets CMDB, SharePoint (read) | ciso-reporting + pptx-executive-summary-ciso + tpsrca knowledge; output schema `templates/ciso_global_deck.schema.json` |
+| `tpa-evidence-analyzer` | d2 | SharePoint Graph (read) | pdf-full-coverage-analyzer method |
+| `soc-report-analyzer` | e | — (file upload) | pdf-full-coverage-analyzer method |
+| `pentest-report-analyzer` | f | — (file upload) | pdf-full-coverage-analyzer method |
+| `template-manager` | j | SharePoint (read) + code_interpreter over template assets | `templates/registry.json` inventory |
+
 ## Exclusions
 
 The forensic-persona skill excluded from the export for data-protection

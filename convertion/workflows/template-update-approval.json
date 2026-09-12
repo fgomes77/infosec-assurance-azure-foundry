@@ -1,0 +1,125 @@
+{
+  "_comment": "Template change-control workflow (requirement j). Fired by the template-manager agent's review package. Publishes the visual before/after preview to a review location, blocks on human approval (HttpWebhook, P7D), and ONLY on APPROVED runs scripts/update_templates.py (via an Azure Container App job / DevOps pipeline hook) to write the template back to the conversion source, bump templates/registry.json, and re-run convert->verify->create so every dependent agent, vector store, code_interpreter file and delivery renderer updates together. REJECTED or expiry -> nothing changes.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "deliveryFunctionBaseUrl": { "type": "string", "defaultValue": "https://{delivery-function}.azurewebsites.net/api" },
+      "deliveryFunctionKey": { "type": "securestring", "defaultValue": "{function-key-from-key-vault}" },
+      "sharepointDriveId": { "type": "string", "defaultValue": "{reports-library-drive-id}" },
+      "templateReviewRootItemId": { "type": "string", "defaultValue": "{item-id-of-Templates-Reviews-folder}" },
+      "approvalWebhookUrl": { "type": "securestring", "defaultValue": "{human-approval-subscribe-endpoint}" },
+      "applyPipelineUrl": { "type": "securestring", "defaultValue": "{devops-or-container-job-trigger-that-runs-update_templates.py}" },
+      "teamsWebhookUrl": { "type": "securestring", "defaultValue": "{teams-incoming-webhook-url}" }
+    },
+    "triggers": {
+      "When_a_template_change_is_proposed": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [ "templateId", "changeSummary", "previewHtml", "newTemplateBase64", "requestedBy" ],
+            "properties": {
+              "templateId": { "type": "string" },
+              "changeSummary": { "type": "string", "description": "Structured old->new diff produced by template-manager" },
+              "impactList": { "type": "string", "description": "Agents/pipelines/schemas affected" },
+              "previewHtml": { "type": "string", "description": "Self-contained before/after visual review page" },
+              "newTemplateBase64": { "type": "string" },
+              "requestedBy": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Publish_visual_review_page": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('deliveryFunctionBaseUrl')}/upload",
+          "queries": { "code": "@parameters('deliveryFunctionKey')" },
+          "headers": { "Content-Type": "application/json" },
+          "body": {
+            "driveId": "@{parameters('sharepointDriveId')}",
+            "folderId": "@{parameters('templateReviewRootItemId')}",
+            "fileName": "TemplateReview_@{triggerBody()?['templateId']}_@{formatDateTime(utcNow(),'yyyy-MM-dd_HHmm')}.html",
+            "contentBase64": "@{base64(triggerBody()?['previewHtml'])}",
+            "share": true
+          },
+          "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT10S" }
+        },
+        "runAfter": {}
+      },
+      "Human_approval_gate": {
+        "type": "HttpWebhook",
+        "inputs": {
+          "subscribe": {
+            "method": "POST",
+            "uri": "@parameters('approvalWebhookUrl')",
+            "body": {
+              "callbackUrl": "@{listCallbackUrl()}",
+              "kind": "TEMPLATE_UPDATE",
+              "templateId": "@{triggerBody()?['templateId']}",
+              "changeSummary": "@{triggerBody()?['changeSummary']}",
+              "impactList": "@{triggerBody()?['impactList']}",
+              "reviewPageUrl": "@{body('Publish_visual_review_page')?['shareUrl']}",
+              "requestedBy": "@{triggerBody()?['requestedBy']}"
+            }
+          },
+          "unsubscribe": {}
+        },
+        "limit": { "timeout": "P7D" },
+        "runAfter": { "Publish_visual_review_page": [ "Succeeded" ] }
+      },
+      "If_approved": {
+        "type": "If",
+        "expression": { "and": [ { "equals": [ "@{body('Human_approval_gate')?['decision']}", "APPROVED" ] } ] },
+        "runAfter": { "Human_approval_gate": [ "Succeeded" ] },
+        "actions": {
+          "Apply_template_update": {
+            "_comment": "Triggers the job that runs: update_templates.py --template <id> --file <new> => writes source, bumps registry version, convert_skills.py, verify_conversion.py, create_agents.py --only <consumers>, stage_renderers.py. Atomic: any step failing rolls the source back.",
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('applyPipelineUrl')",
+              "headers": { "Content-Type": "application/json" },
+              "body": {
+                "templateId": "@{triggerBody()?['templateId']}",
+                "newTemplateBase64": "@{triggerBody()?['newTemplateBase64']}",
+                "approvedBy": "@{body('Human_approval_gate')?['approver']}",
+                "approvalRunId": "@{workflow()?['run']?['name']}"
+              },
+              "retryPolicy": { "type": "exponential", "count": 4, "interval": "PT30S" }
+            },
+            "runAfter": {}
+          },
+          "Notify_applied": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('teamsWebhookUrl')",
+              "headers": { "Content-Type": "application/json" },
+              "body": { "text": "✅ Template @{triggerBody()?['templateId']} update APPROVED by @{body('Human_approval_gate')?['approver']} and propagation started. Review page: @{body('Publish_visual_review_page')?['shareUrl']}" }
+            },
+            "runAfter": { "Apply_template_update": [ "Succeeded" ] }
+          }
+        },
+        "else": { "actions": {
+          "Notify_rejected": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('teamsWebhookUrl')",
+              "headers": { "Content-Type": "application/json" },
+              "body": { "text": "⛔ Template @{triggerBody()?['templateId']} update was NOT approved (@{body('Human_approval_gate')?['decision']}). No changes applied." }
+            },
+            "runAfter": {}
+          }
+        } }
+      }
+    },
+    "outputs": {}
+  }
+}

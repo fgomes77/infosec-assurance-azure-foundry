@@ -8,8 +8,15 @@
     "defender-graph":    { "type": "openapi", "spec": "integrations/openapi/defender-graph.yaml",    "foundry_connection": "conn-defender-graph" },
     "sharepoint-graph":  { "type": "openapi", "spec": "integrations/openapi/sharepoint-graph.yaml",  "foundry_connection": "conn-sharepoint-graph" },
     "iaf-api":           { "type": "openapi", "spec": "integrations/openapi/iaf-api.yaml",           "foundry_connection": "conn-iaf-api" },
+    "confluence-cloud":  { "type": "openapi", "spec": "integrations/openapi/confluence-cloud.yaml",  "foundry_connection": "conn-confluence" },
     "enx-gateway-mcp":   { "type": "mcp",     "config": "integrations/mcp/enx-gateway.json" },
     "web-search":        { "type": "bing_grounding", "foundry_connection": "bing-grounding" }
+  },
+  "model_tiers": {
+    "_comment": "Token-economy routing (governance/MODEL_ROUTING.md). Deployment names from setup/.env: LIGHT_MODEL_DEPLOYMENT_NAME (default gpt-4o-mini), MODEL_DEPLOYMENT_NAME (gpt-4o), REASONING_MODEL_DEPLOYMENT_NAME (o3-mini).",
+    "light":     "structured extraction, rendering hand-off, routing, folder/file bookkeeping",
+    "chat":      "standard report generation against fixed templates",
+    "reasoning": "OSINT research, risk scoring, evidence/SOC/pentest analysis, regulatory advisory"
   },
   "agents": {
     "deepsearch-protocol":                  { "tools": ["web-search", "securityscorecard", "iaf-api", "enx-gateway-mcp"], "model_tier": "reasoning" },
@@ -33,6 +40,14 @@
     "docx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
     "pdf":                                  { "tools": ["sharepoint-graph"], "model_tier": "chat" },
     "pptx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "xlsx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" }
+    "xlsx":                                 { "tools": ["sharepoint-graph"], "model_tier": "light" },
+
+    "ciso-global-report":                   { "tools": ["onetrust", "jira-assets-cmdb", "sharepoint-graph"], "model_tier": "reasoning" },
+    "tpa-evidence-analyzer":                { "tools": ["sharepoint-graph"], "model_tier": "reasoning" },
+    "soc-report-analyzer":                  { "tools": [], "model_tier": "reasoning" },
+    "pentest-report-analyzer":              { "tools": [], "model_tier": "reasoning" },
+    "template-manager":                     { "tools": ["sharepoint-graph"], "model_tier": "chat" },
+
+    "infosec-assurance-advisor":            { "tools": ["confluence-cloud", "jira-cloud", "jira-assets-cmdb", "sharepoint-graph", "onetrust", "defender-graph", "securityscorecard", "iaf-api", "enx-gateway-mcp", "web-search"], "model_tier": "reasoning", "_comment": "Requirement i: every enterprise source attached READ-ONLY (non-GET stripped; no write_connections). Web search only after query sanitisation per governance/DATA_PROTECTION_GUARDRAILS.md." }
   }
 }

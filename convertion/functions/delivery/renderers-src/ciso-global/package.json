@@ -1,0 +1,8 @@
+{
+  "name": "ciso-global-renderer",
+  "private": true,
+  "description": "Global CISO Report 9-slide PPTX renderer (delivery Function)",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

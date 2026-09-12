@@ -76,6 +76,28 @@ python3 smoke_test.py --agent infosec-assurance-orchestrator \
     --prompt "Summarise DORA Art. 30 contractual provisions"
 ```
 
+## Delivery layer (requirements a–j)
+
+`REQUIREMENTS.md` traces the full business-requirement set to its
+components. In one paragraph: seven **report-delivery pipelines**
+(`workflows/report-delivery-pipeline.json` + `workflows/pipelines.json`)
+take a supplier name + service name, run the producing agent, pass the
+draft through the output-verifier and the human approval gate, render the
+file (HTML/DOCX/PPTX/XLSX) in the **delivery Function**
+(`functions/delivery/`), and store it in SharePoint under
+`Reports/<Supplier>/<Service>/` with the idempotent folder rule (reuse
+the supplier folder when it exists, create the service folder only when
+missing — `sharepoint/README.md`). Five **new agents** extend the 35:
+`ciso-global-report` (Global CISO 9-slide deck), `tpa-evidence-analyzer`
+(TPA/Active evidence tree analysis), `soc-report-analyzer`,
+`pentest-report-analyzer`, and `template-manager` (approval-gated template
+change control with visual before/after review —
+`workflows/template-update-approval.json`, `templates/registry.json`,
+`scripts/update_templates.py`). Read-only Confluence access joins the
+integration set for the advisor (requirement i), egress and data
+protection are specified in `governance/DATA_PROTECTION_GUARDRAILS.md`,
+and token-economy model routing in `governance/MODEL_ROUTING.md`.
+
 ## Integrations, workflows, Copilot
 
 The `integrations/` folder wires the agents into the Euronext toolchain —

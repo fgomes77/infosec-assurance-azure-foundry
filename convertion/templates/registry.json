@@ -1,0 +1,94 @@
+{
+  "_comment": "Authoritative template inventory for the template-manager system (requirement j). 'source' paths are relative to the repo root and point at the conversion source of truth - update_templates.py writes approved changes THERE, then re-runs convert->verify->create so agents, vector stores, code_interpreter files and the delivery-function renderers update together. Versions bump on every approved change.",
+  "templates": [
+    {
+      "id": "deepsearch-html-dashboard",
+      "name": "DeepSearch OSINT Assessment HTML Dashboard",
+      "format": "html",
+      "source": "claude-account-export/skills/deepsearch-protocol/SKILL.md#embedded-template",
+      "style": { "theme": "dark teal RGB(0,141,127)", "font": "Verdana", "sections": 11, "buttons": 9, "spider_graph": true },
+      "consumers": ["deepsearch-protocol", "ai-deepsearch-osint-gathering-report"],
+      "pipelines": ["deepsearch-report"],
+      "version": "17.02.11",
+      "last_approved": "2026-03-24"
+    },
+    {
+      "id": "ciso-executive-summary-html",
+      "name": "Strategic Risk Intelligence Dashboard (CISO HTML)",
+      "format": "html",
+      "source": "claude-account-export/skills/ciso-executive-summary/assets/",
+      "style": { "spider_graph_domains": 5, "dual_perimeter": true, "thresholds": "High>=7.0 Medium>=4.0" },
+      "consumers": ["ciso-executive-summary"],
+      "pipelines": [],
+      "version": "1.0",
+      "last_approved": "2026-04-07"
+    },
+    {
+      "id": "ciso-reporting-deck",
+      "name": "CISO Governance Meeting 8-slide PPTX",
+      "format": "pptx",
+      "source": "claude-account-export/skills/ciso-reporting/assets/",
+      "consumers": ["ciso-reporting"],
+      "pipelines": ["cyber-forum-pptx"],
+      "renderer": "functions/delivery/renderers/ciso-reporting/generate_slide.js",
+      "version": "1.0",
+      "last_approved": "2026-05-26"
+    },
+    {
+      "id": "tprm-board-slide",
+      "name": "TPRM Executive Summary Board Slide",
+      "format": "pptx",
+      "source": "claude-account-export/skills/pptx-executive-summary-ciso/assets/template_constants.js",
+      "consumers": ["pptx-executive-summary-ciso", "tprm-slide-generator"],
+      "pipelines": [],
+      "version": "1.0",
+      "last_approved": "2026-03-06"
+    },
+    {
+      "id": "ciso-global-deck",
+      "name": "Global CISO Report 9-slide PPTX (req. d)",
+      "format": "pptx",
+      "source": "convertion/agents/ciso-global-report_instructions.md#deck-content",
+      "schema": "ciso_global_deck.schema.json",
+      "slides": ["cover", "service-supplier-id", "enx-entities", "service-description", "supplier-description", "risk-controls-resume", "exposure-diagram", "ict-scores", "enx-actions"],
+      "consumers": ["ciso-global-report"],
+      "pipelines": ["ciso-global-pptx"],
+      "renderer": "functions/delivery/renderers/ciso-global/generate_slide.js",
+      "version": "1.0",
+      "last_approved": null
+    },
+    {
+      "id": "dpia-dpo-docx",
+      "name": "InfoSec TPA Report for DPO (DOCX)",
+      "format": "docx",
+      "source": "claude-account-export/skills/dpia/scripts/",
+      "consumers": ["dpia"],
+      "pipelines": ["dpia-dpo-report"],
+      "renderer": "functions/delivery/renderers/dpia/render.py",
+      "version": "1.0",
+      "last_approved": "2026-01-27"
+    },
+    {
+      "id": "evidence-summary-docx",
+      "name": "Evidence / SOC / Pentest Findings Summary (DOCX)",
+      "format": "docx",
+      "source": "convertion/functions/delivery/renderers/evidence-summary/",
+      "consumers": ["tpa-evidence-analyzer", "soc-report-analyzer", "pentest-report-analyzer"],
+      "pipelines": ["tpa-evidence-analysis", "soc-report-summary", "pentest-report-summary"],
+      "renderer": "functions/delivery/renderers/evidence-summary/render.py",
+      "version": "1.0",
+      "last_approved": null
+    },
+    {
+      "id": "xlsx-generic",
+      "name": "Generic tabular XLSX export (advisor/TPRM outputs)",
+      "format": "xlsx",
+      "source": "claude-account-export/skills/xlsx/",
+      "consumers": ["xlsx", "infosec-assurance-advisor"],
+      "pipelines": [],
+      "renderer": "functions/delivery/renderers/xlsx-generic/render.py",
+      "version": "1.0",
+      "last_approved": null
+    }
+  ]
+}
