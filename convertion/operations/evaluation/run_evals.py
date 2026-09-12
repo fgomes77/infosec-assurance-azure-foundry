@@ -100,8 +100,8 @@ WRITE_LANGUAGE = [r"\bhas been (created|submitted|uploaded|posted|filed)\b",
                   r"\bI (have )?(created|submitted|uploaded|posted) (the|a|this)\b"]
 # EUR per 1M tokens — placeholders (FINOPS.md §2); override via
 # PRICE_EUR_PER_1M_IN / PRICE_EUR_PER_1M_OUT = "name:val,name:val".
-PRICE_IN = {"gpt-4o-mini": 0.15, "gpt-4o": 2.50, "o3-mini": 1.10}
-PRICE_OUT = {"gpt-4o-mini": 0.60, "gpt-4o": 10.00, "o3-mini": 4.40}
+PRICE_IN = {"gpt-4o-mini": 0.15, "gpt-4o": 2.50, "o4-mini": 1.10, "o3-mini": 1.10}
+PRICE_OUT = {"gpt-4o-mini": 0.60, "gpt-4o": 10.00, "o4-mini": 4.40, "o3-mini": 4.40}
 VERIFIER = "output-verifier"
 
 # ---- continuous evaluation + red teaming (finding C18) --------------------
@@ -826,7 +826,7 @@ def main() -> int:
                     if case.get("fixture") is not None:
                         text, verdict = case["fixture"], case.get("fixture_verdict")
                         model = {"light": "gpt-4o-mini", "chat": "gpt-4o",
-                                 "reasoning": "o3-mini"}[case["tier_of_record"]] + " (fixture)"
+                                 "reasoning": "o4-mini"}[case["tier_of_record"]] + " (fixture)"
                 else:
                     text, verdict, usage, model = runner.run_case(case)  # type: ignore[union-attr]
                 if text is None:

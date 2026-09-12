@@ -18,8 +18,8 @@ agent, 512 MB per file, 10,000 files per vector store
 |---|---|---|---|
 | A1 | Name matches the export skill name / registry key | e.g. `dora`, `tpa-evidence-analyzer` | Build > Agents |
 | A2 | Description = the skill's trigger description (routing text) | non-empty, unchanged from `build/agents/<agent>/manifest` | agent header |
-| A3 | Model deployment = the registry `model_tier` | light `gpt-4o-mini` / chat `gpt-4o` / reasoning `o3-mini` (or the MDL-4 successor for tool-bearing agents) | Setup > Model |
-| A4 | Tool-bearing reasoning agent is NOT on a model without OpenAPI/MCP support | o3-mini: OpenAPI/MCP/SharePoint/Web Search unsupported → must be on the successor deployment | [Tool support](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model) |
+| A3 | Model deployment = the registry `model_tier` | light `gpt-4o-mini` / chat `gpt-4o` / reasoning `o4-mini` (the tool-capable model of record; **never** `o3-mini` — finding C4) | Setup > Model |
+| A4 | Tool-bearing reasoning agent is NOT on a model without OpenAPI/MCP support | `o3-mini`: OpenAPI/MCP/SharePoint/Web Search unsupported → must be on `o4-mini` (or the alternate `gpt-5-mini`); `scripts/attach_integrations.py` refuses the run otherwise | [Tool support](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model) |
 | A5 | Version promoted = `build/manifest.json` version; older versions kept for rollback | pinned, not "always latest", for pipeline agents | Versions |
 
 ## B. Instructions

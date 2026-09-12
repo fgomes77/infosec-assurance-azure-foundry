@@ -63,7 +63,7 @@ not levers (`DATA_PROTECTION_GUARDRAILS.md` §4; DORA Art. 28).
 
 Price placeholders (EUR per 1 M tokens, same map as
 `kql/latency-and-tokens.kql`): `gpt-4o-mini` 0.15 in / 0.60 out; `gpt-4o`
-2.50 / 10.00; `o3-mini` 1.10 / 4.40 (reasoning tokens bill as output).
+2.50 / 10.00; the reasoning tier `o4-mini` 1.10 / 4.40 (reasoning tokens bill as output; the same placeholder figures were used for the rejected `o3-mini` — re-price on the day of the tier change, finding C4).
 Every pipeline deliverable = producer run + `output-verifier` pass
 (reasoning tier, `../scripts/create_orchestrator.py`) + orchestrator hop
 when invoked conversationally. Volumes are the five-user planning

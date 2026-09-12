@@ -173,7 +173,7 @@ Refresher: T1/T3/T4 annually and after any *major* release
 
 | Risk | Mitigation | Owner |
 |---|---|---|
-| Fidelity gap between `gpt-4o`/`o3-mini` and the claude.ai outputs on `chat`/`reasoning` tiers (`../README.md` limitation 1) | comparison set; parallel run; Claude tiers on Foundry where available in the EU Data Zone (`../infra/README.md` "Claude tiers") as a *minor* release after P3 | owner |
+| Fidelity gap between `gpt-4o`/`o4-mini` and the claude.ai outputs on `chat`/`reasoning` tiers (`../README.md` limitation 1) | comparison set; parallel run; Claude tiers on Foundry where available in the EU Data Zone (`../infra/README.md` "Claude tiers") as a *minor* release after P3 | owner |
 | Copilot timeouts on long runs (KI-01) | pipelines for a–f; Copilot for g/h/i only; stated in T2 | owner |
 | Approval fatigue (five people, Tier A on every report) | `approval-sla` alert; hypercare stand-up reviews pending gates; SLO ≤ 2 business days | all |
 | PIM / custom-role not available at bootstrap | `enablePim=false` fallback recorded with a review date; detective drift alert compensates (`TEAM_MODEL.md` §7.1) | owner + IAM |

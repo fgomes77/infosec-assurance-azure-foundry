@@ -60,7 +60,9 @@ from create_delivery_agents import AGENTS as DELIVERY  # noqa: E402
 import create_orchestrator as co  # noqa: E402
 
 CHAT_MODEL = os.environ.get("MODEL_DEPLOYMENT_NAME", "gpt-4o")
-REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o3-mini")
+# finding C4: NOT o3-mini - it carries none of the OpenAPI/MCP/AI Search/
+# SharePoint/Web Search tools the reasoning agents need
+REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o4-mini")
 INTEGRATION_TYPES = {"openapi": "openapi", "mcp": "mcp",
                      "bing_grounding": "bing_grounding",
                      "azure_ai_search": "azure_ai_search"}

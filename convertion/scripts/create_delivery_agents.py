@@ -55,7 +55,9 @@ except ImportError:
 import os
 ENDPOINT = os.environ.get("PROJECT_ENDPOINT")
 CHAT_MODEL = os.environ.get("MODEL_DEPLOYMENT_NAME", "gpt-4o")
-REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o3-mini")
+# finding C4: NOT o3-mini - it carries none of the OpenAPI/MCP/AI Search/
+# SharePoint/Web Search tools the reasoning agents need
+REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o4-mini")
 
 sys.path.insert(0, str(HERE))
 from create_orchestrator import persona  # noqa: E402

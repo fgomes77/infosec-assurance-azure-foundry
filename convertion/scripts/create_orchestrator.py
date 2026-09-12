@@ -46,7 +46,9 @@ except ImportError:
     pass
 
 ENDPOINT = os.environ.get("PROJECT_ENDPOINT")
-REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o3-mini")
+# finding C4: NOT o3-mini - it carries none of the OpenAPI/MCP/AI Search/
+# SharePoint/Web Search tools the reasoning agents need
+REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o4-mini")
 BING_CONNECTION = os.environ.get("BING_CONNECTION_NAME", "bing-grounding")
 ENABLE_A2A = os.environ.get("ENABLE_A2A_TOOL", "false").strip().lower() == "true"
 
