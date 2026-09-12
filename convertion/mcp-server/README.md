@@ -18,6 +18,11 @@ promoted `<agent>:<version>` that produced it (finding C19). Consequence
 for packaging: the server needs `../scripts/` and `../setup/.env` next to
 it (see hosting below).
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## Run locally (per team member, stdio)
 
 ```bash
@@ -40,7 +45,7 @@ Claude Desktop / Claude Code registration (`mcpServers` entry):
 ```
 
 Each user's own Entra identity (az login) is used — access follows the
-Azure AI User role assignments, so revoking a person in Entra revokes their
+Foundry User role assignments, so revoking a person in Entra revokes their
 MCP access too.
 
 Per-user registration checklist (own `az login`, approved MCP clients only,
@@ -58,7 +63,7 @@ az acr build -r {registry} -t infosec-mcp:{tag} -f convertion/mcp-server/Dockerf
 ```
 
 then deploy to Azure Container Apps with a **system-assigned
-managed identity** granted `Azure AI User` on the Foundry project, and put
+managed identity** granted `Foundry User` on the Foundry project, and put
 Entra authentication (Easy Auth) in front so only assurance-team members
 reach it. Register the resulting URL in clients (and, if desired, in the
 ENX gateway) as a remote MCP server.

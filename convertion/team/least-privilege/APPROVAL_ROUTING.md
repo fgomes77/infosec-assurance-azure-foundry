@@ -1,5 +1,12 @@
 # Approval Routing — Who Approves What, Segregation of Duties, Break-Glass
 
+> **HISTORICAL DESIGN VARIANT — not the model of record.** This file is the
+> least-privilege lens kept as a design record; it uses a superseded
+> vocabulary (six groups, approval tiers 1/2/3). The authoritative model is
+> `../TEAM_MODEL.md` (decisions in §21) with `../RACI.md`,
+> `../approval-policy.json` and `../rbac.bicep`. See `README.md` in this
+> folder for the name mapping. Do not implement from this file.
+
 Extends `../../governance/HUMAN_APPROVAL.md` (which says *that* every
 submission of record needs a human) with *who* that human is. The
 approval flow behind `approvalWebhookUrl` (Power Automate or the approval

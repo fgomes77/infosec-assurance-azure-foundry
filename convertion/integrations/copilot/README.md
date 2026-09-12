@@ -5,6 +5,11 @@ Foundry Agents (data-plane) REST API. This page describes how to expose a
 subset of them inside **Microsoft 365 Copilot** (and Teams), so users can ask
 DORA/NIS2/ISO questions or the cyber-forum agent without leaving their chat.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## Option 1 — Copilot Studio agent calling the Foundry endpoint (recommended)
 
 1. In **Copilot Studio**, create a new agent (one per Foundry agent you want
@@ -50,7 +55,7 @@ Original step list:
    `POST /ask` (body: `{ "agent": "dora", "question": "..." }`) that
    internally performs the thread/message/run dance and returns the answer
    synchronously. The Function authenticates to Foundry with its
-   **managed identity** (role: `Azure AI User` on the project).
+   **managed identity** (role: `Foundry User` on the project).
 2. Describe the Function with an **OpenAPI 3.0 spec** (keep it small — one
    or two operations, good descriptions: Copilot picks operations from the
    descriptions).

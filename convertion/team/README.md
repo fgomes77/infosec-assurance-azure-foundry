@@ -28,6 +28,11 @@ Companion files in this folder:
 | `access-review.sh` | Read-only evidence collector for the quarterly access review |
 | `ACCESS_REGISTER.md` | Register template: people, groups, service accounts, connections, rotation dates |
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. The team
 
 | Person | UPN (placeholder) | Standing role | Extra privileges |
@@ -49,7 +54,7 @@ change* (RBAC) and *what they may approve* (approval routing).
 
 | # | Flow | Who acts | Identity in use | Must be true (derived access) | Evidence |
 |---|---|---|---|---|---|
-| F1 | Ask an advisor / orchestrator a question (req. g, h, i) via Foundry playground, Copilot, or local MCP | any of the five | own Entra user | `Azure AI User` on the project; Copilot agent shared with the users group; MCP = own `az login` | Foundry thread + App Insights trace |
+| F1 | Ask an advisor / orchestrator a question (req. g, h, i) via Foundry playground, Copilot, or local MCP | any of the five | own Entra user | `Foundry User` on the project; Copilot agent shared with the users group; MCP = own `az login` | Foundry conversation + App Insights trace |
 | F2 | Request a report (req. a–f): upload PDF or trigger a pipeline with Supplier/Service | any of the five | own Entra user → Logic App MI → Function MI | pipeline trigger accepts only authenticated team callers; `requestedBy` = token UPN | Logic Apps run + SharePoint version |
 | F3 | Approve a report before it is rendered/stored | a **different** team member (four-eyes) | own Entra user in Teams Approval | approver ∈ approver group, approver ≠ requester; Tier B needs owner/deputy | Approval record (UPN, timestamp, correlationId) |
 | F4 | Propose a template change (req. j) | any of the five via `template-manager` | own Entra user | proposal open to all; **approval owner-only** | Review page + `templates/audit.log` |
@@ -91,7 +96,7 @@ records the change in `ACCESS_REGISTER.md`.
 | `sg-infosec-foundry-users` | all five | owner `{upn:francisco.gomes}` (backup owner: IAM team `{group:iam-admins}`) | owner | access package 12 months; quarterly review | Foundry data plane, SharePoint site member, Copilot agent audience, MCP hosted endpoint, App Insights read, GitHub read/PR |
 | `sg-infosec-foundry-report-approvers` | all five (new joiners after the onboarding attestation, §10) | owner | owner | quarterly review | May approve Tier A submissions (§7) |
 | `sg-infosec-foundry-senior-approvers` | owner + deputy | owner's line manager `{upn:line-manager}` | line manager | quarterly review | May approve Tier B submissions (§7) |
-| `sg-infosec-foundry-owner` | owner only | owner's line manager | line manager | quarterly review by line manager | Standing: `Azure AI Developer` (account), `Azure AI Project Manager` (project), Reader (RG), GitHub admin, SharePoint site owner, Copilot Studio maker |
+| `sg-infosec-foundry-owner` | owner only | owner's line manager | line manager | quarterly review by line manager | Standing: `Foundry Owner` (account), `Foundry Project Manager` (project), Reader (RG), GitHub admin, SharePoint site owner, Copilot Studio maker |
 | `sg-infosec-foundry-admin-pim` | **eligible**: owner; **active**: nobody by default | line manager (PIM for Groups policy) | PIM activation: MFA + justification + ticket; max 8 h; approver = line manager for `Contributor`, self-activation allowed for Key Vault/Logic App/Function roles | activation history reviewed quarterly | Contributor (RG), Key Vault Secrets Officer, Logic App Contributor, Website Contributor, Monitoring Contributor, Storage Blob Data Reader, RBAC Administrator (conditioned) |
 | `sg-infosec-foundry-breakglass` | **eligible**: deputy (owner absent) | line manager | PIM activation approved by line manager or SecOps on-call `{group:soc-oncall}`; max 8 h; used only when the owner is unavailable | every activation reviewed by the owner within 5 business days | Same as `admin-pim` |
 | `sg-infosec-foundry-readers` | ISMS/internal audit `{group:isms-audit}`, DPO `{group:dpo}` (optional) | owner | owner | quarterly review | Reader (RG), Log Analytics Reader, Logic App Operator (run history), SharePoint visitor |
@@ -117,42 +122,42 @@ against `az role definition list` before first deployment.
 
 | Resource | `sg-…-users` | `sg-…-owner` (standing) | `sg-…-admin-pim` / `-breakglass` (PIM) | Managed identities / SPs | `sg-…-readers` |
 |---|---|---|---|---|---|
-| Resource group `rg-infosec-foundry` | — | Reader | **Contributor** (redeploy Bicep, create connections) | deployer SP `{app:infosec-foundry-deployer}` (GitHub OIDC): Contributor + `Azure AI Developer` on the account, scoped to this RG only | Reader |
-| Foundry account `{baseName}-aif` | — | **Azure AI Developer** (create/update agents, deployments, connections via the scripts; no role assignment) | RBAC Administrator with condition `roles ∈ {Azure AI User, Reader, Monitoring Reader}` (can only grant the low-privilege roles) | Logic App MI, MCP host MI, Copilot connector SP: **none at account** | Reader |
-| Foundry project `{baseName}-proj` | **Azure AI User** — run agents, threads, files, vector-store reads; the persona experience | **Azure AI Project Manager** (can grant Azure AI User to the users group; manage project) | — | Logic App MI: Azure AI User; MCP host MI (if hosted): Azure AI User; delivery Function MI: **none** (it never calls Foundry) | Reader |
+| Resource group `rg-infosec-foundry` | — | Reader | **Contributor** (redeploy Bicep, create connections) | deployer SP `{app:infosec-foundry-deployer}` (GitHub OIDC): Contributor + `Foundry Owner` on the account, scoped to this RG only | Reader |
+| Foundry account `{baseName}-aif` | — | **Foundry Owner** (create/update agents, deployments, connections via the scripts; no role assignment) | RBAC Administrator with condition `roles ∈ {Foundry User, Reader, Monitoring Reader}` (can only grant the low-privilege roles) | Logic App MI, MCP host MI, Copilot connector SP: **none at account** | Reader |
+| Foundry project `{baseName}-proj` | **Foundry User** — run agents, threads, files, vector-store reads; the persona experience | **Foundry Project Manager** (can grant Foundry User to the users group; manage project) | — | Logic App MI: Foundry User; MCP host MI (if hosted): Foundry User; delivery Function MI: **none** (it never calls Foundry) | Reader |
 | Key Vault `{baseName}-kv` (RBAC permission model, soft-delete + purge protection, no access policies) | — | Reader (list names, not values) | **Key Vault Secrets Officer** (rotate) | Logic App MI, Function MI, Foundry account MI (KV-backed connections): **Key Vault Secrets User** on the specific secrets only (secret-scoped assignments) | — |
 | Delivery Function App `{baseName}-fn-delivery` | — | Reader | **Website Contributor** (deploy) + Monitoring Contributor | Function MI: Graph `Sites.Selected` **write** on the one site; Storage Blob Data Contributor on `deliverables`; Key Vault Secrets User | Reader |
-| Logic Apps Standard `{baseName}-la` | — | Reader | **Logic App Contributor** (import/edit workflows, set parameters) | Logic App MI: Azure AI User (project); Graph `Sites.Selected` **read** (watchlist/list reads) — writes only through the Function; Key Vault Secrets User; Storage (runtime SA) Blob/Queue/Table Data Contributor | **Logic App Operator** (read run history = approval evidence) |
+| Logic Apps Standard `{baseName}-la` | — | Reader | **Logic App Contributor** (import/edit workflows, set parameters) | Logic App MI: Foundry User (project); Graph `Sites.Selected` **read** (watchlist/list reads) — writes only through the Function; Key Vault Secrets User; Storage (runtime SA) Blob/Queue/Table Data Contributor | **Logic App Operator** (read run history = approval evidence) |
 | Storage `{baseName}sa` (`deliverables`) and Logic Apps runtime SA | — | — | Storage Blob Data Reader (investigation only) | Function MI: Blob Data Contributor (`deliverables`); Logic App MI: as above; `allowSharedKeyAccess: false` where the runtime supports identity-based connections | — |
 | Log Analytics `{baseName}-logs` + App Insights `{baseName}-appi` | **Monitoring Reader** (see own runs' traces; team data is shared by classification) | Monitoring Reader | **Monitoring Contributor** (alerts, KQL rules) | Foundry project MI: Monitoring Metrics Publisher (tracing export) | Log Analytics Reader |
 | Bing Grounding `{baseName}-bing` + connection `bing-grounding` | — (used only through agents) | Reader | Contributor (key rotation — the single API key on the platform, imposed by the Bing resource; rotated semi-annually, §6) | — | — |
-| Model deployments (`gpt-4o`, `o3-mini`, `gpt-4o-mini`) | via Azure AI User | via Azure AI Developer | Cognitive Services Contributor is unnecessary — deployments are Bicep-managed | — | — |
+| Model deployments (`gpt-4o`, `o3-mini`, `gpt-4o-mini`) | via Foundry User | via Foundry Owner | Cognitive Services Contributor is unnecessary — deployments are Bicep-managed | — | — |
 
 Roles the platform deliberately does **not** use: `Owner` and `User Access
 Administrator` on the RG (role grants go through the conditioned RBAC
-Administrator role or the landing-zone team), `Azure AI Account Owner`
+Administrator role or the landing-zone team), `Foundry Account Owner`
 (bundles role assignment with data plane — too broad for one person),
 `Cognitive Services Contributor` for humans (keys), Storage account keys.
 
-### 4.1 Azure AI User vs Azure AI Developer — why this split
+### 4.1 Foundry User vs Foundry Owner — why this split
 
-| | Azure AI User (users group) | Azure AI Developer (owner) |
+| | Foundry User (users group) | Foundry Owner (owner) |
 |---|---|---|
 | Data plane: threads, runs, messages, files, vector-store retrieval | yes | yes |
 | Create/update/delete agents, connections, model deployments | current built-in role includes agent-authoring data actions | yes (control + data plane) |
-| Assign roles | no | no (that is Azure AI Project Manager, standing for the owner at project scope only) |
+| Assign roles | no | no (that is Foundry Project Manager, standing for the owner at project scope only) |
 | Sees other users' threads via SDK | yes (project-wide data plane) — hence the thread conventions in §8 | yes |
 
-The Azure AI User built-in role allows agent authoring in the current
+The Foundry User built-in role allows agent authoring in the current
 Foundry role model. That conflicts with "prompt/registry changes are
 owner-only" unless mitigated, so the design applies **both**:
 
 - **Preventive (preferred when the tenant allows custom roles):**
-  `custom-role.agent-consumer.json` — a copy of Azure AI User with the
+  `custom-role.agent-consumer.json` — a copy of Foundry User with the
   agent create/update/delete data actions removed. The exact operation
   strings must be taken from `az provider operation show --namespace
   Microsoft.CognitiveServices` at deployment time (marked `{to-confirm}`
-  in the file); if the tenant forbids custom roles, assign Azure AI User
+  in the file); if the tenant forbids custom roles, assign Foundry User
   and rely on the detective control.
 - **Detective (always on):** the deployment writes the SHA-256 of every
   deployed agent's instructions and tool set into `build/manifest.json`;
@@ -275,7 +280,7 @@ after attestation.
 | Step | Who | Action | Evidence |
 |---|---|---|---|
 | 1 | line manager | Request access package `AP-InfoSec-Foundry-User` (or Teams message to the owner) | request id |
-| 2 | owner | Approve → member of `sg-infosec-foundry-users` (grants Foundry Azure AI User, SharePoint member, Copilot agent, hosted MCP, App Insights read, CA policy) | group change |
+| 2 | owner | Approve → member of `sg-infosec-foundry-users` (grants Foundry Foundry User, SharePoint member, Copilot agent, hosted MCP, App Insights read, CA policy) | group change |
 | 3 | owner | Add to GitHub team `infosec-assurance-users` (read + PR), Teams channels `{teams:infosec-assurance-platform}` and `{teams:infosec-assurance-approvals}` | — |
 | 4 | joiner | Read `governance/*.md`, `sharepoint/README.md`, this file; run the MCP server locally with `az login`; complete one Tier A report end-to-end with a peer approving | attestation form in `Governance/Onboarding/` |
 | 5 | owner | Add to `sg-infosec-foundry-report-approvers`; record in `ACCESS_REGISTER.md` | register row |
@@ -335,8 +340,8 @@ competence, training and authority — the approver groups), Art. 12/26(6)
 
 | Mode | Identity | Who may use | Controls |
 |---|---|---|---|
-| Local stdio (`mcp-server/server.py`) — **default for the five** | the person's own `az login` (`DefaultAzureCredential`) | anyone in `sg-infosec-foundry-users` (their Azure AI User assignment is the gate; removal from the group revokes it) | CA policy (MFA + compliant device) applies to the token; `PROJECT_ENDPOINT` is not a secret; the server stamps `owner_upn` from the signed-in account into thread metadata |
-| Hosted (Azure Container Apps, EU region) — only if the ENX gateway or shared tooling needs it | container MI with Azure AI User; caller authenticated by Easy Auth (Entra), allowed group `sg-infosec-foundry-users` | same group | The server copies `X-MS-CLIENT-PRINCIPAL-NAME` into thread metadata so attribution survives the MI hop; `save_memory` records the caller UPN |
+| Local stdio (`mcp-server/server.py`) — **default for the five** | the person's own `az login` (`DefaultAzureCredential`) | anyone in `sg-infosec-foundry-users` (their Foundry User assignment is the gate; removal from the group revokes it) | CA policy (MFA + compliant device) applies to the token; `PROJECT_ENDPOINT` is not a secret; the server stamps `owner_upn` from the signed-in account into thread metadata |
+| Hosted (Azure Container Apps, EU region) — only if the ENX gateway or shared tooling needs it | container MI with Foundry User; caller authenticated by Easy Auth (Entra), allowed group `sg-infosec-foundry-users` | same group | The server copies `X-MS-CLIENT-PRINCIPAL-NAME` into thread metadata so attribution survives the MI hop; `save_memory` records the caller UPN |
 | MCP **clients** | — | Only clients on the approved AI-tooling list `{register:approved-ai-clients}`: an MCP client whose model provider receives the agents' answers is an egress of Euronext data. Approved by default: internal tooling and the ENX gateway; Claude Desktop/Code or other third-party clients only under a Euronext-approved agreement (DPA, EU processing) recorded in the register | ISO 27001 A.5.19/A.5.20 (supplier), GDPR Art. 28, the "no Euronext data to the web" rule |
 
 ## 13. RACI

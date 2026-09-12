@@ -18,6 +18,11 @@ retires **2027-03-31** and the Assistants API it was built on retired
 2026-08-26 (finding C1; `../enterprise/series/07-workflows-logic-apps.md`
 §2).
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## Deployment
 
 1. Create a Logic Apps **Standard** app (workflow runtime on App Service):
@@ -34,7 +39,7 @@ retires **2027-03-31** and the Assistants API it was built on retired
 
 - **Foundry Agents API:** enable the Logic App's **system-assigned managed
   identity** and grant it the Foundry project data-plane role
-  (`Azure AI User` on the AI Foundry project). The HTTP actions use
+  (`Foundry User` on the AI Foundry project). The HTTP actions use
   `"authentication": {"type": "ManagedServiceIdentity", "audience":
   "https://ai.azure.com"}` — no keys.
 - **Microsoft Graph** (read only): same managed identity, granted

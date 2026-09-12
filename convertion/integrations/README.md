@@ -5,6 +5,11 @@ Every integration is declared in `registry.json` (which agent gets which
 tool, and which model tier) and attached by
 `../scripts/attach_integrations.py` after the agents exist.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## Integrations
 
 | Connection | Type | Used by (default) | Purpose in the TPRM workflow |
@@ -94,7 +99,7 @@ converted with `--include-examples` have explicit entries (`example: true`).
   to the connection resource id (`client.connections.get(name).id`) — the
   SDK does not accept bare names.
 - The Bing grounding key is wired into the `bing-grounding` connection by
-  the Bicep; Logic Apps use managed identity + the Azure AI User role.
+  the Bicep; Logic Apps use managed identity + the Foundry User role.
 - The ENX gateway MCP token is NOT part of the tool definition: it is held
   by the project connection `conn-enx-gateway` (CustomKeys, value sourced
   from Key Vault by `connections/connections.bicep` /

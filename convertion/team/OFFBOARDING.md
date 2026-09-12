@@ -9,6 +9,11 @@ day (ISO 27001:2022 A.5.18, A.6.5; DORA Art. 9(4)(c); NIS2 Art.
 21(2)(i)). Placeholders in `{braces}`; `{upn:leaver}` is the person
 leaving.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. Trigger and roles
 
 | Trigger | Executes | Verifies |
@@ -57,8 +62,8 @@ DORA evidence (GDPR Art. 6(1)(c), (f); Art. 17(3)(b)).
 
 | Object | Action | Basis |
 |---|---|---|
-| Active engagement threads (`metadata.owner_upn = {upn:leaver}`) | re-tag `owner_upn` to the new engagement owner **or** delete when the deliverable is stored; delete thread files first (the source lives in SharePoint) | GDPR Art. 5(1)(c), (e); A.5.12 |
-| `personal-working` threads | delete (they were the leaver's scratch space; nothing in them is a record) | minimisation |
+| Active engagement conversations (`metadata.owner_upn = {upn:leaver}`) | re-tag `owner_upn` to the new engagement owner **or** delete when the deliverable is stored; delete conversation files first (the source lives in SharePoint) | GDPR Art. 5(1)(c), (e); A.5.12 |
+| `personal-working` conversations | delete (they were the leaver's scratch space; nothing in them is a record) | minimisation |
 | Threads referenced by an open audit finding or incident | export to `Governance/Evidence/` first, then handle as above | A.5.33 |
 | Shared memory notes `… \| by {upn:leaver} \| …` | **stay** — team facts and decisions; the `by` field is the audit attribution. Do not rewrite history. A data-subject request is handled by the DPO under the RoPA entry `{ropa:infosec-foundry-memory}` | Art. 17(3)(b); A.5.34 |
 | App Insights traces with `owner_upn` | stay for the retention period (≥ 1 year, DORA Art. 28); purpose limited to cost / audit | Art. 5(1)(b) |
@@ -66,7 +71,7 @@ DORA evidence (GDPR Art. 6(1)(c), (f); Art. 17(3)(b)).
 | Stored reports the leaver produced | stay — reports of record belong to the team | A.5.33 |
 
 Thread inventory (read-only listing, then re-tag / delete through the
-same SDK; run by the owner with `Azure AI User`):
+same SDK; run by the owner with `Foundry User`):
 
 ```python
 # python3 - <<'PY'   (azure-ai-projects, DefaultAzureCredential = owner's az login)
@@ -75,16 +80,16 @@ from azure.identity import DefaultAzureCredential
 from azure.ai.projects import AIProjectClient
 client = AIProjectClient(endpoint=os.environ["PROJECT_ENDPOINT"], credential=DefaultAzureCredential())
 leaver = "{upn:leaver}"
-for t in client.agents.threads.list():
+for t in client.agents.conversations.list():
     md = t.metadata or {}
     if md.get("owner_upn") == leaver:
         print(t.id, md.get("supplier"), md.get("service"), md.get("classification"), t.created_at)
-        # decision per row: client.agents.threads.update(t.id, metadata={**md, "owner_upn": "{upn:new-owner}"})
-        #                or: client.agents.threads.delete(t.id)
+        # decision per row: client.agents.conversations.update(t.id, metadata={**md, "owner_upn": "{upn:new-owner}"})
+        #                or: client.agents.conversations.delete(t.id)
 PY
 ```
 
-Save the before/after listing as `threads-{upn:leaver}-before.json` /
+Save the before/after listing as `conversations-{upn:leaver}-before.json` /
 `-after.json` in the leaver's evidence folder (`Governance/AccessLifecycle/{yyyy}/`).
 
 ## 5. Credentials
@@ -149,7 +154,7 @@ baseline. Only then do steps §2–§6 apply to the outgoing owner.
 | ISO 27001:2022 A.5.18, A.6.5 | §2 same-day removal, §6 evidence |
 | ISO 27001:2022 A.5.17 | §2 session revocation; §5 conditional rotation |
 | ISO 27001:2022 A.5.3 | §3 deputy continuity without self-approval |
-| ISO 27001:2022 A.5.12, A.5.33, A.5.34; GDPR Art. 5(1)(c), (e), 17(3)(b) | §4 thread minimisation, records retained |
+| ISO 27001:2022 A.5.12, A.5.33, A.5.34; GDPR Art. 5(1)(c), (e), 17(3)(b) | §4 conversation minimisation, records retained |
 | DORA Art. 9(4)(c), 11, 28 | §2 access management; §3 continuity; §4–§6 evidence ≥ 1 year |
 | NIS2 Art. 21(2)(i) | §2, §6 |
 | ISO 42001 A.4.6, A.9.2; EU AI Act Art. 26(6) | §2 step 7 approvals re-routed; §4 logs kept |

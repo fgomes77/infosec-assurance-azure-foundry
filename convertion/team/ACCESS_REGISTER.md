@@ -6,6 +6,11 @@ A.5.18; DORA Art. 9(4)(c)). Maintained by the owner; reviewed quarterly
 `operations/access-governance/QUARTERLY_ACCESS_REVIEW.md`). Placeholders only — no real object ids, hostnames
 or secrets are ever written here; secret *names* are fine.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## People
 
 | Person | UPN | Groups | Since | Last review | Notes |
@@ -35,10 +40,10 @@ or secrets are ever written here; secret *names* are fine.
 | Identity | Type | Where used | Roles / permissions | Custodian | Rotation | Next due |
 |---|---|---|---|---|---|---|
 | `{mi:infosecfoundry-proj}` | Foundry project MI | Graph OpenAPI tools (SharePoint, Defender, Entra IAM) | Sites.Selected read; SecurityIncident/Alert/ThreatHunting read; User/Group/RoleManagement read | IAM admins | n/a | — |
-| `{mi:infosecfoundry-la}` | Logic Apps MI | pipelines | Azure AI User (project); Sites.Selected read; KV Secrets User (named secrets); runtime storage data roles (ledger L12) | owner | n/a | — |
+| `{mi:infosecfoundry-la}` | Logic Apps MI | pipelines | Foundry User (project); Sites.Selected read; KV Secrets User (named secrets); runtime storage data roles (ledger L12) | owner | n/a | — |
 | Logic Apps MI Sites.Selected **write** (L12x) | time-boxed exception | `onetrust-assessment-intake`, `scheduled-deepsearch` direct uploads | Sites.Selected write | owner | expires on delta D-W3 (uploads routed through the delivery Function) | {date} |
 | `{mi:infosec-delivery-fn}` | Function MI | render/store | Sites.Selected write; Blob Data Contributor (`deliverables`); KV Secrets User only if `deliveryFunctionReadsSecrets` (ledger L13) | owner | n/a | — |
-| `{app:infosec-foundry-deployer}` | SP, federated (GitHub OIDC) | `deploy.sh` from the `production` environment | Contributor (RG); RBAC Administrator (ABAC-constrained to the `rbac.bicep` role set); Azure AI Developer (account); KV Secrets Officer (seeding) (ledger L11) | owner | n/a (no secret) | — |
+| `{app:infosec-foundry-deployer}` | SP, federated (GitHub OIDC) | `deploy.sh` from the `production` environment | Contributor (RG); RBAC Administrator (ABAC-constrained to the `rbac.bicep` role set); Foundry Owner (account); KV Secrets Officer (seeding) (ledger L11) | owner | n/a (no secret) | — |
 | `{app:infosec-foundry-agents-read}` | app registration — **not granted by default**; only if the project MI cannot hold `Sites.Selected` (would be a new ledger row: exactly three app grants exist today) | agents' SharePoint read | Sites.Selected read | IAM admins | federated / 180 d | {date} |
 | `svc-infosec-foundry-ro-jira` | service account token | `conn-jira-cloud`, `conn-jira-assets` | browse / Assets viewer | Jira admins | 180 d | {date} |
 | `svc-infosec-foundry-ro-confluence` | service account token | `conn-confluence` | space read | Confluence admin | 180 d | {date} |
@@ -47,13 +52,41 @@ or secrets are ever written here; secret *names* are fine.
 | `{app:infosec-foundry-iaf-ro}` | app / token | `conn-iaf-api` | IAF read scope | IAF owner | 180 d | {date} |
 | `svc-infosec-foundry-ro-enxgw` | bearer token | `enx-gateway-mcp` | gateway read toolset | ENX gateway team | 90 d | {date} |
 | Bing Grounding key | resource key | `bing-grounding` connection | web search | owner | 180 d | {date} |
+| `{agentid:infosecfoundry-proj}` | **Entra Agent ID** — shared project agent identity + blueprint (auto-provisioned at first agent creation) | MCP / A2A tool auth (AgenticIdentityToken); data-plane reads | Storage Blob Data Reader (`deliverables`); Search Index Data Reader (`kb-*` indexes) | `{group:iam-admins}` (Conditional Access policy on the blueprint) | n/a | — |
+| `{agentid:<published-agent>}` (one per published agent: cyber-forum, dora, nis2, eu-ai-act, iso27001, iso42001) | **Entra Agent ID** — distinct identity created at publish | Teams / M365 Copilot | same read roles, **re-assigned after every publish** | `{group:iam-admins}` | n/a | — |
+
+## Entra Agent ID principals (finding C7 / ID-2)
+
+Every published agent receives its **own** Entra Agent ID, in addition to the
+project's shared agent identity. Record each one here (agent name, version,
+object id, publish date, publisher) and feed the object ids to
+`../infra/main.bicep` as `agentIdentityPrincipalIds`, which grants them
+**read-only** data-plane roles (Foundry User on the project, Storage Blob Data
+Reader on the `deliverables` container) in `../infra/workload-rbac.bicep`.
+
+| Agent | Version | Object id | Published | Published by |
+|---|---|---|---|---|
+| `{agent}` | `{n}` | `{objectId:agentid-<agent>}` | `{date}` | `{upn:francisco.gomes}` |
+
+The assignment **must be repeated after every publish** — a republished agent
+is a new principal and the previous assignment becomes an orphan. No agent
+identity ever receives write access to SharePoint or to the deliverables
+archive: the delivery Function's managed identity remains the only writer
+(`../governance/HUMAN_APPROVAL.md`). Reviewed as item 12 of
+`../operations/access-governance/QUARTERLY_ACCESS_REVIEW.md`.
+
+## Publishing resources
+
+| Resource | Type | Region | Purpose | Owner |
+|---|---|---|---|---|
+| `{baseName}-bot` | Azure Bot Service | EU | channel registration for the native Foundry "Publish → Teams and Microsoft 365 Copilot" flow | owner + M365 admin |
 
 ## Approved AI / MCP clients (`team/TEAM_MODEL.md` §11)
 
 | Client | Model provider / data path | Agreement reference | Approved by | Until |
 |---|---|---|---|---|
 | Foundry portal playground | Azure OpenAI in `{eu-region}` | tenant | owner | standing |
-| Microsoft 365 Copilot (Copilot Studio agent) | Microsoft 365 boundary | tenant | owner + M365 admin | standing |
+| Microsoft 365 Copilot / Teams (native Foundry publish; Copilot Studio fallback) | Microsoft 365 boundary | tenant | owner + M365 admin | standing |
 | ENX gateway (remote MCP) | internal | internal | owner | standing |
 | `{client}` | `{provider}` | `{dpa-reference}` | `{approver}` | `{date}` |
 

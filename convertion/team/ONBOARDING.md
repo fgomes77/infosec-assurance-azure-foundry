@@ -8,12 +8,17 @@ attestation (§5). Every step leaves evidence in SharePoint
 `Governance/Onboarding/{upn}.md` or the Entra audit log. Placeholders in
 `{braces}`.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. Day 0 — before the joiner's first day (line manager, owner, IAM)
 
 | # | Step | Who | Evidence | Control |
 |---|---|---|---|---|
 | 1 | Request access package `AP-InfoSec-Foundry-User` (12-month expiry) stating "InfoSec Assurance team member, systems a–j" | `{upn:line-manager}` | request id | A.5.18 |
-| 2 | Approve → membership of `sg-infosec-foundry-users` (one act grants Foundry `Azure AI User`, SharePoint Members, Copilot audience, MCP, CA scope) | `{upn:francisco.gomes}` | approval record; `az ad group member check` | A.5.15 |
+| 2 | Approve → membership of `sg-infosec-foundry-users` (one act grants Foundry `Foundry User`, SharePoint Members, Copilot audience, MCP, CA scope) | `{upn:francisco.gomes}` | approval record; `az ad group member check` | A.5.15 |
 | 3 | Add to Teams channels `{teams:infosec-assurance-platform}` (support) and `{teams:infosec-assurance-approvals}` (approval cards); GitHub team `infosec-assurance-users` (Read) | owner | — | A.5.16 |
 | 4 | Confirm the device is Intune-compliant and MFA is registered (CA `CA-InfoSec-Foundry` requires both) | joiner + IT | Entra sign-in log | A.8.5 |
 | 5 | Snapshot `access_snapshot.sh --tag joiner-{upn}` — expect exactly one `sg-infosec-foundry-*` membership | owner | snapshot folder | A.5.18 |
@@ -38,7 +43,7 @@ Self-checks (own `az login`; nothing here changes anything):
 az login                                   # own Entra account, MFA prompt expected
 az ad group member check --group sg-infosec-foundry-users --member-id "$(az ad signed-in-user show --query id -o tsv)"   # value: true
 az role assignment list --assignee "$(az ad signed-in-user show --query id -o tsv)" --all --include-groups \
-  --query "[].{role:roleDefinitionName,scope:scope}" -o table                        # exactly: Azure AI User (or the agent-consumer role) on the project
+  --query "[].{role:roleDefinitionName,scope:scope}" -o table                        # exactly: Foundry User (or the agent-consumer role) on the project
 ```
 
 Open the Foundry portal project (`PROJECT_ENDPOINT` from the owner) and

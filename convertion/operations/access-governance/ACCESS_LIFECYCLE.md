@@ -9,12 +9,17 @@ Art. 21(2)(i). Evidence for every step lands in the SharePoint site
 folder `Governance/AccessLifecycle/{yyyy}/` as the ticket export plus the
 `access_snapshot.sh` output.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. Joiner — new assurance user (target: same day)
 
 | # | Step | Who | Tool / evidence | Least-privilege check |
 |---|---|---|---|---|
 | 1 | Line manager requests access package `AP-InfoSec-Foundry-User` (or a ticket `{jira:INFOSEC-PLAT}` if entitlement management is unavailable) | `{upn:line-manager}` | Entra entitlement management request id | Request states the business need: member of the InfoSec Assurance team using systems a–j |
-| 2 | Owner approves → membership of `sg-infosec-foundry-users` (grants `Azure AI User`, SharePoint Members with Read on `Reports/`/`Templates/`, Copilot agent, MCP, CA policy scope) | `{upn:francisco.gomes}` | Access package approval record | Nothing else is granted at this step |
+| 2 | Owner approves → membership of `sg-infosec-foundry-users` (grants `Foundry User`, SharePoint Members with Read on `Reports/`/`Templates/`, Copilot agent, MCP, CA policy scope) | `{upn:francisco.gomes}` | Access package approval record | Nothing else is granted at this step |
 | 3 | Joiner completes onboarding: reads `governance/*.md`, `sharepoint/README.md`, `team/USER_QUICKSTART.md`, `team/TEAM_MODEL.md` §1, §12, §13; runs the MCP server locally with own `az login`; produces one Tier A report end-to-end (a peer approves) and shadow-reviews one peer's Tier A draft (`team/ONBOARDING.md` §4) | joiner + a peer | Attestation form `Governance/Onboarding/{upn}.md` (date, systems exercised, peer) | EU AI Act Art. 26(2) competence of the natural person exercising oversight |
 | 4 | Owner adds the joiner to `sg-infosec-foundry-report-approvers` | `{upn:francisco.gomes}` | Group change (Entra audit log) | Approver rights only after attestation |
 | 5 | Owner adds to Teams channels `{teams:infosec-assurance-platform}` and `{teams:infosec-assurance-approvals}`, GitHub team `infosec-assurance-users` (Read) | owner | — | Read-only repo access |

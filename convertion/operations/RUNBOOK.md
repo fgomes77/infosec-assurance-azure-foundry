@@ -17,6 +17,11 @@ identities (no keys), EU region, no Euronext data to the web. A fix that
 needs an exception to any of these is a Tier C change, never a runbook
 action. Placeholders in `{braces}`.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. Roles in operation
 
 | Role | Who | Standing access used | Escalation target |
@@ -105,8 +110,8 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 
 | Id | Symptom | Diagnosis | Fix | Access / tier |
 |---|---|---|---|---|
-| FM-01 | Every agent call fails with 401/403 | `az account show`; role of the caller on the project (`Foundry User`, formerly `Azure AI User` — same role id); `disableLocalAuth: true` means key auth is refused by design | user not in `sg-infosec-foundry-users` → `access-governance/ACCESS_LIFECYCLE.md`; MI missing role → `../team/rbac.bicep` redeploy | owner PIM `Foundry Owner` (formerly `Azure AI Developer`) only if a connection is involved; RBAC = Tier C PR |
-| FM-02 | Agent answers but a tool is missing (no web results, no Jira data) | Foundry portal → agent → tools; `attach_integrations.py --dry-run --only <agent>`; connection status | re-run `attach_integrations.py --only <agent>` (idempotent) | owner PIM `Azure AI Developer` (§5 L1) |
+| FM-01 | Every agent call fails with 401/403 | `az account show`; role of the caller on the project (`Foundry User`, formerly `Foundry User` — same role id); `disableLocalAuth: true` means key auth is refused by design | user not in `sg-infosec-foundry-users` → `access-governance/ACCESS_LIFECYCLE.md`; MI missing role → `../team/rbac.bicep` redeploy | owner PIM `Foundry Owner` (formerly `Foundry Owner`) only if a connection is involved; RBAC = Tier C PR |
+| FM-02 | Agent answers but a tool is missing (no web results, no Jira data) | Foundry portal → agent → tools; `attach_integrations.py --dry-run --only <agent>`; connection status | re-run `attach_integrations.py --only <agent>` (idempotent) | owner PIM `Foundry Owner` (§5 L1) |
 | FM-03 | `egress-internal-marker` alert | open the trace (`OperationId`) in App Insights; read the query text; confirm true positive | true positive: P1 — record in ticket `{jira:INFOSEC-PLAT}-nnn`, add the marker to the instruction-layer rule in `attach_integrations.py` **and** `kql/egress-detection.kql` (Tier C PR); never disable Bing wholesale unless the leak repeats | disable connection = PIM; fix = Tier C |
 | FM-04 | Content-filter block on legitimate security text | trace shows `content_filter` finish reason | adjust the custom RAI policy severity for that category (Tier C); never disable filtering (`DATA_PROTECTION_GUARDRAILS.md` §3) | Tier C |
 | FM-05 | `model-throttling-429` | metrics by `ModelDeploymentName` | short term: retries already in `_azure_helpers.py`/workflow `Until` loops; sustained: raise `modelCapacity` in `../infra/main.parameters.json` | Tier C (infra) |
@@ -122,7 +127,7 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 |---|---|---|---|---|
 | FM-08 | Verifier FAIL rate rising on one pipeline | `kql/verifier-fail-rate.kql`; compare a FAIL draft with the verifier findings; `python3 ../scripts/verify_conversion.py` | drift in knowledge/instructions → re-sync from a fresh export (`CHANGE_MANAGEMENT.md` §5 type "re-sync"); tier too low → M2 | Tier C |
 | FM-09 | Agent run stuck `queued`/`in_progress` > 15 min | Foundry portal → threads; App Insights trace for the run | cancel the run (portal); re-run; if repeated, FM-05 or a hung tool (FM-13) | user (own run) / owner |
-| FM-15 | Vector store missing files, `file_search` returns nothing | `create_agents.py --dry-run`; compare `build/manifest.json` with the live agent | re-run `../deploy.sh` steps 3–4 for that agent (`create_agents.py --only <agent>`) | owner PIM `Azure AI Developer` |
+| FM-15 | Vector store missing files, `file_search` returns nothing | `create_agents.py --dry-run`; compare `build/manifest.json` with the live agent | re-run `../deploy.sh` steps 3–4 for that agent (`create_agents.py --only <agent>`) | owner PIM `Foundry Owner` |
 | FM-16 | Memory note wrong or contains personal data beyond minimisation | `memory_store.py list`; identify author | author deletes; else `MEMORY_DELETE` Tier C via deputy (`TEAM_MODEL.md` §13) | user / Tier C |
 | FM-17 | Prompt-injection suspected in a retrieved document | verifier finding (rule 7), or a user report | quarantine the source file (custodian), re-run; add the pattern to `../agents/verifier_instructions.md` if new | P1 if a write was attempted; Tier C |
 
@@ -132,7 +137,7 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 |---|---|---|---|---|
 | FM-10 | `approval-sla` alert — gate pending > 48 h or expired | run history → `Human_approval_gate` inputs: `requestedBy`, `kind`, `reportType`; `{list:ApprovalDecisions}` | pending: remind the tier group; Tier B > 2 business days → fallback per `../team/approval-policy.json`; expired = rejection, requester re-triggers | approvers |
 | FM-18 | Cards not reaching Teams | approval flow (Power Automate/Function behind `approvalWebhookUrl`) run history; webhook secret expiry | rotate the webhook (§5 L3 KV); resubmit the suspended run from run history (`Logic App Standard Operator`) | owner PIM |
-| FM-19 | Run failed at `Run_producing_agent` / `Get_agent_output` | HTTP status in the action output: 401 → Logic App MI lost `Foundry User` (formerly `Azure AI User`) on the project; 404 → the pinned agent name/version no longer exists (agent renamed, version not promoted); 400 `agent_reference` → the `agentVersion` app setting is stale | RBAC via `rbac.bicep`; re-run `scripts/build_logicapps.py` so `agentName`/`agentVersion` are taken from `build/agent-versions.json` (finding C19) and redeploy the instance | Tier C |
+| FM-19 | Run failed at `Run_producing_agent` / `Get_agent_output` | HTTP status in the action output: 401 → Logic App MI lost `Foundry User` (formerly `Foundry User`) on the project; 404 → the pinned agent name/version no longer exists (agent renamed, version not promoted); 400 `agent_reference` → the `agentVersion` app setting is stale | RBAC via `rbac.bicep`; re-run `scripts/build_logicapps.py` so `agentName`/`agentVersion` are taken from `build/agent-versions.json` (finding C19) and redeploy the instance | Tier C |
 | FM-20 | Approver == requester accepted, or approver outside the tier group | approval flow logs; `{list:ApprovalDecisions}` row | P1 control failure: disable the workflow (PIM), fix the flow, re-approve the affected items with a valid approver | disable = PIM; fix = Tier C |
 | FM-21 | Scheduled workflow (`scheduled-deepsearch`, `onetrust-assessment-intake`) not firing | trigger history; app stopped; storage account for the runtime unreachable | start the app; check the runtime storage identity-based connection | owner PIM `Logic App Standard Operator` |
 

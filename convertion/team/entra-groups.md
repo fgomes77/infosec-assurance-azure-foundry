@@ -13,6 +13,11 @@ Administrator for §1, Privileged Role Administrator for §3–§4, Identity
 Governance Administrator for §5–§6); `jq`. Nothing here needs a client
 secret.
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. The seven groups
 
 Attributes common to all: `securityEnabled=true`, `mailEnabled=false`,
@@ -24,7 +29,7 @@ activated per role under the settings of §4.
 
 | Group | Purpose (description field) | Owner | Members (assigned) |
 |---|---|---|---|
-| `sg-infosec-foundry-users` | Assurance users: Azure AI User on the Foundry project; SharePoint site members; Copilot audience; hosted-MCP Easy Auth | `{upn:francisco.gomes}` (backup `{group:iam-admins}`) | `{upn:francisco.gomes}`, `{upn:jose.mogollon}`, `{upn:pedro.santos}`, `{upn:jose.meireles}`, `{upn:tania.morais}` |
+| `sg-infosec-foundry-users` | Assurance users: Foundry User on the Foundry project; SharePoint site members; Copilot audience; hosted-MCP Easy Auth | `{upn:francisco.gomes}` (backup `{group:iam-admins}`) | `{upn:francisco.gomes}`, `{upn:jose.mogollon}`, `{upn:pedro.santos}`, `{upn:jose.meireles}`, `{upn:tania.morais}` |
 | `sg-infosec-foundry-report-approvers` | Tier A approvers (peer four-eyes); joiners added after the onboarding attestation (`ONBOARDING.md` §5) | `{upn:francisco.gomes}` | the five |
 | `sg-infosec-foundry-senior-approvers` | Tier B approvers; deputy approves the owner's Tier C items | `{upn:line-manager}` | `{upn:francisco.gomes}`, `{upn:deputy-approver}` |
 | `sg-infosec-foundry-owner` | Standing low-privilege owner roles (Reader RG, Log Analytics Reader, KV Reader, site owner, Copilot maker, GitHub Maintain) | `{upn:line-manager}` | `{upn:francisco.gomes}` |
@@ -132,7 +137,7 @@ cannot be expressed in `rbac.bicep`; the IAM team sets them once per
 | Scope | Role | Max activation | MFA | Justification | Ticket | Activation approver | Ledger |
 |---|---|---|---|---|---|---|---|
 | RG `rg-infosec-foundry` | Contributor | 8 h | yes | yes | yes | `{upn:line-manager}` (for `-admin-pim`); `{upn:line-manager}` or `{group:soc-oncall}` (for `-breakglass`) | L2, L10 |
-| Foundry account `infosecfoundry-aif` | Azure AI Developer | 8 h | yes | yes | yes | none (self-activation) / third party for `-breakglass` | L1 |
+| Foundry account `infosecfoundry-aif` | Foundry Owner | 8 h | yes | yes | yes | none (self-activation) / third party for `-breakglass` | L1 |
 | Key Vault `infosecfoundry-kv` | Key Vault Secrets Officer | 2 h | yes | yes | yes | none / third party for `-breakglass` | L3 |
 | Logic Apps `infosecfoundry-la` | Logic Apps Standard Developer, Operator | 8 h | yes | yes | yes | none / third party | L4 |
 | Function `infosecfoundry-fn-delivery` | Website Contributor | 4 h | yes | yes | yes | none / third party | L5 |

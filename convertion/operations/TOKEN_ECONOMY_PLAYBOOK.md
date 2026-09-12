@@ -17,6 +17,11 @@ portal is never edited by hand. Control: ISO 42001 A.6.2.4 (verification
 and validation before deployment), A.6.2.6; ISO 27001:2022 A.8.32, A.8.29;
 EU AI Act Art. 9(6)–(8), 26(5); DORA Art. 9(4)(e).
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. The tier-tuning loop (monthly, owner)
 
 | Step | What | Evidence / tool | Exit criterion |
@@ -107,7 +112,7 @@ Runs before step 5 of §1; the artefacts go in the PR (`CHANGE_MANAGEMENT.md`
 |---|---|---|
 | 1 | Select the golden cases of the agent (all `pipeline`/`agent` matches; ≥ 3 cases, including one adversarial: placeholder-laden input, long input) | `evaluation/golden-set.*.json` filtered by `agent` |
 | 2 | Run on the **current** tier (control) — or reuse last month's M1 report if < 30 days old | `python3 evaluation/run_evals.py --golden evaluation/golden-set.example.json --only <ids> --out build/evals/<agent>-control` |
-| 3 | Never touch the production agent: `run_evals.py --model-override <candidate-deployment>` clones it as `<agent>-eval` (same instructions, tools and stores; model swapped), runs the cases and deletes the clone at the end. Creating the clone needs `Azure AI Developer` — the owner's PIM window L1 (`TEAM_MODEL.md` §5); the control run in step 2 needs only `Azure AI User` | PIM activation id + clone name in the ticket |
+| 3 | Never touch the production agent: `run_evals.py --model-override <candidate-deployment>` clones it as `<agent>-eval` (same instructions, tools and stores; model swapped), runs the cases and deletes the clone at the end. Creating the clone needs `Foundry Owner` — the owner's PIM window L1 (`TEAM_MODEL.md` §5); the control run in step 2 needs only `Foundry User` | PIM activation id + clone name in the ticket |
 | 4 | Run on the candidate tier | `python3 evaluation/run_evals.py --golden … --only <ids> --model-override <deployment> --out build/evals/<agent>-candidate` |
 | 5 | Compare: every metric in `EVALUATION.md` §4 ≥ floor; verifier first-pass PASS = 100 % of cases; no structure/threshold/section drift vs baseline sha256 where the case is deterministic; wording delta reviewed by the owner **and** one peer (deputy when the owner proposes) | `report.md` diff attached |
 | 6 | Cost evidence: tokens and € per case, control vs candidate | from the report's `usage` block (live runs) |

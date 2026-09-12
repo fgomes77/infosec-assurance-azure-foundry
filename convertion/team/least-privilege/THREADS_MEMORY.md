@@ -1,5 +1,12 @@
 # Threads & Memory Conventions — Per-User Threads, Shared Team Memory, GDPR Minimisation
 
+> **HISTORICAL DESIGN VARIANT — not the model of record.** This file is the
+> least-privilege lens kept as a design record; it uses a superseded
+> vocabulary (six groups, approval tiers 1/2/3). The authoritative model is
+> `../TEAM_MODEL.md` (decisions in §21) with `../RACI.md`,
+> `../approval-policy.json` and `../rbac.bicep`. See `README.md` in this
+> folder for the name mapping. Do not implement from this file.
+
 Two kinds of state exist (`../../ARCHITECTURE.md` "Memory/state"): Foundry
 **threads** (session context) and the durable **`vs-assurance-memory`**
 vector store (team knowledge). Neither is private storage; both are

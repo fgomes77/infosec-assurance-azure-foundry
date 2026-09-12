@@ -39,6 +39,11 @@ Consolidation note for the maintainer: `README.md` §1–§15 and
 are superseded by this file and `RACI.md`; keep them until the deltas of
 §20 are applied, then retire them (git history is the record).
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. Team and roles
 
 | Person | UPN | Standing role | Additional privileges |
@@ -81,7 +86,7 @@ ownership); DORA Art. 5(2); ISO 42001 A.3.2.
 
 | # | Flow | Actor | Identity in use | Derived requirement |
 |---|---|---|---|---|
-| F1 | Converse with advisors / orchestrator (g, h, i) via playground, Copilot, MCP | any of the five | own Entra user | `Azure AI User` (or the agent-consumer custom role) on the project; Copilot agent shared to the users group; local MCP = own `az login` |
+| F1 | Converse with advisors / orchestrator (g, h, i) via playground, Copilot, MCP | any of the five | own Entra user | `Foundry User` (or the agent-consumer custom role) on the project; Copilot agent shared to the users group; local MCP = own `az login` |
 | F2 | Request a report (a–f, d2): upload PDF or trigger a pipeline with Supplier / Service | any of the five | own user → Logic App MI → Function MI | trigger accepts only authenticated team callers; `requestedBy` taken from the token claim |
 | F3 | Approve a report before render / store | a different member (four-eyes) | own user in Teams Approvals | approver ∈ tier group, approver ≠ requester, decision recorded |
 | F4 | Propose a template change (j) | any of the five via `template-manager` | own user | proposal open to all; approval owner-only |
@@ -111,17 +116,17 @@ per `../workflows/pipelines.json`.
 
 | Req | System | User action | Minimum user grant | Identity doing the work | Tier (§12) |
 |---|---|---|---|---|---|
-| a | DeepSearch HTML (`deepsearch-report`) | ask agent / Teams form with Supplier + Service | `Azure AI User`; SharePoint `Reports/` Read | project MI (Bing, SSC, IAF, CMDB, ENX gateway — read); Logic App MI; Function MI (writer) | **A** peer four-eyes |
-| b | OneTrust PDF → DPO DOCX (`dpia-dpo-report`) | upload to own thread; trigger | `Azure AI User`; `Reports/DPO/` Read | `conn-onetrust` (viewer); Function MI | **B** senior four-eyes |
+| a | DeepSearch HTML (`deepsearch-report`) | ask agent / Teams form with Supplier + Service | `Foundry User`; SharePoint `Reports/` Read | project MI (Bing, SSC, IAF, CMDB, ENX gateway — read); Logic App MI; Function MI (writer) | **A** peer four-eyes |
+| b | OneTrust PDF → DPO DOCX (`dpia-dpo-report`) | upload to own thread; trigger | `Foundry User`; `Reports/DPO/` Read | `conn-onetrust` (viewer); Function MI | **B** senior four-eyes |
 | c | OneTrust PDF → Cyber Forum PPTX (`cyber-forum-pptx`) | as b | as b + `Reports/` Read | `conn-onetrust`, `conn-sharepoint-graph` read; Function MI | **B** |
 | d | OneTrust PDF → Global CISO PPTX (`ciso-global-pptx`) | as c | as c | + `conn-jira-assets` CMDB read | **B** |
-| d2 | TPA evidence tree analysis (`tpa-evidence-analysis`) | trigger with Supplier (+ Service) | `Azure AI User`; `Reports/` Read; Edit on `GRC/TPA/Active` is a pre-existing job duty | project MI `Sites.Selected` read | **A** |
-| e / f | SOC / pentest upload → summary (`soc-report-summary`, `pentest-report-summary`) | upload to own thread; trigger | `Azure AI User`; `Reports/` Read | Function MI | **A** |
-| g / h | Framework advisory, TPRM knowledge (+ file generation) | converse; download from thread | `Azure AI User` | project MI advisory read surface (`advisory_read_only_toolset`) | none (stays in-thread) |
-| i | Persona + read-only enterprise + sanitised web | converse (portal, MCP, Copilot) | `Azure AI User`; membership of `sg-infosec-foundry-users` for Copilot audience / hosted-MCP Easy Auth | project MI (all `conn-*` read) | none |
-| j | Template management (`template-update-approval`) | select / analyse / edit / preview; propose | `Azure AI User`; `Templates/` Read | Function MI writes `Templates/Reviews/` | **C** owner-only (deputy if proposer = owner) |
+| d2 | TPA evidence tree analysis (`tpa-evidence-analysis`) | trigger with Supplier (+ Service) | `Foundry User`; `Reports/` Read; Edit on `GRC/TPA/Active` is a pre-existing job duty | project MI `Sites.Selected` read | **A** |
+| e / f | SOC / pentest upload → summary (`soc-report-summary`, `pentest-report-summary`) | upload to own thread; trigger | `Foundry User`; `Reports/` Read | Function MI | **A** |
+| g / h | Framework advisory, TPRM knowledge (+ file generation) | converse; download from thread | `Foundry User` | project MI advisory read surface (`advisory_read_only_toolset`) | none (stays in-thread) |
+| i | Persona + read-only enterprise + sanitised web | converse (portal, MCP, Copilot) | `Foundry User`; membership of `sg-infosec-foundry-users` for Copilot audience / hosted-MCP Easy Auth | project MI (all `conn-*` read) | none |
+| j | Template management (`template-update-approval`) | select / analyse / edit / preview; propose | `Foundry User`; `Templates/` Read | Function MI writes `Templates/Reviews/` | **C** owner-only (deputy if proposer = owner) |
 
-Not granted to users, and why: any Azure role beyond `Azure AI User`
+Not granted to users, and why: any Azure role beyond `Foundry User`
 (outputs arrive in-thread, Teams or SharePoint); SharePoint write on
 `Reports/` or `Templates/` (Function MI is the only writer); Key Vault or
 connection secrets; GitHub write (changes flow through `template-manager`
@@ -133,7 +138,7 @@ know); DORA Art. 9(4)(c).
 
 | # | Principal | Addition | Justification | Control |
 |---|---|---|---|---|
-| L1 | owner | `Azure AI Developer` on Foundry account — **PIM 8 h** | agent / vector-store / connection maintenance (`deploy.sh` steps 3–6b) | PIM: MFA + justification + ticket; Activity Log; A.8.2 |
+| L1 | owner | `Foundry Owner` on Foundry account — **PIM 8 h** | agent / vector-store / connection maintenance (`deploy.sh` steps 3–6b) | PIM: MFA + justification + ticket; Activity Log; A.8.2 |
 | L2 | owner | `Contributor` on RG — PIM 8 h, line-manager approval | hotfix Bicep / config when the pipeline cannot | PIM approval; activations reviewed quarterly; A.8.2 |
 | L3 | owner | `Key Vault Secrets Officer` — PIM 2 h | credential rotation | immutable secret versions = A.5.17 evidence |
 | L4 | owner | `Logic Apps Standard Developer` + `Operator` — PIM 8 h | deploy workflows; resubmit / disable in incident | run history; A.8.2 |
@@ -143,13 +148,13 @@ know); DORA Art. 9(4)(c).
 | L8 | owner | `Monitoring Contributor` — PIM 4 h | alert rules, KQL detections | PIM |
 | L9 | owner | SharePoint Site Owner; `Templates/`, `Governance/` Edit; `Reports/` Contribute (no delete) | site admin; `Sites.Selected` grants need site ownership; versioned corrections | versioning + SharePoint audit log; A.8.3 |
 | L10 | deputy | `sg-infosec-foundry-senior-approvers`; PIM-eligible `-breakglass` | SoD (A.5.3) + continuity (DORA Art. 9) | routing rule; PIM approval by line manager / SOC on-call |
-| L11 | deploy SP `{app:infosec-foundry-deployer}` (OIDC, no secret) | `Contributor` RG; `RBAC Administrator` ABAC-constrained to the role set in `rbac.bicep`; `Azure AI Developer` (account); `Key Vault Secrets Officer` (seeding) | reproducible deployments; removes the owner's standing write | GitHub `production` environment approval by owner; no interactive sign-in; A.5.17, A.8.32 |
-| L12 | Logic App MI | `Azure AI User` (project); `Key Vault Secrets User` (named secrets); runtime storage data roles; Graph `Sites.Selected` **read** on the one site | runs agents / verifier; KV references; `scheduled-deepsearch` watchlist list read | managed identity |
+| L11 | deploy SP `{app:infosec-foundry-deployer}` (OIDC, no secret) | `Contributor` RG; `RBAC Administrator` ABAC-constrained to the role set in `rbac.bicep`; `Foundry Owner` (account); `Key Vault Secrets Officer` (seeding) | reproducible deployments; removes the owner's standing write | GitHub `production` environment approval by owner; no interactive sign-in; A.5.17, A.8.32 |
+| L12 | Logic App MI | `Foundry User` (project); `Key Vault Secrets User` (named secrets); runtime storage data roles; Graph `Sites.Selected` **read** on the one site | runs agents / verifier; KV references; `scheduled-deepsearch` watchlist list read | managed identity |
 | L12x | Logic App MI | Graph `Sites.Selected` **write** — **time-boxed exception** until delta D-W3 routes the two direct `PUT …/content` uploads in `onetrust-assessment-intake` and `scheduled-deepsearch` through the delivery Function | kit as shipped uploads directly from these two workflows | expiry date in `ACCESS_REGISTER.md`; removed in the same PR as the delta |
 | L13 | Delivery Function MI | Graph `Sites.Selected` **write** on the one site; `Storage Blob Data Contributor` on `deliverables`; `Key Vault Secrets User` (if the Function reads any secret) | the single SharePoint write path after verifier PASS + human approval | `../functions/delivery/README.md` |
 | L14 | Foundry project MI | Graph app permissions (all read, §8); account MI `Key Vault Secrets User` for KV-backed connections | OpenAPI tools authenticate with managed identity, not secrets | non-GET stripped; admin consent recorded |
 | L15 | `sg-infosec-foundry-readers` (empty by default) | `Reader` RG, `Log Analytics Reader`, `Logic Apps Standard Reader` / Operator (run history), SharePoint Visitor on `Governance/` | audit evidence without touching the owner's account | populated per engagement; A.5.35 |
-| L16 | hosted MCP MI (only if deployed) | `Azure AI User` (project) | shared endpoint for the ENX gateway | Easy Auth allowed group |
+| L16 | hosted MCP MI (only if deployed) | `Foundry User` (project) | shared endpoint for the ENX gateway | Easy Auth allowed group |
 
 A new ledger row is a platform change (Tier C). A row nobody can justify
 at the quarterly review is removed, not renewed (ISO 27001:2022 A.5.18).
@@ -161,6 +166,15 @@ Naming `sg-infosec-foundry-<purpose>`; security groups, mail-disabled,
 Entra access reviews. Membership changes go through entitlement-management
 access packages where available, otherwise the group owner adds directly
 and records the change in `ACCESS_REGISTER.md`.
+
+The group definitions of record (names, purpose, owners, initial members,
+review cadence, the Conditional Access policy and the service principals) live
+in `least-privilege/entra/groups.json` and are created by
+`least-privilege/scripts/provision_identity.sh`, which deploys **this** model's
+`rbac.bicep`. Those two files are the only live artefacts in that folder;
+every `.md` there is a historical design variant with a different vocabulary
+(six groups, approval tiers 1/2/3) — the mapping to the names below is in
+`least-privilege/README.md`, and each decision is recorded in §21.
 
 | Group | Members | Group owner (adds / removes) | Approval to add | Review | Grants |
 |---|---|---|---|---|---|
@@ -195,27 +209,27 @@ deployment (§19).
 | Resource | `-users` | `-owner` (standing) | `-admin-pim` / `-breakglass` (PIM) | Deploy SP | Workload identities | `-readers` |
 |---|---|---|---|---|---|---|
 | RG `rg-infosec-foundry` | — | `Reader` | `Contributor` 8 h (line-manager approval) | `Contributor`; `RBAC Administrator` with ABAC condition restricting grantable roles to the set in `rbac.bicep` | — | `Reader` |
-| Foundry account `{baseName}-aif` | — | — | `Azure AI Developer` 8 h | `Azure AI Developer` | account MI: `Key Vault Secrets User` | `Reader` |
-| Foundry project `{baseName}-proj` | `Azure AI User` **or** custom `InfoSec Foundry Agent Consumer` (§7.1) | as user | — | inherits | Logic App MI, hosted-MCP MI: `Azure AI User`; Function MI: **none**; Copilot connector: delegated (OBO) | `Reader` |
+| Foundry account `{baseName}-aif` | — | — | `Foundry Owner` 8 h | `Foundry Owner` | account MI: `Key Vault Secrets User` | `Reader` |
+| Foundry project `{baseName}-proj` | `Foundry User` **or** custom `InfoSec Foundry Agent Consumer` (§7.1) | as user | — | inherits | Logic App MI, hosted-MCP MI: `Foundry User`; Function MI: **none**; Copilot connector: delegated (OBO) | `Reader` |
 | Model deployments (`gpt-4o`, `o3-mini`, `gpt-4o-mini`) | via AI User data actions | — | via AI Developer | Bicep-managed | — | — |
 | Key Vault `{baseName}-kv` (RBAC model, soft-delete + purge protection) | — | `Reader` (names only) | `Key Vault Secrets Officer` 2 h | `Secrets Officer` (seeding) | Logic App MI, account MI, Function MI: `Key Vault Secrets User` scoped to the named secrets | — |
 | Delivery Function `{baseName}-fn-delivery` | — | `Reader` | `Website Contributor` 4 h | `Website Contributor` | Function MI: `Storage Blob Data Contributor` (runtime + `deliverables`); Graph `Sites.Selected` write | `Reader` |
-| Logic Apps Standard `{baseName}-la` | — | `Reader` | `Logic Apps Standard Developer` + `Operator` 8 h | `Logic Apps Standard Contributor` | Logic App MI: runtime storage Blob / Queue / Table Data Contributor; `Azure AI User`; `Secrets User`; Graph `Sites.Selected` read (+ write under L12x) | `Logic Apps Standard Reader` / Operator (run history) |
+| Logic Apps Standard `{baseName}-la` | — | `Reader` | `Logic Apps Standard Developer` + `Operator` 8 h | `Logic Apps Standard Contributor` | Logic App MI: runtime storage Blob / Queue / Table Data Contributor; `Foundry User`; `Secrets User`; Graph `Sites.Selected` read (+ write under L12x) | `Logic Apps Standard Reader` / Operator (run history) |
 | Storage `{baseName}sa` (`deliverables`) + Logic Apps runtime SA | — | — | `Storage Blob Data Reader` 4 h | `Storage Account Contributor` | Function MI: `Blob Data Contributor` (container scope); `allowSharedKeyAccess: false` where the runtime supports identity-based connections (D-B4) | — |
 | Log Analytics `{baseName}-logs` + App Insights `{baseName}-appi` | — | `Log Analytics Reader` | `Monitoring Contributor` 4 h | `Monitoring Contributor` | project MI: `Monitoring Metrics Publisher` | `Log Analytics Reader` |
 | Bing Grounding `{baseName}-bing` | via connection only | `Reader` | `Contributor` 2 h (key rotation — the single API key on the platform, imposed by the resource) | Bicep-managed | — | — |
-| Container Apps (hosted MCP, optional) | Easy Auth allowed group | `Reader` | `Contributor` 4 h | `Contributor` | MI: `Azure AI User` | — |
+| Container Apps (hosted MCP, optional) | Easy Auth allowed group | `Reader` | `Contributor` 4 h | `Contributor` | MI: `Foundry User` | — |
 
 Roles deliberately not used: `Owner` / `User Access Administrator` on the
-RG; `Azure AI Account Owner` (bundles role assignment with data plane);
-`Azure AI Project Manager` for humans (role grants go through code);
+RG; `Foundry Account Owner` (bundles role assignment with data plane);
+`Foundry Project Manager` for humans (role grants go through code);
 `Cognitive Services Contributor` for humans (keys); storage account keys.
 No human holds `RBAC Administrator`: every access change is a PR + review
 + deployment record (ISO 27001:2022 A.5.18, A.8.32; DORA Art. 9(4)(e)).
 
-### 7.1 Azure AI User vs Azure AI Developer, and the agent-authoring gap
+### 7.1 Foundry User vs Foundry Owner, and the agent-authoring gap
 
-| Capability | Azure AI User (five users) | Azure AI Developer (owner, PIM) |
+| Capability | Foundry User (five users) | Foundry Owner (owner, PIM) |
 |---|---|---|
 | Playground, run agents, threads, files, vector-store retrieval | yes | yes |
 | Create / update / delete agents, vector stores | **built-in role currently includes these data actions** | yes |
@@ -223,16 +237,16 @@ No human holds `RBAC Administrator`: every access change is a PR + review
 | Role assignments | no | no (deploy SP only) |
 | Sees other users' threads via SDK | yes (project-wide data plane) → §13 conventions | yes |
 
-Because the built-in `Azure AI User` allows agent authoring, "prompt /
+Because the built-in `Foundry User` allows agent authoring, "prompt /
 registry changes are owner-only" needs both controls:
 
 - **Preventive (preferred where tenant policy allows custom roles):**
-  `custom-role.agent-consumer.json` — a copy of `Azure AI User` with the
+  `custom-role.agent-consumer.json` — a copy of `Foundry User` with the
   agent create / update / delete data actions removed; operation strings
   confirmed from `az provider operation show --namespace
   Microsoft.CognitiveServices` at deployment (`{to-confirm}` markers).
   Assigned to `sg-infosec-foundry-users` via
-  `agentConsumerRoleDefinitionId`; otherwise fall back to `Azure AI User`.
+  `agentConsumerRoleDefinitionId`; otherwise fall back to `Foundry User`.
 - **Detective (always on):** `../deploy.sh` records the SHA-256 of each
   deployed agent's instructions and tool set in `build/manifest.json`; a
   daily Logic App (`../operations/` layer) re-reads live agents and raises
@@ -318,7 +332,7 @@ A.5.20; DORA Art. 28–30 (ICT third-party register); ISO 42001 A.10.3.
 |---|---|---|---|
 | Copilot Studio (`../integrations/copilot/README.md`) | consume the agent published to `sg-infosec-foundry-users` only | Environment Maker in `{env:infosec-foundry}`; Power Platform admins hold Environment Admin | delegated (OBO) auth; DLP allows only the Foundry HTTP connector |
 | MCP local (`../mcp-server/server.py`) — default for the five | own `az login` (`DefaultAzureCredential`); access = own project role; CA applies to the token | — | server stamps `owner_upn` into thread metadata; group removal revokes; `PROJECT_ENDPOINT` is not a secret |
-| MCP hosted (Container Apps, EU) — only if the ENX gateway or shared tooling needs it | Easy Auth allowed group `sg-infosec-foundry-users` | MI `Azure AI User` | `X-MS-CLIENT-PRINCIPAL-NAME` copied into thread metadata; `save_memory` records the caller |
+| MCP hosted (Container Apps, EU) — only if the ENX gateway or shared tooling needs it | Easy Auth allowed group `sg-infosec-foundry-users` | MI `Foundry User` | `X-MS-CLIENT-PRINCIPAL-NAME` copied into thread metadata; `save_memory` records the caller |
 | MCP **clients** | only clients on the approved AI-tooling register `{register:approved-ai-clients}` in `ACCESS_REGISTER.md` (internal tooling and the ENX gateway by default; third-party desktop clients only under a Euronext-approved agreement — DPA, EU processing) | owner maintains the register | a client's model provider receives Euronext data: A.5.19 / A.5.20, GDPR Art. 28 |
 | GitHub `{github:org/repo}` | `Read` (team `infosec-assurance-users`) | `Maintain` + CODEOWNERS; deputy `Write` for reviews | branch protection: 1 CODEOWNERS review, no self-approval; OIDC federated credential bound to environment `production`; environment approval by owner; secret scanning + push protection |
 
@@ -505,8 +519,8 @@ path (R36) — DPO. Changes to the matrix are Tier C.
 
 | Check | Command / source |
 |---|---|
-| Built-in role GUIDs in `rbac.bicep` | `az role definition list --query "[].{n:roleName,id:name}"` — `rbac.bicep` and `least-privilege/infra/rbac.bicep` both carry `Azure AI User` = `53ca6127-db72-4b80-b1b0-d229d5fc3ae7` (the published built-in id); confirm every GUID of `var roles` with the command before the first `what-if`, as built-in ids are tenant-independent but preview roles (`Azure AI User`, `Azure AI Developer`) have been re-published |
-| `Azure AI User` data actions include agent authoring? | `az role definition list --name "Azure AI User" --query "[].permissions[].dataActions"` → decide custom role vs detective-only |
+| Built-in role GUIDs in `rbac.bicep` | `az role definition list --query "[].{n:roleName,id:name}"` — `rbac.bicep` and `least-privilege/infra/rbac.bicep` both carry `Foundry User` = `53ca6127-db72-4b80-b1b0-d229d5fc3ae7` (the published built-in id); confirm every GUID of `var roles` with the command before the first `what-if`, as built-in ids are tenant-independent but preview roles (`Foundry User`, `Foundry Owner`) have been re-published |
+| `Foundry User` data actions include agent authoring? | `az role definition list --name "Foundry User" --query "[].permissions[].dataActions"` → decide custom role vs detective-only |
 | Custom-role operation strings | `az provider operation show --namespace Microsoft.CognitiveServices` |
 | PIM API availability (`roleEligibilityScheduleRequests`) and Entra ID P2 licence | tenant admin; else `enablePim=false` |
 | `Sites.Selected` support for the `sharepoint-graph` spec's `/search/query` | test with the project MI; apply delta D-I2 |
@@ -532,7 +546,7 @@ target file).
 | D-B4 | `infra/main.bicep` | storage `properties` | `allowSharedKeyAccess: false` |
 | D-B5 | `infra/main.bicep` | outputs | `output keyVaultName string = keyVault.name` |
 | D-B6 | `infra/main.parameters.json` | parameters | `"deployTeamRbac": { "value": false }, "enablePim": { "value": true }, "usersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-users}" }, "ownerGroupObjectId": { "value": "{objectId:sg-infosec-foundry-owner}" }, "pimGroupObjectId": { "value": "{objectId:sg-infosec-foundry-admin-pim}" }, "breakglassGroupObjectId": { "value": "{objectId:sg-infosec-foundry-breakglass}" }, "readersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-readers}" }, "deployerPrincipalId": { "value": "{objectId:infosec-foundry-deployer}" }` |
-| D-T1 | `team/rbac.bicep` | `var roles` + owner block + new params | **applied** — `rbac.bicep` carries `azureAiUser: '53ca6127-db72-4b80-b1b0-d229d5fc3ae7'` (same as `least-privilege/infra/rbac.bicep`), the role set below, `breakglassGroupObjectId`, `enablePim`, `keyVaultSecretNames` (Secrets User scoped to named secrets), no standing `Azure AI Developer` / `Azure AI Project Manager` on `-owner`, `pim*` / `perm*` / `bg*` resource pairs. Original text: add `keyVaultSecretsOfficer: 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'`, `storageBlobDataReader: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'`, `monitoringContributor: '749f88d5-cbae-40b8-bcfc-e573ddc772fa'`, `websiteContributor: 'de139f84-1756-47ae-9be6-808fbbe84772'`, `logicAppsStandardDeveloper: '523776ba-4eb2-4600-a3c8-f2dc93da4bdb'`, `logicAppsStandardOperator: 'b70c96e9-66fe-4c09-b6e7-c98e69c98555'`; add `@description('Object id of sg-infosec-foundry-breakglass') param breakglassGroupObjectId string = ''` and `@description('PIM eligibilities for privileged human roles (Entra ID P2); false = permanent assignment to ownerGroupObjectId, recorded as an exception in ACCESS_REGISTER.md') param enablePim bool = true`; **remove** `ownerAccount` (Azure AI Developer) and `ownerProject` (Azure AI Project Manager) standing assignments; add, per role in {contributor (RG), azureAiDeveloper (account), keyVaultSecretsOfficer (KV), monitoringContributor (workspace), storageBlobDataReader (deliverables), websiteContributor (Function), logicAppsStandardDeveloper + Operator (Logic App)}, the pair from `team/least-privilege/infra/rbac.bicep` lines 194–300: `resource pim<Role> 'Microsoft.Authorization/roleEligibilityScheduleRequests@2022-04-01-preview' = if (enablePim) { name: guid(<scope>.id, pimGroupObjectId, roles.<role>, 'pim') scope: <scope> properties: { principalId: pimGroupObjectId roleDefinitionId: roleId(roles.<role>) requestType: 'AdminAssign' justification: 'TEAM_MODEL.md §5 ledger row' scheduleInfo: { startDateTime: pimStartDateTime, expiration: { type: 'AfterDuration', duration: pimEligibilityDuration } } } }` and `resource perm<Role> 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!enablePim) { … principalId: ownerGroupObjectId … }`, plus the same `pim<Role>` set for `breakglassGroupObjectId` when non-empty (no RBAC Administrator); add `param pimEligibilityDuration string = 'P365D'` and `param pimStartDateTime string = utcNow('yyyy-MM-ddTHH:mm:ssZ')` |
+| D-T1 | `team/rbac.bicep` | `var roles` + owner block + new params | **applied** — `rbac.bicep` carries `azureAiUser: '53ca6127-db72-4b80-b1b0-d229d5fc3ae7'` (same as `least-privilege/infra/rbac.bicep`), the role set below, `breakglassGroupObjectId`, `enablePim`, `keyVaultSecretNames` (Secrets User scoped to named secrets), no standing `Foundry Owner` / `Foundry Project Manager` on `-owner`, `pim*` / `perm*` / `bg*` resource pairs. Original text: add `keyVaultSecretsOfficer: 'b86a8fe4-44ce-4948-aee5-eccb2c155cd7'`, `storageBlobDataReader: '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1'`, `monitoringContributor: '749f88d5-cbae-40b8-bcfc-e573ddc772fa'`, `websiteContributor: 'de139f84-1756-47ae-9be6-808fbbe84772'`, `logicAppsStandardDeveloper: '523776ba-4eb2-4600-a3c8-f2dc93da4bdb'`, `logicAppsStandardOperator: 'b70c96e9-66fe-4c09-b6e7-c98e69c98555'`; add `@description('Object id of sg-infosec-foundry-breakglass') param breakglassGroupObjectId string = ''` and `@description('PIM eligibilities for privileged human roles (Entra ID P2); false = permanent assignment to ownerGroupObjectId, recorded as an exception in ACCESS_REGISTER.md') param enablePim bool = true`; **remove** `ownerAccount` (Foundry Owner) and `ownerProject` (Foundry Project Manager) standing assignments; add, per role in {contributor (RG), azureAiDeveloper (account), keyVaultSecretsOfficer (KV), monitoringContributor (workspace), storageBlobDataReader (deliverables), websiteContributor (Function), logicAppsStandardDeveloper + Operator (Logic App)}, the pair from `team/least-privilege/infra/rbac.bicep` lines 194–300: `resource pim<Role> 'Microsoft.Authorization/roleEligibilityScheduleRequests@2022-04-01-preview' = if (enablePim) { name: guid(<scope>.id, pimGroupObjectId, roles.<role>, 'pim') scope: <scope> properties: { principalId: pimGroupObjectId roleDefinitionId: roleId(roles.<role>) requestType: 'AdminAssign' justification: 'TEAM_MODEL.md §5 ledger row' scheduleInfo: { startDateTime: pimStartDateTime, expiration: { type: 'AfterDuration', duration: pimEligibilityDuration } } } }` and `resource perm<Role> 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!enablePim) { … principalId: ownerGroupObjectId … }`, plus the same `pim<Role>` set for `breakglassGroupObjectId` when non-empty (no RBAC Administrator); add `param pimEligibilityDuration string = 'P365D'` and `param pimStartDateTime string = utcNow('yyyy-MM-ddTHH:mm:ssZ')` |
 | D-T2 | `team/approval-policy.json` | `kinds`, tier C, `record.fields` | **applied** (extended to every `reportType` in `../workflows/pipelines.json`: `AIDeepSearch`, `ThreatIntelBrief`, `Transcript`, `Advisory` → A; `CISOExecSummary` → B; `TEAMS_POST` → A; `principals` block for the flow). Original text: replace the seven `REPORT_*` kinds with `"REPORT_DELIVERY": { "tier_by_reportType": { "DeepSearch": "A", "EvidenceAnalysis": "A", "SOCSummary": "A", "PentestSummary": "A", "InfoSecTPA-DPO": "B", "CyberForum": "B", "CISOGlobal": "B" }, "pipelines": ["deepsearch-report", "scheduled-deepsearch", "tpa-evidence-analysis", "soc-report-summary", "pentest-report-summary", "dpia-dpo-report", "onetrust-assessment-intake", "cyber-forum-pptx", "ciso-global-pptx"] }`; add `"MEMORY_DELETE": { "tier": "C", "requirement": "-", "pipelines": ["scripts/memory_store.py delete"] }`; in tier C set `"self_approval": false, "requester_is_owner_fallback": { "approver_groups": ["senior_approvers"], "exclude": ["requestedBy"], "ruleId": "tierC-owner-item-deputy-approves" }` and drop `self_approval_compensating_control`; in tier B fallback add `"ruleId": "tierB-fallback-peer-after-2bd"`; `record.fields` → `["kind", "reportType", "tier", "ruleId", "correlationId", "requestedBy", "approver", "approverObjectId", "reviewedBy", "decision", "timestamp", "reportPath"]`; `_comment` → reference `team/TEAM_MODEL.md §12` |
 | D-T3 | `team/least-privilege/entra/groups.json` | `groups[]` | **applied** (also: deployer renamed `{app:infosec-foundry-deployer}`, IAM team `{group:iam-admins}`, CA policy `CA-InfoSec-Foundry`, `-admin-pim` uses `eligibleMembers`). Original text: rename `sg-infosec-foundry-platform-approvers` → `sg-infosec-foundry-senior-approvers`, `sg-infosec-foundry-platform-admins` → `sg-infosec-foundry-admin-pim` (members → `eligibleMembers`), `sg-infosec-foundry-auditors` → `sg-infosec-foundry-readers`; add `{ "name": "sg-infosec-foundry-owner", "purpose": "standing low-privilege owner roles (Reader RG, Log Analytics Reader, SharePoint site owner, Copilot maker, GitHub Maintain)", "owners": ["{upn:line-manager}"], "members": ["{upn:francisco.gomes}"], "accessReview": { "cadence": "quarterly", "reviewer": "{upn:line-manager}" } }`; set `owners` of `-senior-approvers`, `-admin-pim`, `-breakglass` to `["{upn:line-manager}"]` (executed by `{group:iam-admins}`); `_comment` → `team/TEAM_MODEL.md §6` |
 | D-T4 | `team/README.md` | top of file | **applied**. Original text: replace the intro with `Superseded: the authoritative model is TEAM_MODEL.md (identity, RBAC, approvals, threads/memory, access review) and RACI.md; this file is retained for its companion-file table until the §20 deltas of TEAM_MODEL.md are applied.` |
@@ -560,7 +574,7 @@ target file).
 
 | Topic | Least-privilege lens | Operations lens | Decision and reason |
 |---|---|---|---|
-| Group count / standing privilege | 6 groups; no standing privileged role | 7 groups; `-owner` holds standing `Azure AI Developer` + `Azure AI Project Manager` | **7 groups, no standing privilege**: keep `-owner` but strip it to Reader / Log Analytics Reader / site owner / maker / GitHub; `Azure AI Developer` is PIM via `-admin-pim`; `Azure AI Project Manager` dropped (role grants are code). `enablePim=false` fallback recorded as an exception |
+| Group count / standing privilege | 6 groups; no standing privileged role | 7 groups; `-owner` holds standing `Foundry Owner` + `Foundry Project Manager` | **7 groups, no standing privilege**: keep `-owner` but strip it to Reader / Log Analytics Reader / site owner / maker / GitHub; `Foundry Owner` is PIM via `-admin-pim`; `Foundry Project Manager` dropped (role grants are code). `enablePim=false` fallback recorded as an exception |
 | Tier A (a, d2, e, f) | author sign-off + 10 % sampling + escalation flag | peer four-eyes | **Peer four-eyes** — everything written to `Reports/` is a record and the kit's Layer 3 expects a human other than the producer; five people give four candidate approvers. Sampling kept as a quality check on approvals |
 | Tier B (b, c, d) | any peer ≠ requester | owner or deputy ≠ requester | **Owner / deputy** — deliverables leaving the team carry the accountable signature; 2-business-day fallback to any peer with owner notification avoids the bottleneck |
 | Owner's own platform change | deputy approves | owner approves, deputy reviews | **Both**: required deputy review (no self-approval) and the owner merges / approves deployment as accountable; templates proposed by the owner are approved by the deputy |

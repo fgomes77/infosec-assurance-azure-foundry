@@ -17,6 +17,11 @@ A.6.2.7 (operation and monitoring), A.6.2.3 (documentation); DORA Art.
 8(2)–(3) (identification of ICT assets and dependencies), 9(4)(e); EU AI
 Act Art. 9 (life-cycle risk management, deployer of a modified system).
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. Versioned objects and their identifiers
 
 | # | Object | Source of truth | Version identifier | Where the live copy is | Rebuilt by |
@@ -56,7 +61,7 @@ deployment name.
 
 | Bump | When | Examples | Gates beyond the standard flow |
 |---|---|---|---|
-| **major** | a platform invariant, an approval tier, the taxonomy, an identity model or a model *family* changes; a re-sync that changes any report-producing agent's rules or thresholds | `Azure AI User` → custom consumer role; chat tier moves to a new model family; a new Tier | comparison set on every pipeline; line-manager awareness; `HUMAN_APPROVAL.md` / `DATA_PROTECTION_GUARDRAILS.md` reviewed in the same PR |
+| **major** | a platform invariant, an approval tier, the taxonomy, an identity model or a model *family* changes; a re-sync that changes any report-producing agent's rules or thresholds | `Foundry User` → custom consumer role; chat tier moves to a new model family; a new Tier | comparison set on every pipeline; line-manager awareness; `HUMAN_APPROVAL.md` / `DATA_PROTECTION_GUARDRAILS.md` reviewed in the same PR |
 | **minor** | new agent, pipeline, integration, template, workflow, alert; a re-sync that only adds knowledge; a model *version* bump on one tier; SDK minor bump | new read-only spec; `modelVersion` `2024-11-20` → next | comparison set on affected pipelines; staged tier rollout (`CHANGE_MANAGEMENT.md` §1 "Model tier / capacity") |
 | **patch** | docs, runbooks, KQL, thresholds, watchlist rows, instruction wording that the comparison set proves neutral, dependency patch pins | typo in a runbook; alert threshold 0.30 → 0.25 | standard flow, single reviewer |
 
@@ -145,7 +150,7 @@ custodian (`../team/TEAM_MODEL.md` §10).
 
 | Object | Disable | Observe | Remove | Record kept |
 |---|---|---|---|---|
-| Agent (a skill withdrawn from the export, or replaced) | remove it from the orchestrator's connected tools (`create_orchestrator.py` re-wires from the live list after the agent is renamed `zz-retired-<name>`) and from the Copilot publication | 30 days: no runs in `AppDependencies` for the agent | delete the agent and its `vs-<agent>` store (owner PIM `Azure AI Developer`); drop from `build/` by removing the skill from the export (`convert_skills.py` rebuilds without it); `verify_conversion.py` COVERAGE must still pass | `build/baseline-{date}.json` before removal; `Governance/Releases/{tag}.md` lists the retirement; threads that used it are kept to their normal retention (`TEAM_MODEL.md` §13) |
+| Agent (a skill withdrawn from the export, or replaced) | remove it from the orchestrator's connected tools (`create_orchestrator.py` re-wires from the live list after the agent is renamed `zz-retired-<name>`) and from the Copilot publication | 30 days: no runs in `AppDependencies` for the agent | delete the agent and its `vs-<agent>` store (owner PIM `Foundry Owner`); drop from `build/` by removing the skill from the export (`convert_skills.py` rebuilds without it); `verify_conversion.py` COVERAGE must still pass | `build/baseline-{date}.json` before removal; `Governance/Releases/{tag}.md` lists the retirement; threads that used it are kept to their normal retention (`TEAM_MODEL.md` §13) |
 | Template | set `"deprecated_on": "{date}"` in `../templates/registry.json` (delta D-LC-TR1) via `template-update-approval`; pipelines referencing it fail closed at `/render` | one quarterly template inventory review (`CHANGE_MANAGEMENT.md` §9) | remove the registry entry; `update_templates.py` audit line `retired`; the source stays in git history | `../templates/audit.log`; last approved rendering kept in `Templates/Reviews/` |
 | Pipeline (entry in `../workflows/pipelines.json`) | disable the Logic Apps workflow instance (owner PIM `Logic Apps Standard Operator`; no approval needed to disable) and set `approvalKind` to `RETIRED` in `pipelines.json` (a kind absent from `../team/approval-policy.json` is rejected by the approval flow, so a late callback cannot store anything) | 30 days of run history: no triggers | delete the instance; remove the `pipelines.json` entry; `report-status.json` keeps answering for historical run ids from Log Analytics | run history exported to `Governance/Operations/` before deletion (Log Analytics retains 365 d) |
 | Integration / connection † | remove the connection from every agent in `../integrations/registry.json` (`attach_integrations.py` re-attaches without it); disable the Foundry connection | 30 days: no tool calls in `AppDependencies` by `gen_ai.tool.name` | delete the connection; custodian revokes the service account; Key Vault secret **disabled** (not purged — purge protection); `ACCESS_REGISTER.md` row closed | register change log; KV secret version history |

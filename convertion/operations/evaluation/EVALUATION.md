@@ -24,6 +24,11 @@ environments), A.8.32; EU AI Act Art. 9(6)–(8) (testing against
 pre-defined metrics before and after deployment), Art. 26(5); DORA Art.
 9(4)(e), 8(2).
 
+
+> Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /
+> Foundry Account Owner / Foundry Project Manager); the underlying role definition
+> GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
+
 ## 1. The loop
 
 | Stage | What happens | Who | Evidence |
@@ -66,14 +71,14 @@ ISO 42001 A.7.6.
 
 | May | May not |
 |---|---|
-| read agents, create threads/messages/runs with the caller's own identity (`Azure AI User`) | approve any approval gate (`HUMAN_APPROVAL.md` Layer 3 stays human) — evaluation runs never subscribe a gate; if a live case triggers a pipeline by mistake, let the gate expire (= rejection) |
+| read agents, create threads/messages/runs with the caller's own identity (`Foundry User`) | approve any approval gate (`HUMAN_APPROVAL.md` Layer 3 stays human) — evaluation runs never subscribe a gate; if a live case triggers a pipeline by mistake, let the gate expire (= rejection) |
 | send report drafts to `output-verifier` | render or upload anything: no call to `functions/delivery`, nothing under `Reports/` |
-| with `--model-override`, create `<agent>-eval` clones and delete them at the end (`Azure AI Developer`, owner PIM L1; `agent_modified_by_non_deploy_identity` will fire — reconcile with the PIM activation, `RUNBOOK.md` H7) | change a production agent, registry, template or tier — those go through `CHANGE_MANAGEMENT.md` |
+| with `--model-override`, create `<agent>-eval` clones and delete them at the end (`Foundry Owner`, owner PIM L1; `agent_modified_by_non_deploy_identity` will fire — reconcile with the PIM activation, `RUNBOOK.md` H7) | change a production agent, registry, template or tier — those go through `CHANGE_MANAGEMENT.md` |
 | record tokens, latency, estimated € per case | send Euronext data to the web — inputs are synthetic; the agents' egress rules are unchanged and are themselves under test (`egress_clean`) |
 | run off-peak (shares the reasoning TPM cap — `FINOPS.md` §3) | run against `prod` during business hours in a campaign |
 
 Least privilege: a peer can run G0 (offline) and the control leg of G1
-with nothing more than their standing `Azure AI User`; only the owner (PIM)
+with nothing more than their standing `Foundry User`; only the owner (PIM)
 can run the candidate leg. Control: ISO 27001:2022 A.5.15, A.8.2; DORA Art.
 9(4)(c).
 

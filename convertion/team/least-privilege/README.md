@@ -1,15 +1,49 @@
 # Least-Privilege-First Team, Identity & Approval Model
 
-> **Superseded:** the authoritative model is `../TEAM_MODEL.md` and
-> `../RACI.md` (they merge this lens with the operations-first lens;
-> §21 records every decision). The `.md` files in this folder are kept
-> as the design record until the next quarterly review. Still **live**
-> here because `TEAM_MODEL.md` governs them: `entra/groups.json`
-> (groups of record, delta D-T3 applied) and
-> `scripts/provision_identity.sh` (deploys `../rbac.bicep`).
-> `infra/rbac.bicep`, `infra/rbac.parameters.json` and
-> `approvals/routing.json` are the superseded lens' equivalents of
-> `../rbac.bicep` and `../approval-policy.json` — do not deploy them.
+> ## HISTORICAL DESIGN VARIANT — NOT THE MODEL OF RECORD
+>
+> This folder is the **design record of the least-privilege lens** that was
+> merged into the model of record. Nothing in the `.md` files here is
+> implemented, deployed or maintained. **Do not follow it, do not deploy its
+> Bicep, and do not copy its group names or approval-tier numbers into new
+> work** — they are a *different vocabulary* from the platform's.
+>
+> | Question | Authoritative file |
+> |---|---|
+> | Team, roles, access, groups, RBAC, approval tiers | `../TEAM_MODEL.md` |
+> | Who does what | `../RACI.md` |
+> | Joiner / leaver | `../ONBOARDING.md`, `../OFFBOARDING.md` |
+> | Admin-side lifecycle runbook and access review | `../../operations/access-governance/` |
+> | Role assignments as code | `../rbac.bicep` (+ `../rbac.parameters.example.json`) |
+> | Approval routing consumed at run time | `../approval-policy.json` |
+> | Conversations and memory conventions | `../TEAM_MODEL.md` §13, `../../governance/MEMORY_POLICY.md` |
+>
+> **Still live in this folder** (governed by `../TEAM_MODEL.md`, kept here only
+> because the files already carry the group definitions and the provisioning
+> script):
+> - `entra/groups.json` — the **seven groups of record** (delta D-T3 applied)
+> - `scripts/provision_identity.sh` — creates those groups and verifies live
+>   role assignments; it deploys `../rbac.bicep`, never the copy below
+>
+> **Superseded, do not deploy:** `infra/rbac.bicep`,
+> `infra/rbac.parameters.json`, `approvals/routing.json` (the model of record
+> uses `../rbac.bicep` and `../approval-policy.json`), and every `.md` in this
+> folder.
+>
+> ### Vocabulary map (this folder → model of record)
+>
+> | Historical name here | Model of record |
+> |---|---|
+> | `sg-infosec-foundry-platform-approvers` | `sg-infosec-foundry-senior-approvers` |
+> | `sg-infosec-foundry-platform-admins` | `sg-infosec-foundry-admin-pim` (+ the stripped standing `sg-infosec-foundry-owner`) |
+> | `sg-infosec-foundry-auditors` | `sg-infosec-foundry-readers` |
+> | six groups, no standing `owner` group | **seven** groups, `-owner` kept but stripped of standing privilege |
+> | approval "tier 1 / 2 / 3" | approval **Tier A / B / C** (`../approval-policy.json`) |
+> | tier 2 = author sign-off + 10 % sampling | **Tier A = peer four-eyes**; the sampling survives as a quality check on approvals (`../TEAM_MODEL.md` §21) |
+>
+> Every contradiction between the two lenses and the decision taken is recorded
+> in `../TEAM_MODEL.md` §21. This folder is reviewed for deletion at the
+> quarterly access review.
 
 One of the lenses on the team/ownership model for the InfoSec Assurance
 Foundry platform (the operations-first lens is `../README.md`). This lens
