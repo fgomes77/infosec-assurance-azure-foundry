@@ -75,7 +75,8 @@ BUILD = CONV / "build"
 PACKS = CONV / "agents" / "knowledge-packs"
 
 from convert_skills import (ALIASES, EXAMPLE_SKILLS,  # noqa: E402
-                            FILE_SEARCH_EXT, PLATFORM_ROOTS, bucket_for)
+                            FILE_SEARCH_EXT, LICENSE_RESTRICTED,
+                            PLATFORM_ROOTS, bucket_for)
 
 FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 REQUIRE_RE = re.compile(r"""require\(\s*path\.join\(\s*__dirname\s*,\s*['"]([^'"]+)['"]""")
@@ -239,7 +240,13 @@ def check_skill_decisions(manifest: dict, options: dict,
         # --- C4: AGENT + deployed => built and registered
         if decision == "AGENT" and r.get("deployed"):
             flag = r.get("requires_flag")
-            skipped = flag == "--include-examples" and not options.get("include_examples")
+            skipped = (
+                (flag == "--include-examples" and not options.get("include_examples"))
+                # The Anthropic-licensed skills are conversion-gated until the IP
+                # position is settled (governance/THIRD_PARTY_IP.md §2). A build
+                # without the acceptance is a legitimate build, not a gap.
+                or (r.get("skill") in LICENSE_RESTRICTED
+                    and not options.get("accept_anthropic_license")))
             agent = r.get("agent")
             if not agent:
                 problems.append(f"{rid}: decision AGENT but no 'agent' name (C4)")
@@ -419,6 +426,8 @@ def main() -> int:
             continue                                   # partial build by request
         if name in EXAMPLE_SKILLS and not options.get("include_examples"):
             continue                                   # decision: optional (MAPPING.md)
+        if name in LICENSE_RESTRICTED and not options.get("accept_anthropic_license"):
+            continue        # decision: conversion-gated (governance/THIRD_PARTY_IP.md §2)
         problems.append(f"{name}: exported skill neither converted nor covered "
                         f"by a recorded decision (EXAMPLE_SKILLS)")
     try:

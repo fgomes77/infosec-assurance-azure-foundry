@@ -95,7 +95,7 @@ stages:
 
           - script: |
               set -euo pipefail
-              python3 -m pip install --quiet pytest jsonschema
+              python3 -m pip install --quiet pytest jsonschema requests
               python3 -m pytest convertion/functions/delivery/tests \
                 convertion/functions/office-tools/tests \
                 convertion/scripts/tests -q
