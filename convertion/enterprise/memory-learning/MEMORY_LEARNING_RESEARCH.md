@@ -37,7 +37,7 @@ production traffic ──► continuous EvaluationRule (groundedness, relevance,
    approved SharePoint reports; refreshed quarterly)
        │
        ▼
-   Agent Optimizer run (preview) ──► candidates + diff ──► Francisco reviews
+   Agent Optimizer run (preview) ──► candidates + diff ──► Francisco Gustavo Gomes reviews
        │                                                        │
        └── "Promote candidate" = NEW immutable agent version ◄──┘
                      │
