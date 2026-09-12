@@ -108,3 +108,19 @@ Controls behind this page: ISO 27001:2022 A.5.10 (acceptable use), A.6.3
 (awareness), A.8.15 (logging — every run is traced); DORA Art. 13(6)
 (ICT awareness); EU AI Act Art. 14, 26(2) (informed human oversight); ISO
 42001 A.9.2–A.9.3 (responsible use, intended purpose).
+
+## Portal map (new Microsoft Foundry portal)
+
+- **Build > Agents** — run and test the agents, see their versions.
+- **Build > Models** — the three deployments (read only).
+- **Operate > Tracing** — your own runs.
+- **Operate > Evaluations** — reviewer feedback templates.
+
+You **cannot** edit agents, tools or connections: changes go through the owner
+(`../enterprise/PORTAL_CONFIGURATION.md`; a portal edit raises the
+`agent_modified_by_non_deploy_identity` alert).
+
+**Teams / Microsoft 365 Copilot:** the six advisors (`cyber-forum`, `dora`,
+`nis2`, `eu-ai-act`, `iso27001`, `iso42001`) are published to
+`sg-infosec-foundry-users`. There is **no file upload** there — use the
+pipelines for anything that takes a document.

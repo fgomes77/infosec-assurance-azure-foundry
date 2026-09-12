@@ -24,7 +24,7 @@ A.6.3 (users know where to get help); DORA Art. 5(2); ISO 42001 A.3.2.
 Measured monthly by the owner (RUNBOOK §2 M1) from `{list:ApprovalDecisions}`,
 `LogicAppWorkflowRuntime` and the ticket queue; reported in the ISMS
 operating rhythm.
-
+ Outcome and control indicators beyond these SLOs: `KPIS.md`.
 | SLO | Target | Source of measurement |
 |---|---|---|
 | First response to a support post | ≤ 4 business hours (L1), per `RUNBOOK.md` §3 for incidents | Teams thread timestamps / ticket |
@@ -87,7 +87,7 @@ P1–P3; requests that would change configuration become change requests
 4. Close with the evidence links and, for P1/P2, the post-incident note (RUNBOOK §6).
 5. Feed the feedback loop (§7).
 
-## 6. Known-issue list (maintained monthly, RUNBOOK M3)
+## 6. Known-issue list (maintained monthly, RUNBOOK M3) Seeded during the pilot and hypercare (`ROLLOUT_PLAN.md` P1-g, P3).
 
 | Id | Issue | Workaround | Permanent fix (ticket) |
 |---|---|---|---|
@@ -116,6 +116,10 @@ Control: ISO 27001:2022 cl. 9.1, 10.1; ISO 42001 cl. 9.1, A.6.2.6
 AI concerns — users can report any concern with an AI output through this
 model); EU AI Act Art. 26(5), 26(7) (deployer monitoring and informing
 workers); DORA Art. 13(6) (lessons learned feed staff awareness).
+
+Every signal above lands in the owner's improvement backlog and is delivered in
+the quarterly cycle described in `CONTINUOUS_IMPROVEMENT.md` (signals §1,
+backlog template §2, weekly triage §3, cycle §4).
 
 ## 8. User guides
 
