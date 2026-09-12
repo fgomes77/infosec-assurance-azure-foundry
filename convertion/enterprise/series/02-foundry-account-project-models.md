@@ -58,7 +58,7 @@ az cognitiveservices model list -l swedencentral --query "[?model.name=='gpt-4o'
 |---|---|---|---|---|---|
 | `chat` | `modelName=gpt-4o` | `2024-11-20` (explicit) | `DataZoneStandard` | 50 K TPM | retires 2027-04-14 → D4 replacement project |
 | `light` | `lightModelName=gpt-4o-mini` | set explicitly (kit default `''` = provider default — set `2024-07-18`, `operations/LIFECYCLE.md` §5) | `DataZoneStandard` | 100 K | lacks Azure AI Search (not used by light agents) |
-| `reasoning` | `reasoningModelName` — **not `o3-mini`** (D3) | explicit | `DataZoneStandard` | 30 K | must show OpenAPI + MCP + Web Search = Yes in the tool-support table on the day; record the row in the sign-off |
+| `reasoning` | `reasoningModelName` = `o4-mini` — **not `o3-mini`** (D3) | `2025-04-16`, re-confirmed on the day | `DataZoneStandard` | 30 K | must show OpenAPI + MCP + Web Search = Yes in the tool-support table on the day; record the row in the sign-off |
 | candidate (D4) | fourth deployment `{replacement}` | explicit | `DataZoneStandard` | 10 K | created only during a migration window, compared with the comparison set, then tiers switched (`attach_integrations.py --only`) — six-phase process: https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/model-migration (2026-08-26) |
 
 Every deployment in `main.bicep` already carries `raiPolicyName:

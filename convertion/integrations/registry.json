@@ -524,6 +524,31 @@
       "infosec-assurance-advisor"
     ]
   },
+  "interactive_advisory_tools": {
+    "_comment": "Finding C9. The native SharePoint grounding tool (preview) runs ON BEHALF OF the signed-in user, returns permission-trimmed citations and is capped (per-user request rate; small result count per query). It is therefore attached ONLY to agents used interactively by a named human, and NEVER to pipeline agents, the delivery Function path, or agents published to Teams / M365 Copilot. Exhaustive and batch SharePoint reads (TPA evidence scans, report intake) keep the application-identity `sharepoint-graph` OpenAPI tool. Requires the five users to hold the licence the tool demands; `agents` stays EMPTY until that is confirmed AND the connection is enabled (connections.sharepoint-grounding.enabled is false today, so attach_integrations.py refuses to attach it). Source: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/sharepoint (preview, 2026-08-21).",
+    "tools": [
+      "sharepoint-grounding"
+    ],
+    "agents": [],
+    "excluded_agents": [
+      "output-verifier",
+      "dpia",
+      "ciso-reporting",
+      "ciso-executive-summary",
+      "ciso-global-report",
+      "tpa-evidence-analyzer",
+      "soc-report-analyzer",
+      "pentest-report-analyzer",
+      "tprm-slide-generator",
+      "pptx-executive-summary-ciso",
+      "onetrust-form-b",
+      "docx",
+      "pdf",
+      "pptx",
+      "xlsx",
+      "enterprise-explorer"
+    ]
+  },
   "example_agents": {
     "_comment": "Agents converted only with convert_skills.py --include-examples. attach_integrations.py must FAIL (not skip) for any live agent that has no registry entry unless it is named in unmanaged_ok.",
     "agents": [
@@ -545,5 +570,8 @@
       "project_connection_api_key",
       "delegated_obo"
     ]
+  },
+  "agent_versions": {
+    "_comment": "Promoted immutable agent versions of record (<name>:<version>). Written by deploy.sh / scripts/_foundry_runtime.py into build/agent-versions.json (git-ignored) and recorded on approved template changes by scripts/update_templates.py (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md R5, finding C19). Pipelines, the Copilot wrapper and the MCP server reference `<name>:<version>`, never an unversioned id. This key is documentation of the contract - the ledger itself is build/agent-versions.json, which the release pipeline publishes as ISMS evidence."
   }
 }

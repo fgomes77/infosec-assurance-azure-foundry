@@ -27,7 +27,7 @@ evidence folder structure.
 |---|---|---|---|---|
 | D1 | Agent runtime | classic (retires 2027-03-31) / **new Responses-API service** | new service; scripts migrated in step 06 §A before any agent is created | owner |
 | D2 | Multi-agent routing without connected agents | Logic Apps `agent-fanout.json` + explicit agent choice / A2A tool (preview) / Agent Framework hosted agent (GA) | v1: Logic Apps + explicit choice; A2A pilot in `test`; Agent Framework hosted orchestrator as the Q1-2027 candidate | owner |
-| D3 | Reasoning-tier model | one of the EU-Data-Zone models marked supported for OpenAPI + MCP + Web Search | chosen in step 02 §C after reading the tool-support table on the day; `o3-mini` is excluded | owner |
+| D3 | Reasoning-tier model | one of the EU-Data-Zone models marked supported for OpenAPI + MCP + Web Search | **decided: `o4-mini`** (alternate `gpt-5-mini`, then `gpt-4.1`); re-read the tool-support table in step 02 §C on the day and record the row in the sign-off; `o3-mini` is excluded (finding C4) | owner |
 | D4 | Model version policy | auto-upgrade / **`NoAutoUpgrade` + explicit versions** | pinned; replacement project scheduled 90 days before 2027-04-14 | owner |
 | D5 | Advisor stores | single merged vector store / AI Search index (Foundry IQ) | single store `vs-assurance-advisor` in v1 (memory notes prefixed `MEMORY-`), Foundry IQ evaluated in `test` (`enterprise/memory-learning/`) | owner |
 | D6 | Agent setup | basic (Microsoft-managed storage) / **standard (BYO Cosmos DB + Storage + AI Search)** | basic in `dev`; standard in `test`/`prod` — residency evidence and export/delete control for DORA Art. 28 / GDPR; note the extra cost (Cosmos DB ≥ 3000 RU/s, AI Search) | owner + landing zone |

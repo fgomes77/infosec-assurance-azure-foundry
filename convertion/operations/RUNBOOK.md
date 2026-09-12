@@ -105,13 +105,16 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 
 | Id | Symptom | Diagnosis | Fix | Access / tier |
 |---|---|---|---|---|
-| FM-01 | Every agent call fails with 401/403 | `az account show`; role of the caller on the project (`Azure AI User`); `disableLocalAuth: true` means key auth is refused by design | user not in `sg-infosec-foundry-users` → `access-governance/ACCESS_LIFECYCLE.md`; MI missing role → `../team/rbac.bicep` redeploy | owner PIM `Azure AI Developer` only if a connection is involved; RBAC = Tier C PR |
+| FM-01 | Every agent call fails with 401/403 | `az account show`; role of the caller on the project (`Foundry User`, formerly `Azure AI User` — same role id); `disableLocalAuth: true` means key auth is refused by design | user not in `sg-infosec-foundry-users` → `access-governance/ACCESS_LIFECYCLE.md`; MI missing role → `../team/rbac.bicep` redeploy | owner PIM `Foundry Owner` (formerly `Azure AI Developer`) only if a connection is involved; RBAC = Tier C PR |
 | FM-02 | Agent answers but a tool is missing (no web results, no Jira data) | Foundry portal → agent → tools; `attach_integrations.py --dry-run --only <agent>`; connection status | re-run `attach_integrations.py --only <agent>` (idempotent) | owner PIM `Azure AI Developer` (§5 L1) |
 | FM-03 | `egress-internal-marker` alert | open the trace (`OperationId`) in App Insights; read the query text; confirm true positive | true positive: P1 — record in ticket `{jira:INFOSEC-PLAT}-nnn`, add the marker to the instruction-layer rule in `attach_integrations.py` **and** `kql/egress-detection.kql` (Tier C PR); never disable Bing wholesale unless the leak repeats | disable connection = PIM; fix = Tier C |
 | FM-04 | Content-filter block on legitimate security text | trace shows `content_filter` finish reason | adjust the custom RAI policy severity for that category (Tier C); never disable filtering (`DATA_PROTECTION_GUARDRAILS.md` §3) | Tier C |
 | FM-05 | `model-throttling-429` | metrics by `ModelDeploymentName` | short term: retries already in `_azure_helpers.py`/workflow `Until` loops; sustained: raise `modelCapacity` in `../infra/main.parameters.json` | Tier C (infra) |
 | FM-06 | p95 latency > 5 min on an agent | `kql/latency-and-tokens.kql`; check whether the run loops on tool errors | fix the failing tool (FM-02/FM-13); if the loop is behavioural, instruction change | Tier C |
 | FM-07 | Token budget exceeded | same query; identify agent/model | confirm legitimate load; else move a non-advisory agent down a tier at M2 (`MODEL_ROUTING.md` rule 7) | Tier C |
+
+| FM-33 | Defender for AI alert (jailbreak attempt, sensitive-data exposure, suspicious access) | Defender for Cloud alert → `OperationId` → Operate > Tracing run | quarantine the conversation (record the id), review the agent's guardrail (`infosec-web-facing`), open a ticket; **P1 if a write was attempted** — see §AI threat alerts below | `{group:soc}` + owner |
+| FM-34 | Policy non-compliance (Global* SKU, non-EU location, public access) reported by `../enterprise/azure-policy-assignments.bicep` | `az policy state list -g rg-infosec-foundry` | revert by redeploying `../infra/main.bicep`; never fix in the portal; record in `CHANGE_MANAGEMENT.md` §7 | owner; P1 if a non-compliant deployment actually served traffic |
 
 ### 4.2 Agents, vector stores, memory
 
@@ -129,7 +132,7 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 |---|---|---|---|---|
 | FM-10 | `approval-sla` alert — gate pending > 48 h or expired | run history → `Human_approval_gate` inputs: `requestedBy`, `kind`, `reportType`; `{list:ApprovalDecisions}` | pending: remind the tier group; Tier B > 2 business days → fallback per `../team/approval-policy.json`; expired = rejection, requester re-triggers | approvers |
 | FM-18 | Cards not reaching Teams | approval flow (Power Automate/Function behind `approvalWebhookUrl`) run history; webhook secret expiry | rotate the webhook (§5 L3 KV); resubmit the suspended run from run history (`Logic App Standard Operator`) | owner PIM |
-| FM-19 | Run failed at `Run_producing_agent` / `Get_agent_output` | HTTP status in the action output: 401 → Logic App MI lost `Azure AI User`; 404 → agent id parameter stale after re-create | RBAC via `rbac.bicep`; update the `agentId` app setting from `build/manifest.json` | Tier C |
+| FM-19 | Run failed at `Run_producing_agent` / `Get_agent_output` | HTTP status in the action output: 401 → Logic App MI lost `Foundry User` (formerly `Azure AI User`) on the project; 404 → the pinned agent name/version no longer exists (agent renamed, version not promoted); 400 `agent_reference` → the `agentVersion` app setting is stale | RBAC via `rbac.bicep`; re-run `scripts/build_logicapps.py` so `agentName`/`agentVersion` are taken from `build/agent-versions.json` (finding C19) and redeploy the instance | Tier C |
 | FM-20 | Approver == requester accepted, or approver outside the tier group | approval flow logs; `{list:ApprovalDecisions}` row | P1 control failure: disable the workflow (PIM), fix the flow, re-approve the affected items with a valid approver | disable = PIM; fix = Tier C |
 | FM-21 | Scheduled workflow (`scheduled-deepsearch`, `onetrust-assessment-intake`) not firing | trigger history; app stopped; storage account for the runtime unreachable | start the app; check the runtime storage identity-based connection | owner PIM `Logic App Standard Operator` |
 
@@ -141,6 +144,7 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 | FM-12 | `ensure_folder` 403/404 | Function MI `Sites.Selected` write grant missing or site id changed (`SHAREPOINT_SITE_ID`) | re-grant per `../functions/delivery/README.md`; never widen to `Sites.ReadWrite.All` | custodian `{group:spo-admins}` + owner; Tier C |
 | FM-22 | Duplicate supplier folder or report under the wrong supplier | folder rule in `../sharepoint/README.md` (normalisation, case-insensitive); check the trigger payload | P1 if a report landed under another supplier: move the file (site owner), record in the ticket; if the normalisation missed a case, fix `normalise()` (Tier C) | owner (site owner) |
 | FM-23 | Share link anonymous or wrong scope | `Upload_and_share` output: `scope` must be `organization` (`users` for `Reports/DPO/`) | remove the link (site owner); fix the pipeline parameter | P1; Tier C |
+| FM-35 | Run stored the report but the Teams notice says `sensitivity label: ASSIGNMENT FAILED - apply manually` | delivery Function `/assign_label` returned non-2xx (Graph `assignSensitivityLabel` is metered and asynchronous; missing the metered-API approval, `InformationProtectionPolicy.Read.All`, or `Sites.Selected` write) | apply the label by hand on the stored file, fix the Function permission; **no re-run of the pipeline** — the file is already verified, approved and stored (finding C16) | Tier C |
 | FM-24 | Upload succeeds, Teams notification fails | `Notify_team` action output | notification-only step, not gated: fix the `teamsWebhookUrl` app setting | owner PIM |
 
 ### 4.5 Connections, Key Vault, credentials
@@ -161,6 +165,36 @@ without approval; "change" actions follow `CHANGE_MANAGEMENT.md`.
 | FM-30 | Copilot agent answers with stale behaviour | Copilot Studio publication date vs last `deploy.sh` | republish to `sg-infosec-foundry-users` only (`../integrations/copilot/README.md`) | owner (Environment Maker) |
 | FM-31 | `deploy.sh` fails at step 2 (`verify_conversion.py`) | its output lists the discrepancy (fidelity/coverage/rules/freshness) | never bypass: fix the export or the converter, re-run; the gate is what keeps outputs identical to claude.ai | Tier C |
 | FM-32 | `deploy.sh` fails at steps 3–6 in the pipeline | GitHub Actions log; OIDC federated credential; deploy SP roles | re-run after fixing; hotfix by hand only under `CHANGE_MANAGEMENT.md` §8 | deploy SP / owner PIM |
+
+### 4.x AI threat alerts (Defender for Cloud AI, finding C17)
+
+Named in the alert descriptions created by `../infra/monitoring.bicep`.
+
+**Trigger** — activity-log alert `{baseName}-defender-ai-high` (Error-level
+security alerts routed to `{baseName}-ag-soc`) or `{baseName}-defender-ai-other`
+(owner group).
+
+**Alert classes** — jailbreak / prompt-injection attempt; sensitive-data
+exposure in a prompt or completion; wallet abuse / credential theft.
+
+**First actions**
+1. Open the alert in Defender for Cloud and read the `OperationId`.
+2. Identify the agent and the calling user from the project diagnostics
+   (`allLogs`) and the Operate > Tracing run.
+3. Confirm whether any tool call left the read-only surface (FM-33 is P1 if a
+   write was attempted — there is no write path outside the delivery Function,
+   so a write attempt means a control failed).
+4. Check the `egress-internal-markers` alert for the same window: an injection
+   that also exfiltrated would show there.
+5. Quarantine the conversation (record its id) and review the agent's RAI
+   policy assignment (`infosec-web-facing` carries XPIA detection).
+
+**Escalation** — `{group:soc}` owns High; the platform owner owns Medium/Low at
+the weekly review.
+
+**Privacy note** — `AIPromptEvidence` is **OFF by default**, so alert payloads
+carry no prompt bodies. Enabling it needs a DPO decision recorded in the RoPA
+(`../governance/DATA_PROTECTION_GUARDRAILS.md` §4).
 
 ## 5. Escalation
 

@@ -6,3 +6,37 @@ AzureDiagnostics
 | where OperationName has_any ("Agents.CreateAgent", "Agents.UpdateAgent", "Agents.DeleteAgent")
 | where CallerIPAddress != "" and identity_claim_appid_g != "{deploy-service-principal-appid}"
 | project TimeGenerated, OperationName, identity_claim_appid_g, CallerIPAddress, ResultType
+
+// ---------------------------------------------------------------------------
+// agent_version_not_in_manifest (delta D-UP-9 / finding C19)
+// A run served by an agent VERSION that the last deploy did not promote =
+// a portal edit, or an unpromoted version serving traffic.
+//
+// Baseline: build/agent-versions.json — the ledger scripts/_foundry_runtime.py
+// writes on every deploy (NOT build/manifest.json, which holds no versions).
+// deploy.sh publishes it to App Insights as the custom event
+// `deploy_manifest` with one dynamic property `agent_versions` of the shape
+// {"<agent-name>": "<version>"}; `build/` is git-ignored, so the RELEASE
+// PIPELINE must publish the ledger as a build artefact and restore it before
+// scripts/verify_deployment.py runs, or this comparison is skipped.
+// On the classic (threads/runs) runtime the service has no versions: the
+// ledger stores version = null and this query returns nothing by design.
+// ---------------------------------------------------------------------------
+let promoted =
+    AppEvents
+    | where Name == "deploy_manifest"
+    | top 1 by TimeGenerated desc
+    | mv-expand kv = bag_keys(todynamic(tostring(Properties["agent_versions"])))
+    | extend agentName = tostring(kv),
+             version   = tostring(todynamic(tostring(Properties["agent_versions"]))[tostring(kv)])
+    | project agentName, version;
+AppDependencies
+| where TimeGenerated > ago(1h)
+| extend agentName = tostring(Properties["gen_ai.agent.name"]),
+         version   = tostring(Properties["gen_ai.agent.version"])
+| where isnotempty(agentName) and isnotempty(version)
+| join kind=leftouter promoted on agentName
+| where isempty(version1) or version != version1
+| summarize runs = count(), firstSeen = min(TimeGenerated), lastSeen = max(TimeGenerated)
+          by agentName, servingVersion = version, promotedVersion = version1
+| project-reorder agentName, servingVersion, promotedVersion, runs, firstSeen, lastSeen

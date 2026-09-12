@@ -1,6 +1,12 @@
 // Monitoring alerts for the InfoSec Assurance Foundry platform
 // (operations/MONITORING.md §4 alert catalogue; runbook: operations/RUNBOOK.md).
 //
+// Defender for Cloud AI threat-protection alerts (finding C17) are routed by
+// infra/monitoring.bicep to the SOC action group `{baseName}-ag-soc` (rules
+// `{baseName}-defender-ai-high` / `-other` on activity-log category Security);
+// this file covers the LOG-QUERY alerts only. Do NOT add a second Defender
+// rule here - two alert catalogues on one signal means duplicate pages.
+//
 // Deploy at resource-group scope AFTER infra/main.bicep (needs the Log Analytics
 // workspace and the Foundry account it created), as a module (delta D-OPS-B1 in
 // MONITORING.md §7) or standalone:

@@ -67,6 +67,17 @@ A.8.15 "logs protected"; A.5.34 privacy; GDPR Art. 5(1)(c)).
 | `verifier-fail-rate.kql` | FAIL/PASS split per pipeline over 24 h (from `Notify_verifier_fail` vs `Human_approval_gate` action completions) | `LogicAppWorkflowRuntime` | alert `verifier-fail-rate`; RUNBOOK H3, M1; MODEL_ROUTING rule 7 |
 | `latency-and-tokens.kql` | Runs, p50/p95 latency, tokens and estimated cost per agent/model | `AppDependencies` | alert `latency-and-token-budget`; RUNBOOK H5, M2 |
 | `approval-sla.kql` | Gates pending > 48 h or expired (`TimedOut`) | `LogicAppWorkflowRuntime` | alert `approval-sla`; RUNBOOK FM-10; SUPPORT_MODEL SLO |
+| `../infra/kql/agent-drift.kql` | (1) an agent definition changed by an identity other than the deploy SP; (2) **`agent_version_not_in_manifest`** — a run whose `gen_ai.agent.version` is not the version the last deploy promoted | `AzureDiagnostics`, `AppDependencies` + `AppEvents` | alerts `agent-drift`, `agent_version_not_in_manifest` (`../infra/monitoring.bicep`); RUNBOOK FM-19 |
+
+**Version-drift baseline (finding C19).** `agent_version_not_in_manifest`
+compares the serving version against `build/agent-versions.json` — the ledger
+`scripts/_foundry_runtime.py` writes on every deploy — **not** against
+`build/manifest.json`, which holds no versions. `deploy.sh` publishes the
+ledger to App Insights as the custom event `deploy_manifest`. Nightly drift
+Routine: **restore the release pipeline's `build/agent-versions.json` before
+running `python3 scripts/verify_deployment.py`** — `build/` is git-ignored, so
+without the restored ledger the version comparison is silently skipped and the
+drift check degrades to a name-only check.
 
 Each file ends with a `where` that keeps only breaching rows (so the alert
 fires on *rows > 0*); remove that line for the dashboard view. Thresholds
