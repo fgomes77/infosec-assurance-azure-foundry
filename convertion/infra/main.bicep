@@ -55,6 +55,16 @@ param location string = 'swedencentral'
 @allowed(['dev', 'test', 'prod'])
 param environmentName string = 'dev'
 
+@description('Cost-allocation tags applied to every taggable resource (operations/FINOPS.md §5). Cost Management groups by these, and the quarterly cost review reads them; keep `workload` stable across environments')
+param resourceTags object = {
+  owner: '{email:sg-infosec-foundry-owner}'
+  costCenter: '{costcenter:infosec-assurance}'
+  workload: 'infosec-foundry'
+  environment: environmentName
+  dataClassification: 'confidential'
+  requirement: 'a-j'
+}
+
 // ------------------------------------------------------------ model tiers
 @description('Chat-tier model (registry model_tier "chat")')
 param modelName string = 'gpt-4o'
@@ -275,6 +285,7 @@ var injectAgentVnet = enableAgentVnetInjection && !empty(effectiveAgentSubnetId)
 // ---------------------------------------------------------------- Foundry
 resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
   name: '${baseName}-aif'
+  tags: resourceTags
   location: location
   kind: 'AIServices'
   sku: { name: 'S0' }
@@ -311,6 +322,7 @@ resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' = {
 resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' = {
   parent: foundry
   name: '${baseName}-proj'
+  tags: resourceTags
   location: location
   identity: { type: 'SystemAssigned' }
   properties: {
@@ -424,6 +436,7 @@ resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
 var bingLocation = 'global'
 resource bing 'Microsoft.Bing/accounts@2020-06-10' = if (enableWebSearch) {
   name: '${baseName}-bing'
+  tags: resourceTags
   location: bingLocation
   kind: 'Bing.Grounding'
   sku: { name: 'G1' }
@@ -445,6 +458,7 @@ resource bingConnection 'Microsoft.CognitiveServices/accounts/connections@2025-0
 // ---------------------------------------- observability (traces/metrics)
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: '${baseName}-logs'
+  tags: resourceTags
   location: location
   properties: {
     sku: { name: 'PerGB2018' }
@@ -454,6 +468,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: '${baseName}-appi'
+  tags: resourceTags
   location: location
   kind: 'web'
   properties: {
@@ -514,6 +529,7 @@ resource projectMetricsPublisher 'Microsoft.Authorization/roleAssignments@2022-0
 // bind them by reference; RBAC authorisation; purge protection for evidence.
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   name: '${baseName}-kv'
+  tags: resourceTags
   location: location
   properties: {
     tenantId: subscription().tenantId
@@ -549,6 +565,7 @@ resource keyVaultDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-p
 // vector-store backups written by scripts/memory_store.py — README §Storage.
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: toLower(replace('${baseName}sa', '-', ''))
+  tags: resourceTags
   location: location
   kind: 'StorageV2'
   sku: { name: storageSku }
@@ -595,6 +612,16 @@ resource deliverables 'Microsoft.Storage/storageAccounts/blobServices/containers
   name: 'deliverables'
 }
 
+// Memory-store exports + evidence (operations/BACKUP_DR.md §3, B1). Written by
+// operations/backup_vector_stores.py --upload-account (deploy.sh step [0/8])
+// and by operations/backup-job.bicep when that nightly job is deployed. Never
+// committed to git (convertion/.gitignore operations/backups/).
+resource backups 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+  parent: blobService
+  name: 'backups'
+  properties: { publicAccess: 'None' }
+}
+
 resource storageDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
   name: 'to-log-analytics'
   scope: blobService
@@ -611,6 +638,7 @@ resource storageDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-pr
 // "strip every non-GET" rule of attach_integrations.py needs no exception.
 resource docIntel 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (enableDocumentIntelligence) {
   name: '${baseName}-docintel'
+  tags: resourceTags
   location: location
   kind: 'FormRecognizer'
   sku: { name: 'S0' }
@@ -625,6 +653,7 @@ resource docIntel 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (enable
 
 resource speech 'Microsoft.CognitiveServices/accounts@2025-06-01' = if (enableSpeech) {
   name: '${baseName}-speech'
+  tags: resourceTags
   location: location
   kind: 'SpeechServices'
   sku: { name: 'S0' }
@@ -671,6 +700,7 @@ module agentStores 'agent-stores.bicep' = if (enableStandardAgentSetup) {
 // the service already exists (agent-stores.bicep) and this block stays off.
 resource knowledgeSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = if (enableKnowledgeSearch && !enableStandardAgentSetup) {
   name: '${baseName}-search'
+  tags: resourceTags
   location: location
   sku: { name: 'basic' }
   identity: { type: 'SystemAssigned' }
@@ -944,6 +974,7 @@ output foundryAccountName string = foundry.name
 output projectName string = project.name
 output modelDeploymentName string = modelDeployment.name
 output webFacingRaiPolicyName string = raiPolicyWebFacing.name
+output backupsContainerName string = backups.name
 output reasoningModelDeploymentName string = reasoningDeployment.name
 output lightModelDeploymentName string = lightDeployment.name
 output bingConnectionName string = enableWebSearch ? 'bing-grounding' : ''

@@ -167,8 +167,13 @@ DORA Art. 9(2), 10(1) (detection of anomalous activity); ISO 42001 A.6.2.6.
 
 ## 5. Cost allocation and tagging
 
-Every resource in `rg-infosec-foundry` carries the tags below (delta
-D-FIN-B2 adds them to `main.bicep`); Cost analysis groups by `costCenter`
+Every taggable resource in `rg-infosec-foundry` carries the tags below —
+**applied**: `infra/main.bicep` `param resourceTags` is set on the Foundry
+account and project, Bing, Log Analytics, Application Insights, Key Vault,
+storage, Document Intelligence, Speech and the knowledge Search service.
+(Child resources without a `tags` property — model deployments, RAI policies,
+connections, containers, diagnostic settings, role assignments — inherit
+attribution from their parent in Cost analysis.) Cost analysis groups by `costCenter`
 and `requirement`, and the token spend is attributed per agent by
 `kql/latency-and-tokens.kql` (agents are not Azure resources, so the KQL
 estimate is the per-agent view).
