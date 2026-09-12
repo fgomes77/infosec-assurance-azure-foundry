@@ -123,6 +123,9 @@ def check_crossrefs(findings: list[str]) -> None:
     from create_orchestrator import ADVISOR, ORCHESTRATOR, VERIFIER
     from stage_renderers import SOURCES
     from convert_skills import EXAMPLE_SKILLS, ALIASES
+    # optional TPSRCA role split (scripts/create_tpsrca_subagents.py): these
+    # names are legitimate registry entries even though no skill converts to them
+    from create_tpsrca_subagents import SUBAGENTS as TPSRCA_SPLIT
 
     manifest = {}
     if (BUILD / "manifest.json").is_file():
@@ -132,7 +135,7 @@ def check_crossrefs(findings: list[str]) -> None:
         print("note: build/manifest.json missing - run convert_skills.py; "
               "manifest cross-references skipped")
     known = set(manifest) | set(DELIVERY) | {ADVISOR, ORCHESTRATOR, VERIFIER} \
-        | EXAMPLE_SKILLS | set(ALIASES)
+        | EXAMPLE_SKILLS | set(ALIASES) | set(TPSRCA_SPLIT)
 
     for name, cfg in reg["agents"].items():
         if manifest and name not in known:

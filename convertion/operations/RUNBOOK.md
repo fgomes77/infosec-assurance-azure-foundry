@@ -79,6 +79,7 @@ Evidence goes to `Governance/Operations/{yyyy}-{mm}/` on the SharePoint site.
 | M2 | Cost and tier review (`../governance/MODEL_ROUTING.md` rule 7) | `kql/latency-and-tokens.kql` (full table); `FINOPS.md` §6 checklist; the `evaluation/run_evals.py` report of the month | tier moves proposed as Tier C changes; advisory agents never move down |
 | M3 | Known-issue list refresh + platform currency | `SUPPORT_MODEL.md` §6; run `python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run --horizon 180 --params ../infra/main.parameters.prod.json` and open a ticket for any deployment within 120 days of retirement | updated list posted in the Teams channel |
 | M4 | PIM activation report | Entra PIM audit | sent to `{upn:line-manager}` (team model §12.2) |
+| M5 | Retention and cleanup run (`RETENTION_AND_CLEANUP.md` §4) | `python3 ../scripts/cleanup_foundry.py --dry-run` (offline rehearsal), then the read-only listings `--stores --files` and `--threads --memory`; owner approval before any `--apply`; a `--memory` purge additionally needs `--approved-by "{upn:francisco.gomes}"` | console output of every step filed as `Governance/Operations/{yyyy}-{mm}/retention-run.md`; protected stores `vs-assurance-memory` / `vs-assurance-combined` still present (check C2) |
 
 Quarterly and annual items (access review, DR test, template inventory
 review) are in `access-governance/QUARTERLY_ACCESS_REVIEW.md` and

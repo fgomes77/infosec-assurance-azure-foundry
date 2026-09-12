@@ -2,7 +2,7 @@
 """Shared chart renderer (matplotlib, headless) — PNG/SVG for decks, DOCX
 reports and dossier infographics rendered inside the EU boundary.
 
-Usage: charts.py <data.json> <out.png|out.svg>
+Usage: render.py <data.json> <out.png|out.svg>
 
 data.json: {"chart": "spider"|"gauge"|"bar"|"heatmap"|"exposure", ...}
   spider:   {"labels": [5 domains]?, "values": [0-10 x5], "title": str?, "max": 10?}

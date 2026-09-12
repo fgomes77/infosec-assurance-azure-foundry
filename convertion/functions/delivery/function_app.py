@@ -23,6 +23,12 @@ read-only, see ../../sharepoint/README.md.
   POST /api/portfolio_update {supplierName, serviceName, tpaStatus, reportType, reportUrl, runId, approvedBy}
   POST /api/history_append   {supplierName, serviceName, assessmentDate, composite, reportType, reportUrl, runId}
   POST /api/fetch_evidence   {driveId, itemId} -> {fileId, fileName, bytes}   (SharePoint -> Foundry file)
+  POST /api/extract_pdf      {model?: prebuilt-read|prebuilt-layout, pages?,
+                              contentBase64|driveId+itemId|fileId, attachToProject?}
+      -> {content, pages, tables, confidence: {mean, min}, source}
+         Azure AI Document Intelligence (EU) — the OCR path for scanned or
+         garbled evidence; pure-Python and office-tools come first
+         (agents/knowledge-packs/pdf-reading-foundry.md §4).
   GET  /api/fetch_public_page?url=&supplierDomain=&mode=&maxBytes=   (osint-proxy.yaml)
   GET  /api/allowlist
   GET  /api/passive_recon?domain=                                     (passive-recon.yaml)
@@ -33,6 +39,12 @@ read-only, see ../../sharepoint/README.md.
 Rendering executes the byte-verified generators staged by
 ../../scripts/stage_renderers.py into renderers/<template>/ (manifest.json
 per renderer, see renderers-src/README.md) so outputs match claude.ai.
+
+The LibreOffice/pandoc toolchain lives in the SEPARATE office-tools Function
+App (../office-tools): this app calls it over `OFFICE_TOOLS_BASE_URL` with
+`OFFICE_TOOLS_KEY` for the mandatory xlsx recalc gate, and never runs soffice
+itself — see ../office-tools/README.md §"Trust boundary" and the Dockerfile
+header here for the image split.
 """
 
 from __future__ import annotations
@@ -83,6 +95,14 @@ PORTFOLIO_LIST = os.environ.get("PORTFOLIO_LIST_NAME", "TPRM Portfolio")
 HISTORY_LIST = os.environ.get("HISTORY_LIST_NAME", "TPSRCA History")
 PROJECT_ENDPOINT = os.environ.get("PROJECT_ENDPOINT", "").rstrip("/")
 FOUNDRY_API_VERSION = os.environ.get("FOUNDRY_API_VERSION", "2025-05-15-preview")
+
+# Azure AI Document Intelligence (OCR of scanned evidence). Reached ONLY from
+# this app with its managed identity — main.bicep sets disableLocalAuth, so no
+# key exists to leak. Empty endpoint = enableDocumentIntelligence=false.
+DOCINTEL_ENDPOINT = os.environ.get("DOCINTEL_ENDPOINT", "").rstrip("/")
+DOCINTEL_API_VERSION = os.environ.get("DOCINTEL_API_VERSION", "2024-11-30")  # v4.0 GA
+DOCINTEL_MODELS = ("prebuilt-read", "prebuilt-layout")
+DOCINTEL_MAX_CHARS = int(os.environ.get("DOCINTEL_MAX_CHARS", "400000"))
 
 
 # --------------------------------------------------------------------- utils
@@ -137,6 +157,67 @@ def normalise(name: str) -> str:
     """Trim and replace Graph-illegal characters so name variants of the
     same supplier/service resolve to one folder."""
     return ILLEGAL.sub("-", name.strip()).rstrip(". ")
+
+
+# ------------------------------------------------------- request contracts
+# Bodies of the file-handling routes are jsonschema-validated before any byte
+# is fetched or written, so a malformed payload is a deterministic 400 naming
+# the offending field instead of a KeyError deep inside a Graph call. (The
+# RENDER payload has its own per-template schema gate: _validate_schema.)
+_FILE_SOURCE = {
+    "contentBase64": {"type": "string", "minLength": 4},
+    "fileName": {"type": "string", "minLength": 1, "maxLength": 180},
+    "driveId": {"type": "string", "minLength": 1, "maxLength": 300},
+    "itemId": {"type": "string", "minLength": 1, "maxLength": 300},
+    "fileId": {"type": "string", "minLength": 1, "maxLength": 300},
+}
+REQUEST_SCHEMAS: dict[str, dict] = {
+    "fetch_evidence": {
+        "type": "object",
+        "required": ["driveId", "itemId"],
+        "properties": {"driveId": _FILE_SOURCE["driveId"], "itemId": _FILE_SOURCE["itemId"]},
+    },
+    "extract_pdf": {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            **_FILE_SOURCE,
+            "model": {"type": "string", "enum": list(DOCINTEL_MODELS)},
+            "pages": {"type": "string", "pattern": r"^\d{1,5}(-\d{1,5})?(,\d{1,5}(-\d{1,5})?)*$"},
+            "outputContentFormat": {"type": "string", "enum": ["text", "markdown"]},
+            "attachToProject": {"type": "boolean"},
+        },
+        "anyOf": [
+            {"required": ["contentBase64"]},
+            {"required": ["driveId", "itemId"]},
+            {"required": ["fileId"]},
+        ],
+    },
+}
+
+
+def _body(req: func.HttpRequest, contract: str) -> dict:
+    """Parse + jsonschema-validate a request body. Fails closed: no
+    jsonschema in the image, or an invalid payload, is never a silent pass."""
+    raw = req.get_body() or b""
+    if not raw.strip():
+        raise Http(400, f"empty body; {contract} expects a JSON object")
+    try:
+        b = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise Http(400, f"body is not valid UTF-8 JSON: {e}")
+    if not isinstance(b, dict):
+        raise Http(400, "body must be a JSON object")
+    try:
+        import jsonschema
+    except ImportError:
+        raise Http(500, "jsonschema is not installed in this image")
+    try:
+        jsonschema.validate(b, REQUEST_SCHEMAS[contract])
+    except jsonschema.ValidationError as e:
+        raise Http(400, f"invalid {contract} payload: {e.message}",
+                   {"path": list(map(str, e.absolute_path)) or ["<root>"]})
+    return b
 
 
 def check_filename(name: str, fmt: str) -> str:
@@ -340,7 +421,7 @@ def _foundry_download(file_id: str) -> bytes:
 def fetch_evidence(req: func.HttpRequest) -> func.HttpResponse:
     """Attach a SharePoint evidence file to the Foundry project (file_search /
     code_interpreter) without streaming it through the conversation."""
-    b = req.get_json()
+    b = _body(req, "fetch_evidence")
     data, name = _drive_item_bytes(b["driveId"], b["itemId"])
     return _json({"fileId": _foundry_upload(data, name), "fileName": name, "bytes": len(data)})
 
@@ -348,12 +429,168 @@ def fetch_evidence(req: func.HttpRequest) -> func.HttpResponse:
 def _input_bytes(b: dict, key_prefix: str = "") -> tuple[bytes, str]:
     """Resolve an input file from contentBase64 | driveId+itemId | fileId."""
     if b.get(key_prefix + "contentBase64"):
-        return base64.b64decode(b[key_prefix + "contentBase64"]), b.get(key_prefix + "fileName", "input.bin")
+        try:
+            data = base64.b64decode(re.sub(r"\s+", "", str(b[key_prefix + "contentBase64"])), validate=True)
+        except (ValueError, TypeError) as e:
+            raise Http(400, f"{key_prefix}contentBase64 is not valid base64: {e}")
+        if not data:
+            raise Http(400, f"{key_prefix}contentBase64 decodes to zero bytes")
+        if len(data) > MAX_PAYLOAD:
+            raise Http(413, f"{key_prefix}contentBase64 exceeds {MAX_PAYLOAD} bytes")
+        return data, b.get(key_prefix + "fileName", "input.bin")
     if b.get(key_prefix + "driveId") and b.get(key_prefix + "itemId"):
         return _drive_item_bytes(b[key_prefix + "driveId"], b[key_prefix + "itemId"])
     if b.get(key_prefix + "fileId"):
         return _foundry_download(b[key_prefix + "fileId"]), b.get(key_prefix + "fileName", "input.bin")
     raise Http(400, f"provide {key_prefix}contentBase64, {key_prefix}driveId+{key_prefix}itemId or {key_prefix}fileId")
+
+
+# ------------------------------------------- Document Intelligence (OCR)
+def _docintel_confidence(result: dict) -> dict:
+    """Mean / minimum word confidence — the number the knowledge pack tells
+    agents to record ("OCR via Document Intelligence, confidence X") and the
+    signal for quoting a passage as "(OCR)"."""
+    vals = [w.get("confidence") for p in result.get("pages", []) or []
+            for w in p.get("words", []) or [] if isinstance(w.get("confidence"), (int, float))]
+    if not vals:
+        return {"mean": None, "min": None, "words": 0}
+    return {"mean": round(sum(vals) / len(vals), 4), "min": round(min(vals), 4), "words": len(vals)}
+
+
+@app.route(route="extract_pdf", methods=["POST"])
+@_guard
+def extract_pdf(req: func.HttpRequest) -> func.HttpResponse:
+    """OCR / layout extraction for scanned or garbled evidence, on Azure AI
+    Document Intelligence in the EU region — the replacement for the
+    sandbox's pytesseract (agents/knowledge-packs/pdf-reading-foundry.md §4,
+    document_agents_addendum.md). Fallback order stays: pure-Python first,
+    office-tools (poppler) second, this endpoint last.
+
+    Document Intelligence is reached ONLY from here, with this app's managed
+    identity (main.bicep: disableLocalAuth, no key anywhere) — it is never an
+    agent tool connection, so nothing can send it a document that has not
+    passed through the pipeline.
+
+    Body: {model?: prebuilt-read|prebuilt-layout, pages?: "1-5",
+           contentBase64 | driveId+itemId | fileId, fileName?,
+           outputContentFormat?: text|markdown, attachToProject?: bool}
+    """
+    b = _body(req, "extract_pdf")
+    if not DOCINTEL_ENDPOINT:
+        raise Http(503, "DOCINTEL_ENDPOINT not configured (enableDocumentIntelligence=false)")
+    model = b.get("model", "prebuilt-read")
+    data, name = _input_bytes(b)
+    params = {"api-version": DOCINTEL_API_VERSION,
+              "outputContentFormat": b.get("outputContentFormat", "text")}
+    if b.get("pages"):
+        params["pages"] = b["pages"]
+    token = _token("https://cognitiveservices.azure.com/.default")
+    r = requests.post(f"{DOCINTEL_ENDPOINT}/documentintelligence/documentModels/{model}:analyze",
+                      params=params, timeout=120,
+                      headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                      json={"base64Source": base64.b64encode(data).decode()})
+    if r.status_code not in (200, 202):
+        raise Http(502, "Document Intelligence rejected the document",
+                   {"status": r.status_code, "detail": r.text[:500]})
+    op = r.headers.get("operation-location") or r.headers.get("Operation-Location")
+    if not op:
+        raise Http(502, "Document Intelligence returned no operation-location")
+
+    deadline = time.monotonic() + float(os.environ.get("DOCINTEL_TIMEOUT_SECONDS", "420"))
+    delay, payload = 1.0, {}
+    while True:
+        if time.monotonic() > deadline:
+            raise Http(504, "Document Intelligence analysis timed out")
+        time.sleep(delay)
+        delay = min(delay * 1.5, 10.0)
+        poll = requests.get(op, headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        poll.raise_for_status()
+        payload = poll.json()
+        status = str(payload.get("status", "")).lower()
+        if status == "succeeded":
+            break
+        if status in ("failed", "canceled"):
+            raise Http(502, "Document Intelligence analysis failed",
+                       {"detail": json.dumps(payload.get("error", {}))[:500]})
+
+    result = payload.get("analyzeResult") or {}
+    content = result.get("content") or ""
+    truncated = len(content) > DOCINTEL_MAX_CHARS
+    tables = [{"rowCount": t.get("rowCount"), "columnCount": t.get("columnCount"),
+               "pageNumber": (t.get("boundingRegions") or [{}])[0].get("pageNumber"),
+               "cells": [{"rowIndex": c.get("rowIndex"), "columnIndex": c.get("columnIndex"),
+                          "content": c.get("content", "")} for c in (t.get("cells") or [])]}
+              for t in (result.get("tables") or [])]
+    out = {"model": model, "fileName": name, "bytes": len(data),
+           "apiVersion": DOCINTEL_API_VERSION,
+           "pages": len(result.get("pages") or []),
+           "pageRange": b.get("pages", "all"),
+           "content": content[:DOCINTEL_MAX_CHARS],
+           "truncated": truncated,
+           "tables": tables,
+           "confidence": _docintel_confidence(result),
+           "source": f"OCR via Document Intelligence ({model}, {DOCINTEL_API_VERSION}), EU region"}
+    if b.get("attachToProject"):
+        out["fileId"] = _foundry_upload(content.encode("utf-8"), f"{Path(name).stem}.ocr.txt")
+    _audit("extract_pdf", model=model, pages=out["pages"], bytes=len(data))
+    return _json(out)
+
+
+# ------------------------------------------- office-tools (LibreOffice app)
+OFFICE_TOOLS_BASE = os.environ.get("OFFICE_TOOLS_BASE_URL", "").rstrip("/")
+OFFICE_TOOLS_KEY = os.environ.get("OFFICE_TOOLS_KEY", "")
+
+
+def _office_tools(path: str, payload: dict, timeout: int = 600) -> dict:
+    """Call the separate office-tools Function App (functions/office-tools:
+    LibreOffice/pandoc/poppler). Key-protected; this app holds the key, the
+    agents never see it."""
+    if not OFFICE_TOOLS_BASE:
+        raise Http(503, "OFFICE_TOOLS_BASE_URL not configured (office-tools app not deployed)")
+    headers = {"Content-Type": "application/json"}
+    if OFFICE_TOOLS_KEY:
+        headers["x-functions-key"] = OFFICE_TOOLS_KEY
+    r = requests.post(f"{OFFICE_TOOLS_BASE}/{path}", json=payload, headers=headers, timeout=timeout)
+    if r.status_code >= 400:
+        raise Http(502, f"office-tools /{path} failed",
+                   {"status": r.status_code, "detail": r.text[:1000]})
+    return r.json()
+
+
+def _recalc_gate(prim: dict, files: list[dict]) -> dict:
+    """The xlsx skill's mandatory recalc gate (renderers-src/xlsx-generic/
+    manifest.json 'post', verifier rule 9): every workbook leaving /api/render
+    is recalculated by LibreOffice in the office-tools app and must report
+    total_errors=0. The RECALCULATED bytes replace the rendered ones, so the
+    stored record opens with cached values rather than uncalculated formulas.
+
+    Degrades explicitly, never silently: with no office-tools app configured
+    the gate is reported as {"passed": null, "reason": ...} so the verifier
+    and the approver can see the check did not run."""
+    xlsx = [f for f in files if f["kind"] == "xlsx"]
+    if not xlsx:
+        return {"passed": True, "checks": []}
+    if not OFFICE_TOOLS_BASE:
+        return {"passed": None, "gate": "xlsx-recalc",
+                "reason": "office-tools not configured (OFFICE_TOOLS_BASE_URL empty)"}
+    checks, details = [], []
+    for f in xlsx:
+        res = _office_tools("recalc", {"fileName": f["fileName"],
+                                       "contentBase64": f["contentBase64"],
+                                       "timeoutSeconds": 60})
+        g = res.get("gate") or {}
+        checks += [f"{f['fileName']}: {c}" for c in g.get("checks", [])]
+        details.append({"fileName": f["fileName"], "totalErrors": res.get("total_errors"),
+                        "totalFormulas": res.get("total_formulas")})
+        if res.get("contentBase64"):
+            # `prim` is a copy of one of these entries under the requested
+            # output name: match it on content, not on position.
+            if prim["kind"] == "xlsx" and prim.get("contentBase64") == f["contentBase64"]:
+                prim["contentBase64"] = res["contentBase64"]
+            f["contentBase64"] = res["contentBase64"]
+    if checks:
+        raise Http(422, "quality gate failed", {"gate": "xlsx-recalc", "checks": checks})
+    return {"passed": True, "gate": "xlsx-recalc", "checks": [], "recalc": details}
 
 
 # ---------------------------------------------------------------- render
@@ -393,37 +630,88 @@ def _manifest(d: Path) -> dict:
     raise Http(500, f"renderer {d.name} has no manifest.json / render.py / generate_slide.js")
 
 
+_FENCE = re.compile(r"```[ \t]*(?:json|jsonc|JSON)?[ \t]*\r?\n(.*?)```", re.S)
+_ZWSP = re.compile("[\u200b-\u200f\u2028\u2029\ufeff]")
+
+
 def _extract_payload(text, fmt: str):
     """Agent messages arrive as prose + one fenced ```json block (or the
-    finished HTML). Return the JSON object / HTML string the renderer needs."""
+    finished HTML). Return the JSON object / HTML string the renderer needs.
+
+    Defensive on purpose: the producer is a language model, so every fenced
+    block is tried in order (a first block that is an example or truncated
+    must not lose a valid second one), invisible characters and a leading BOM
+    are stripped, a bare object embedded in prose is the last resort, and the
+    result must be an object/array — a JSON *string* or number is a contract
+    error, never a renderer input. Every failure is a 400 that says what was
+    seen (the pipeline shows it to the requester), never a 500."""
     if isinstance(text, (dict, list)):
         return text
-    if text is None:
+    if text is None or (isinstance(text, str) and not text.strip()):
         raise Http(400, "data/content missing")
-    s = str(text)
-    if fmt == "html" or (fmt == "pdf" and "<html" in s.lower() and "```json" not in s):
+    if isinstance(text, (int, float, bool)):
+        raise Http(400, f"data must be an object or a fenced ```json block, got {type(text).__name__}")
+    s = _ZWSP.sub("", str(text)).lstrip("\ufeff")
+
+    if fmt == "html" or (fmt == "pdf" and "<html" in s.lower() and "```" not in s):
         m = re.search(r"<!doctype html.*?</html>|<html.*?</html>", s, re.I | re.S)
         return m.group(0) if m else s
-    m = re.search(r"```json\s*(.*?)```", s, re.S | re.I)
-    if m:
-        return json.loads(m.group(1))
+
+    tried = 0
+    for m in _FENCE.finditer(s):
+        tried += 1
+        try:
+            obj = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, (dict, list)):
+            return obj
     try:
-        return json.loads(s)
+        obj = json.loads(s)
+        if isinstance(obj, (dict, list)):
+            return obj
     except json.JSONDecodeError:
-        raise Http(400, "no fenced ```json block found in data")
+        pass
+    # last resort: a bare {...} embedded in prose without a fence
+    brace = re.search(r"\{.*\}", s, re.S)
+    if brace:
+        try:
+            obj = json.loads(brace.group(0))
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+    raise Http(400, f"no parsable JSON object found in data ({tried} fenced block(s) tried)",
+               {"preview": s[:200]})
 
 
 def _validate_schema(template: str, data) -> None:
+    """jsonschema gate: a payload that does not match the registered contract
+    is a 400 naming the failing field, before any renderer is started. Fails
+    CLOSED — an unreadable schema or a missing jsonschema package is a 500,
+    never a silent pass (a renderer fed an off-contract payload produces a
+    plausible-looking wrong report)."""
     for sd in SCHEMA_DIRS:
         for cand in (sd / f"{template}.schema.json", sd / f"{template.replace('-', '_')}.schema.json"):
-            if cand.exists():
+            if not cand.exists():
+                continue
+            try:
                 import jsonschema
-                try:
-                    jsonschema.validate(data, json.loads(cand.read_text(encoding="utf-8")))
-                except jsonschema.ValidationError as e:
-                    raise Http(400, f"data does not match {cand.name}: {e.message}",
-                               {"path": list(map(str, e.absolute_path))})
-                return
+            except ImportError:
+                raise Http(500, "jsonschema is not installed in this image")
+            try:
+                schema = json.loads(cand.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as e:
+                raise Http(500, f"schema {cand.name} is unreadable: {e}")
+            try:
+                jsonschema.validate(data, schema)
+            except jsonschema.ValidationError as e:
+                raise Http(400, f"data does not match {cand.name}: {e.message}",
+                           {"path": list(map(str, e.absolute_path)) or ["<root>"],
+                            "schemaPath": list(map(str, e.absolute_schema_path))})
+            except jsonschema.SchemaError as e:
+                raise Http(500, f"schema {cand.name} is invalid: {e.message}")
+            return
 
 
 def _run(cmd: list[str], cwd: Path, timeout=600) -> str:
@@ -561,6 +849,11 @@ def render(req: func.HttpRequest) -> func.HttpResponse:
                 inp.write_bytes(data)
                 extra["input"] = inp
             prim, files, gate = render_with(template, fmt, payload, out_name, tdp, extra)
+    # xlsx leaves this endpoint only after LibreOffice has recalculated it in
+    # the office-tools app (raises 422 when the workbook still has errors).
+    recalc = _recalc_gate(prim, files)
+    if recalc.get("gate"):
+        gate = {**gate, **recalc}
     return _json({"fileName": prim["fileName"], "contentBase64": prim["contentBase64"],
                   "files": files, "gate": gate, "template": template, "format": fmt})
 
@@ -855,4 +1148,6 @@ def health(req: func.HttpRequest) -> func.HttpResponse:
     except ImportError:
         tools["playwright"] = False
     return _json({"status": "ok", "renderers": staged, "tools": tools,
+                  "officeTools": bool(OFFICE_TOOLS_BASE),
+                  "documentIntelligence": bool(DOCINTEL_ENDPOINT),
                   "dataBoundary": os.environ.get("ENX_DATA_BOUNDARY", "EU")})

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * render_mermaid.js — Mermaid source -> SVG or PNG via @mermaid-js/mermaid-cli
- * Usage: node render_mermaid.js <data.json> <out.svg|out.png>
+ * generate_slide.js — Mermaid source -> SVG or PNG via @mermaid-js/mermaid-cli
+ * Usage: node generate_slide.js <data.json> <out.svg|out.png>
  * data.json: { "mermaid": "...", "theme": "neutral", "background": "white", "width": 1400 }
  * Runs the bundled Chromium with --no-sandbox (container), no network access needed.
  */

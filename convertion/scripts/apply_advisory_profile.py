@@ -59,7 +59,8 @@ HEREPATH = Path(__file__).resolve().parent
 sys.path.insert(0, str(HEREPATH))
 from _foundry_runtime import (ai_search_tool, get_runtime,  # noqa: E402
                               knowledge_source, record_version)
-from _azure_helpers import kit_metadata, tool_type  # noqa: E402
+from _azure_helpers import (dedupe_tools, kit_metadata,  # noqa: E402
+                            tool_type)
 
 ENDPOINT = os.environ.get("PROJECT_ENDPOINT")
 MARKER = "# Advisory-system addendum"
@@ -160,6 +161,10 @@ def main() -> int:
         has_search = any(tool_type(t) == "azure_ai_search" for t in tools)
         if search_defs and not has_search:
             tools += search_defs
+
+        # the live list can already carry a twin of something attached here
+        # (a re-run, or attach_integrations.py in the same deploy)
+        tools = dedupe_tools(tools, label=name)
 
         updated = rt.upsert_agent(
             name=name, model=agent.model, description=agent.description,

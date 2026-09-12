@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "ALLOWED_CALLER_PRINCIPAL_IDS": "{delivery-function-managed-identity-object-id},{logic-apps-managed-identity-object-id}",
+    "MAX_PAYLOAD_BYTES": "52428800",
+    "SOFFICE_TIMEOUT_SECONDS": "300",
+    "TOOLCHAIN_DIR": "",
+    "ENX_DATA_BOUNDARY": "EU",
+    "HOME": "/tmp"
+  }
+}

@@ -4,10 +4,16 @@
 # claude.ai export) before the next runs — accuracy gates the speed.
 #
 #   ./deploy.sh                runtime pre-flight -> model lifecycle ->
-#                              convert -> verify -> agents -> delivery agents
+#                              convert -> self-knowledge pack -> verify
+#                              -> agents -> delivery agents -> router rewire
 #                              -> advisor/orchestrator -> integrations
 #                              -> advisory profile -> renderers -> checks
 #                              -> smoke test -> live drift check
+#
+# Not run here (optional, one-off): scripts/create_tpsrca_subagents.py splits
+# the TPSRCA 12-role methodology into tpsrca-calc / tpsrca-analysis /
+# tpsrca-report. It needs registry entries first and changes the routable
+# agent set, so it is an owner decision, not a deploy step.
 #   ./deploy.sh --dry-run      full offline rehearsal (no Azure calls)
 #   ./deploy.sh --infra        also run setup/provision.sh first
 #   ./deploy.sh --functions    also publish functions/delivery (func CLI)
@@ -99,6 +105,31 @@ echo "==> [1/8] Converting skills from the claude.ai export ${CONVERT_FLAGS}"
 # shellcheck disable=SC2086
 python3 convert_skills.py $CONVERT_FLAGS
 
+# [1b] The platform self-knowledge pack (what agents retrieve when asked what
+# THIS platform can do) is generated from the kit: manifest, registry,
+# pipelines, templates, approval policy. It needs the fresh manifest, so it
+# runs after the conversion; when it changes anything the conversion re-runs
+# so every knowledge store ships the new version.
+echo "==> [1b/8] Regenerating the platform self-knowledge pack"
+if [ -n "$DRY" ]; then
+  # a rehearsal must not write into agents/ (the pack is a committed file):
+  # report only. Add `build_self_knowledge.py --check` to the pipeline once
+  # the regenerated pack is in git, to fail on a stale one.
+  python3 build_self_knowledge.py --dry-run | tail -1
+else
+  set +e
+  python3 build_self_knowledge.py --changed-exit 9
+  sk_rc=$?
+  set -e
+  case "$sk_rc" in
+    0) ;;
+    9) echo "    pack changed - re-converting so every knowledge store gets it"
+       # shellcheck disable=SC2086
+       python3 convert_skills.py $CONVERT_FLAGS ;;
+    *) echo "self-knowledge pack generation failed"; exit "$sk_rc" ;;
+  esac
+fi
+
 echo "==> [2/8] Verifying conversion fidelity (templates, rules, gates) + kit consistency"
 python3 verify_conversion.py
 python3 verify_kit.py
@@ -119,11 +150,18 @@ if [ -z "$DRY" ] && [ -z "${ALLOW_BASIC_AGENT_SETUP:-}" ]; then
   fi
 fi
 
-echo "==> [3/8] Creating/updating agents $DRY"
-python3 create_agents.py $DRY
+echo "==> [3/8] Creating/updating agents (router wiring deferred) $DRY"
+python3 create_agents.py --skip-routers $DRY
 
 echo "==> [4/8] Creating delivery-layer agents (ciso-global-report, analyzers, template-manager) $DRY"
 python3 create_delivery_agents.py $DRY
+
+# The control-center ROUTE table covers the delivery agents (menu options
+# 6-10, agents/overlays/enx-tprm-control-center.md), so it can only be wired
+# once step [4] has created them - wiring it inside step [3] would fail on
+# targets that do not exist yet.
+echo "==> [4b/8] Wiring the control-center ROUTE table over the full agent set $DRY"
+python3 create_agents.py --rewire $DRY
 
 echo "==> [5/8] Creating advisor + verifier + orchestrator (+ memory store) $DRY"
 python3 create_orchestrator.py $DRY

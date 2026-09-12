@@ -104,10 +104,11 @@ your best direct answer, clearly labelled as such.
 # Same mandatory gate the converter appends to every specialist agent.
 sys.path.insert(0, str(HERE))
 from convert_skills import APPROVAL_GATE, ALIASES  # noqa: E402
-from _azure_helpers import (integration_tools, kit_metadata,  # noqa: E402
-                            reconcile_store, routing_table_block)
-from _foundry_runtime import (ai_search_tool, get_runtime,  # noqa: E402
-                              knowledge_source, memory_backend,
+from _azure_helpers import (dedupe_tools, integration_tools,  # noqa: E402
+                            kit_metadata, reconcile_store,
+                            routing_table_block, tool_type)
+from _foundry_runtime import (ai_search_tool, bing_grounding_tool,  # noqa: E402
+                              get_runtime, knowledge_source, memory_backend,
                               record_version)
 
 
@@ -215,9 +216,20 @@ def main() -> int:
 
     if not ENDPOINT:
         sys.exit("Set PROJECT_ENDPOINT (setup/.env)")
-    from azure.ai.agents.models import BingGroundingTool, FileSearchTool
+    from azure.ai.agents.models import FileSearchTool
     rt = get_runtime(ENDPOINT)
     live = rt.list_agents()
+
+    # Grounding with Bing needs the project connection's ID, not its name:
+    # resolve BING_CONNECTION_NAME once and report a miss instead of
+    # attaching a tool that would never ground (the residual-risk acceptance
+    # for web grounding itself is finding C13, integrations/registry.json).
+    bing_conn = rt.connection_id(BING_CONNECTION)
+    if not bing_conn:
+        print(f"note: project connection {BING_CONNECTION!r} not found — web "
+              f"grounding NOT attached to {ADVISOR}/{ORCHESTRATOR}; create it "
+              f"(infra/main.bicep, integrations/connections/) or set "
+              f"BING_CONNECTION_NAME in setup/.env")
 
     # ---- advisor -----------------------------------------------------
     from _azure_helpers import UploadCache, upload_files
@@ -257,11 +269,10 @@ def main() -> int:
     if ADVISOR in live:
         # keep what attach_integrations.py attached (OpenAPI/MCP/Bing/Search)
         tools += integration_tools(live[ADVISOR])
-    if not any(getattr(t, "type", "") == "bing_grounding" for t in tools):
-        try:
-            tools += BingGroundingTool(connection_id=BING_CONNECTION).definitions
-        except Exception:
-            print("note: Bing grounding not attached (connection missing?)")
+    if not any(tool_type(t) == "bing_grounding" for t in tools):
+        tools += bing_grounding_tool(bing_conn)
+    # integration_tools() + the definitions built here can overlap on a re-run
+    tools = dedupe_tools(tools, label=ADVISOR)
 
     had_advisor = ADVISOR in live
     advisor = rt.upsert_agent(
@@ -293,11 +304,9 @@ def main() -> int:
     live[VERIFIER] = verifier
 
     # ---- orchestrator ------------------------------------------------
-    otools = []
-    try:
-        otools += BingGroundingTool(connection_id=BING_CONNECTION).definitions
-    except Exception:
-        pass
+    otools = list(bing_grounding_tool(bing_conn))
+    if ORCHESTRATOR in live:
+        otools += integration_tools(live[ORCHESTRATOR])
     alias_notes: dict[str, list[str]] = {}
     for alias, target in ALIASES.items():
         alias_notes.setdefault(target, []).append(alias)
@@ -320,7 +329,7 @@ def main() -> int:
             for name, _ in rows:
                 otools += A2ATool(agent_name=name).definitions
             print(f"  A2A tool attached for {len(rows)} agents (preview)")
-        except Exception as e:  # noqa: BLE001 - absent in the pinned SDK
+        except (ImportError, AttributeError, TypeError, ValueError) as e:
             print(f"note: ENABLE_A2A_TOOL=true but this SDK has no A2A tool "
                   f"({type(e).__name__}) — using the ROUTE table only "
                   f"(enterprise/series/06-agents-conversion-and-deploy.md §D)")
@@ -331,7 +340,7 @@ def main() -> int:
         description="Entry point: routes and decomposes InfoSec "
                     "Assurance requests across all agents.",
         instructions=orchestrator_instructions() + routing_table_block(rows),
-        tools=otools, metadata=kit_metadata(),
+        tools=dedupe_tools(otools, label=ORCHESTRATOR), metadata=kit_metadata(),
         existing=live.get(ORCHESTRATOR))
     record_version(orchestrator, note="routing table")
     print(f"{'updated' if had_orch else 'created'}  {orchestrator.ref} "

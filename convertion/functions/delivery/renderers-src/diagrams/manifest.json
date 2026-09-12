@@ -1,9 +1,9 @@
 {
   "runtime": "node",
-  "entry": "render_mermaid.js",
+  "entry": "generate_slide.js",
   "argv": ["{data}", "{out}"],
   "formats": ["svg", "png"],
   "outputs": "single",
   "timeout": 300,
-  "source": "mermaid-cli (headless Chromium from the Dockerfile). data.json: {\"mermaid\": \"flowchart TD ...\", \"theme\": \"neutral\"?, \"background\": \"white\"?}. Replaces the Whimsical / draw.io / Mermaid Chart connectors of claude.ai for diagram rendering inside the EU boundary."
+  "source": "mermaid-cli (headless Chromium from the Dockerfile). data.json: {\"mermaid\": \"flowchart TD ...\", \"theme\": \"neutral\"?, \"background\": \"white\"?}. Replaces the Whimsical / draw.io / Mermaid Chart connectors of claude.ai for diagram rendering inside the EU boundary. Entry is generate_slide.js, the registry convention for node renderers (templates/registry.json 'renderer', scripts/stage_renderers.py SHIMS + function_app._manifest fallback)."
 }

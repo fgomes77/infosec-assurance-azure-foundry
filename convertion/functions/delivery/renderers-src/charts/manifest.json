@@ -1,8 +1,8 @@
 {
   "runtime": "python",
-  "entry": "charts.py",
+  "entry": "render.py",
   "argv": ["{data}", "{out}"],
   "formats": ["png", "svg"],
   "outputs": "single",
-  "source": "Foundry-side chart renderer (matplotlib) replacing Chart.js/Playwright screenshots: spider (5-domain, same geometry as the ciso-reporting spider), gauge, bar, heatmap, exposure map. Palette: palette.json. Called via /api/render {format: png|svg, template: charts, data: {chart: spider|gauge|bar|heatmap|exposure, ...}}"
+  "source": "Foundry-side chart renderer (matplotlib) replacing Chart.js/Playwright screenshots: spider (5-domain, same geometry as the ciso-reporting spider), gauge, bar, heatmap, exposure map. Palette: palette.json. Entry is render.py, the registry convention for python renderers (templates/registry.json 'renderer', scripts/stage_renderers.py + function_app._manifest fallback). Called via /api/render {format: png|svg, template: charts, data: {chart: spider|gauge|bar|heatmap|exposure, ...}}"
 }

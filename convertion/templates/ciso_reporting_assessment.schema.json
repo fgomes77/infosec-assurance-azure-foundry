@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ciso_reporting_assessment",
+  "description": "Verified assessment JSON produced by the ciso-reporting agent (requirement c: Cyber Forum deck). Consumed unchanged by functions/delivery/renderers/ciso-reporting/render.py, which runs the byte-verified scripts/generate_reports_v2.py against assets/Group_CISO_Report_Template_v3_1.pptx and must print 'PASS - zero unsubstituted tokens'. Field names mirror the skill's own assets/assessment_schema_example.json and must not drift.",
+  "type": "object",
+  "required": ["vendor", "assessment_id", "organisation", "template_name",
+               "date_created", "date_completed", "analyst", "analyst_decision",
+               "manager", "manager_decision", "dora_in_scope", "critical_supplier",
+               "service_criticality", "supplier_type", "certifications",
+               "approval_status", "risks", "findings", "perimeter",
+               "crit_findings", "dora_actions"],
+  "properties": {
+    "vendor": { "type": "string", "minLength": 1 },
+    "assessment_id": { "type": "string" },
+    "organisation": { "type": "string", "default": "EURONEXT NV" },
+    "template_name": { "type": "string", "description": "Source questionnaire, e.g. 'Infosec Form (v14)'." },
+    "date_created": { "type": "string", "pattern": "^\\d{2}/\\d{2}/\\d{4}$" },
+    "date_completed": { "type": "string", "pattern": "^\\d{2}/\\d{2}/\\d{4}$" },
+    "analyst": { "type": "string", "description": "Role or placeholder name of the assurance analyst; never a mailbox." },
+    "analyst_decision": { "type": "string", "enum": ["Approved", "Approved (Conditional)", "Rejected", "Pending"] },
+    "manager": { "type": "string" },
+    "manager_decision": { "type": "string", "enum": ["Approved", "Approved (Conditional)", "Rejected", "Pending"] },
+    "dora_in_scope": { "type": "boolean" },
+    "critical_supplier": { "type": "boolean" },
+    "service_criticality": { "type": "string", "enum": ["Critical", "Important", "Standard"] },
+    "supplier_type": { "type": "string" },
+    "certifications": { "type": "string" },
+    "cert_valid": { "type": "boolean" },
+    "approval_status": { "type": "string" },
+    "risks": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "required": ["rid", "desc", "category", "domain", "inherent", "residual", "stage"],
+        "properties": {
+          "rid": { "type": "string" },
+          "desc": { "type": "string" },
+          "category": { "type": "string" },
+          "domain": { "type": "string", "enum": ["Cybersecurity", "Data Management", "IT", "Business Continuity", "Third-Parties"] },
+          "inherent": { "type": "number", "minimum": 0, "maximum": 10 },
+          "residual": { "type": "number", "minimum": 0, "maximum": 10 },
+          "target": { "type": "number", "minimum": 0, "maximum": 10 },
+          "stage": { "type": "string", "description": "OneTrust treatment stage, e.g. 'Treated', 'In Treatment', 'Open'." },
+          "controls": {
+            "type": "array",
+            "items": {
+              "type": "object", "required": ["id", "status"],
+              "properties": {
+                "id": { "type": "string", "description": "Control id; a 'Euronext' prefix marks an INTERNAL control, any other prefix (CIS/ISO/NIST/SOC2) an external one." },
+                "status": { "type": "string", "enum": ["Implemented", "Pending", "Not Doing"] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": { "type": "array", "items": { "type": "string" } },
+    "perimeter": {
+      "type": "object",
+      "required": ["Cybersecurity", "Data Management", "IT", "Business Continuity", "Third-Parties"],
+      "additionalProperties": {
+        "type": "object", "required": ["internal", "external"],
+        "properties": { "internal": { "type": "string" }, "external": { "type": "string" } }
+      },
+      "description": "Dual-perimeter statement per domain: internal = Euronext-owned controls, external = vendor-side controls."
+    },
+    "crit_findings": {
+      "type": "array",
+      "items": {
+        "type": "array", "minItems": 3, "maxItems": 3,
+        "prefixItems": [{ "type": "string" }, { "type": "string" }, { "type": "boolean" }]
+      },
+      "description": "[title, detail, positive] triples; positive=true renders as a strength."
+    },
+    "dora_actions": {
+      "type": "array",
+      "items": {
+        "type": "array", "minItems": 2, "maxItems": 2,
+        "prefixItems": [{ "type": "string" }, { "type": "string" }]
+      },
+      "description": "[when, action] pairs, e.g. ['IMMEDIATE', 'Finalise the contractual addendum.']."
+    },
+    "analyst_notes": { "type": "array", "items": { "type": "string" } }
+  }
+}

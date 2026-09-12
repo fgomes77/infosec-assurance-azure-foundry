@@ -41,7 +41,40 @@ REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o4-mini")
 LIGHT_MODEL = os.environ.get("LIGHT_MODEL_DEPLOYMENT_NAME", "gpt-4o-mini")
 TIER_MODEL = {"light": LIGHT_MODEL, "chat": CHAT_MODEL, "reasoning": REASONING_MODEL}
 
+sys.path.insert(0, str(HERE))
+from _azure_helpers import dedupe_tools, tool_type  # noqa: E402
+
 REGISTRY = json.loads((CONV / "integrations" / "registry.json").read_text())
+
+# Foundry tool definitions bind a project connection by its ID, never by the
+# name used in integrations/registry.json. The resolver turns one into the
+# other once per name and says so when a connection is missing, instead of
+# attaching a tool that silently never calls anything.
+_PROJECT = None
+_CONN_IDS: dict[str, str] = {}
+
+
+def resolve_connection(name: str) -> str:
+    """Project connection name -> connection id (unchanged when it already is
+    an id, when there is no client, or when the lookup fails - with a note)."""
+    if not name or name.startswith("/"):
+        return name
+    if name in _CONN_IDS:
+        return _CONN_IDS[name]
+    resolved = name
+    if _PROJECT is not None:
+        try:
+            from azure.core.exceptions import AzureError
+        except ImportError:               # SDK not installed (dry runs)
+            AzureError = Exception        # noqa: N806
+        try:
+            resolved = _PROJECT.connections.get(name=name).id or name
+        except (AzureError, AttributeError, TypeError, ValueError) as e:
+            print(f"note: project connection {name!r} did not resolve to an id "
+                  f"({type(e).__name__}: {e}) - passing the name through; "
+                  f"create it with integrations/connections/ if the tool fails")
+    _CONN_IDS[name] = resolved
+    return resolved
 # Live agents that may legitimately lack a registry entry: the verifier
 # (registry example_agents.unmanaged_ok) and the orchestrator, whose tools
 # are owned by create_orchestrator.py. Any other unmanaged live agent FAILS
@@ -116,7 +149,7 @@ def build_tools(agent_tools: list[str], write_connections: list[str],
             read_only = key not in write_connections
             auth = OpenApiConnectionAuthDetails(
                 security_scheme=OpenApiConnectionSecurityScheme(
-                    connection_id=conn["foundry_connection"]))
+                    connection_id=resolve_connection(conn["foundry_connection"])))
             defs += OpenApiTool(
                 name=key.replace("-", "_"),
                 description=(f"{key} integration"
@@ -126,8 +159,14 @@ def build_tools(agent_tools: list[str], write_connections: list[str],
                 auth=auth,
             ).definitions
         elif conn["type"] == "bing_grounding":
-            defs += BingGroundingTool(
-                connection_id=conn["foundry_connection"]).definitions
+            # finding C13 keeps the residual-risk acceptance for web grounding;
+            # this only makes the wiring real - the tool needs the connection ID
+            cid = resolve_connection(conn["foundry_connection"])
+            if cid == conn["foundry_connection"] and _PROJECT is not None:
+                print(f"note: web grounding for {key!r} is attached with an "
+                      f"unresolved connection reference - verify it in the "
+                      f"portal (enterprise/portal/agent-checklist.md)")
+            defs += BingGroundingTool(connection_id=cid).definitions
         elif conn["type"] == "mcp":
             mcp = json.loads((CONV / conn["config"]).read_text())
             # every key starting with '_' is documentation, not tool definition
@@ -145,7 +184,8 @@ def build_tools(agent_tools: list[str], write_connections: list[str],
             if cname or conn.get("foundry_connection"):
                 # finding C10: auth is the project connection, never a run-time
                 # bearer header injected into the tool definition
-                mcp["connection_id"] = cname or conn["foundry_connection"]
+                mcp["connection_id"] = resolve_connection(
+                    cname or conn["foundry_connection"])
             defs.append(mcp)  # MCP tool definitions pass through as dicts
         else:
             sys.exit(f"connection {key!r}: unsupported type {conn['type']!r} - "
@@ -210,8 +250,9 @@ def list_mcp_tools(dry: bool) -> int:
 def _probe_read_only_hint(cfg: dict, tool: str):
     """Live tools/list probe against the gateway. Returns None when the
     gateway cannot be reached (read-only access, no credentials in the kit)."""
+    import urllib.error
+    import urllib.request
     try:
-        import urllib.request
         req = urllib.request.Request(
             cfg["server_url"], method="POST",
             data=json.dumps({"jsonrpc": "2.0", "id": 1,
@@ -219,11 +260,19 @@ def _probe_read_only_hint(cfg: dict, tool: str):
             headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as r:
             body = json.loads(r.read().decode())
-        for t in body.get("result", {}).get("tools", []):
-            if t.get("name") == tool:
-                return bool(t.get("annotations", {}).get("readOnlyHint"))
-    except Exception:
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError,
+            OSError, ValueError, json.JSONDecodeError) as e:
+        # the gateway is unreachable from here (read-only access, no
+        # credentials in the kit) - UNKNOWN, and the caller then refuses to
+        # attach the tool (finding C10). Never silently "not read-only".
+        print(f"    probe {tool!r}: {type(e).__name__}: {e}")
         return None
+    except KeyError:
+        print(f"    probe {tool!r}: the MCP config has no 'server_url'")
+        return None
+    for t in body.get("result", {}).get("tools", []):
+        if t.get("name") == tool:
+            return bool(t.get("annotations", {}).get("readOnlyHint"))
     return None
 
 
@@ -274,8 +323,10 @@ def main() -> int:
         sys.exit("Set PROJECT_ENDPOINT (setup/.env)")
     from azure.ai.projects import AIProjectClient
     from azure.identity import DefaultAzureCredential
-    agents_client = AIProjectClient(
-        endpoint=ENDPOINT, credential=DefaultAzureCredential()).agents
+    global _PROJECT
+    _PROJECT = AIProjectClient(endpoint=ENDPOINT,
+                               credential=DefaultAzureCredential())
+    agents_client = _PROJECT.agents
 
     live = {a.name: a for a in agents_client.list_agents()}
     integration_names = {k.replace("-", "_") for k in REGISTRY["connections"]}
@@ -286,16 +337,29 @@ def main() -> int:
             print(f"skip     {name}: not deployed (run create_agents.py)")
             continue
         # keep non-integration tools; drop previously attached integrations
-        kept = [t for t in (agent.tools or [])
-                if getattr(t, "type", t.get("type") if isinstance(t, dict) else "")
-                not in ("openapi", "bing_grounding", "mcp")
-                or (getattr(t, "name", "") or (t.get("server_label", "")
-                    if isinstance(t, dict) else "")) not in integration_names]
+        def _is_integration(t) -> bool:
+            ttype = tool_type(t)
+            if ttype not in ("openapi", "bing_grounding", "mcp"):
+                return False
+            if ttype == "bing_grounding":
+                # a Bing tool carries no name, so it can only be recognised by
+                # its type - and web grounding is owned by the registry. Keeping
+                # the old one would leave TWO grounding tools on the agent (one
+                # bound to a connection NAME, one to the resolved id).
+                return True
+            name = (getattr(t, "name", "")
+                    or (t.get("server_label", "") if isinstance(t, dict) else ""))
+            return name in integration_names
+
+        kept = [t for t in (agent.tools or []) if not _is_integration(t)]
         model = model_for(cfg)
-        agents_client.update_agent(
-            agent.id, model=model,
-            tools=kept + build_tools(cfg["tools"],
-                                     cfg.get("write_connections", []), False))
+        # `kept` and the freshly built definitions can overlap (a tool renamed
+        # in the registry, an agent updated twice in one deploy): one tool of
+        # each identity, first occurrence wins.
+        tools = dedupe_tools(kept + build_tools(cfg["tools"],
+                                                cfg.get("write_connections", []),
+                                                False), label=name)
+        agents_client.update_agent(agent.id, model=model, tools=tools)
         guard = cfg.get("guardrail_policy", "infosec-security-analysis")
         # The pinned SDK does not expose the agent-level RAI assignment on
         # update_agent; it is set at creation / in the portal and verified by

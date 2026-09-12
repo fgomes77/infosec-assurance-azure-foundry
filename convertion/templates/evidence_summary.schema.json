@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "evidence_summary",
+  "description": "Output contract of the tpa-evidence-analyzer (req. d2), soc-report-analyzer (req. e) and pentest-report-analyzer (req. f) agents. Rendered to DOCX by functions/delivery/renderers/evidence-summary/render.py. The delivery Function validates the agent's JSON against this file before the renderer starts (SCHEMA_DIRS); the output-verifier checks the content rules that a schema cannot express (every finding cited, no invented evidence).",
+  "type": "object",
+  "required": ["title", "supplier", "reportDate", "executiveSummary", "findings", "actions"],
+  "properties": {
+    "title": { "type": "string", "minLength": 3, "description": "Document title, e.g. 'SOC 2 Type II Reliance Summary'." },
+    "supplier": { "type": "string" },
+    "service": { "type": "string", "description": "Empty or omitted for a supplier-wide evidence pack; the pipeline then stores under Reports/<Supplier>/_ALL-SERVICES/." },
+    "reportDate": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "classification": { "type": "string", "default": "Euronext Internal" },
+    "executiveSummary": {
+      "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 10 },
+      "description": "Bullet per point: opinion/period/scope, exception or finding counts, currency of the evidence."
+    },
+    "verdict": {
+      "type": "string",
+      "description": "Reliance/acceptance statement, e.g. 'RELIANCE OK', 'RELIANCE WITH CONDITIONS', 'ACCEPTABLE', 'CONDITIONS', 'UNACCEPTABLE'."
+    },
+    "identification": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["field", "value"],
+        "properties": { "field": { "type": "string" }, "value": { "type": "string" } }
+      },
+      "description": "Identification table (report type, auditor/tester, period, scope, version, issue date)."
+    },
+    "inventory": {
+      "type": ["array", "null"],
+      "items": { "type": "object", "minProperties": 1 },
+      "description": "d2 per-file evidence inventory; free column set (the renderer takes the first row's keys as the header)."
+    },
+    "timeline": {
+      "type": ["array", "null"],
+      "items": { "type": "object", "minProperties": 1 },
+      "description": "Validity timeline (issued / period covered / expiry / next evidence due)."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id", "title", "severity", "source"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+          "source": { "type": "string", "description": "File + page/section the finding is evidenced by — never blank (verifier rule: every finding traceable)." },
+          "detail": { "type": "string" },
+          "status": { "type": "string", "description": "e.g. Open, Remediated, Retest pending, Accepted risk." }
+        }
+      },
+      "description": "Findings / exceptions register. An empty array is allowed ONLY when executiveSummary states that the evidence carried no adverse finding."
+    },
+    "cuecs": {
+      "type": ["array", "null"],
+      "items": { "type": "object", "minProperties": 1 },
+      "description": "SOC complementary user-entity controls and the Euronext-side owner/status."
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["action", "priority", "owner"],
+        "properties": {
+          "action": { "type": "string" },
+          "priority": { "type": "string", "enum": ["High", "Medium", "Low"] },
+          "owner": { "type": "string", "description": "Role or placeholder UPN — never a real mailbox." },
+          "due": { "type": "string" }
+        }
+      }
+    },
+    "sources": { "type": "array", "items": { "type": "string" } }
+  }
+}

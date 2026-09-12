@@ -10,10 +10,22 @@ and can be re-activated); on the classic fallback runtime the agent is
 updated in place. Either way the vector store is reconciled (no orphan
 stores) and integration tools attached by attach_integrations.py are
 preserved. Alias twins (manifest "alias_of") are NOT deployed - the
-target agent answers for them. Router agents are wired last against the
-LIVE agent list, so --only <router> still wires; routing is a deploy-time
-ROUTE table in the instructions, not the retired ConnectedAgentTool
-(finding C2).
+target agent answers for them. Routing is a deploy-time ROUTE table in the
+instructions, not the retired ConnectedAgentTool (finding C2).
+
+ROUTER WIRING ORDER. The control-center's ROUTE table covers the delivery
+agents too (ciso-global-report, the three analyzers, template-manager),
+and those are created by create_delivery_agents.py, which runs AFTER this
+script. Routers are therefore wired in a SEPARATE pass:
+
+    python3 create_agents.py --skip-routers      # step [3]: agents only
+    python3 create_delivery_agents.py            # step [4]: delivery agents
+    python3 create_agents.py --rewire            # step [4b]: ROUTE tables
+
+A plain run still wires the routers at the end (standalone use), but when
+a target is a delivery agent that is not live yet it DEFERS instead of
+failing and prints the --rewire command. In --rewire mode a missing target
+always fails loudly: by then everything must exist.
 
 Every deployed version is recorded in build/agent-versions.json (C19),
 which pipelines pin and verify_deployment.py compares against.
@@ -21,6 +33,8 @@ which pipelines pin and verify_deployment.py compares against.
 Usage:
     python3 create_agents.py                # everything in the manifest
     python3 create_agents.py --only dora
+    python3 create_agents.py --skip-routers # agents only, leave ROUTE tables
+    python3 create_agents.py --rewire       # ROUTE tables only (no agent save)
     python3 create_agents.py --dry-run
 """
 
@@ -109,9 +123,23 @@ def ensure_agent(rt, spec: dict, existing: dict, dry: bool):
     return agent
 
 
-def wire_router(rt, spec: dict, ids: dict, dry: bool):
+def delivery_agent_names() -> set[str]:
+    """The agents create_delivery_agents.py owns - router targets that only
+    exist after step [4] of deploy.sh."""
+    try:
+        from create_delivery_agents import AGENTS as DELIVERY
+    except ImportError:                      # standalone copy of this script
+        return set()
+    return set(DELIVERY)
+
+
+def wire_router(rt, spec: dict, ids: dict, dry: bool, *, required: bool = False):
     """Targets are resolved against the LIVE agents (merged with this run),
-    so `--only <router>` wires too; a missing target fails loudly.
+    so `--only <router>` wires too.
+
+    A target that is not live yet fails loudly in --rewire mode (`required`);
+    in a plain run it DEFERS when the missing targets are delivery agents,
+    because those are created by the next step of deploy.sh.
 
     Connected agents do not exist on the new Agent Service (finding C2), so
     the router gets a deploy-time ROUTE table in its instructions instead:
@@ -123,10 +151,19 @@ def wire_router(rt, spec: dict, ids: dict, dry: bool):
     if not targets:
         return
     if dry:
+        deferred = sorted(set(targets) & delivery_agent_names())
         print(f"[dry-run] router {spec['name']} -> ROUTE table over {targets} "
-              f"(no ConnectedAgentTool — finding C2)")
+              f"(no ConnectedAgentTool — finding C2)"
+              + (f"; {len(deferred)} target(s) come from "
+                 f"create_delivery_agents.py, so the live wiring happens in "
+                 f"the --rewire pass: {deferred}" if deferred else ""))
         return
     missing = [t for t in targets if t not in ids]
+    if missing and not required and set(missing) <= delivery_agent_names():
+        print(f"deferred {spec['name']}: {missing} not deployed yet "
+              f"(create_delivery_agents.py) — wire with "
+              f"`python3 create_agents.py --rewire` after step [4]")
+        return
     if missing or spec["name"] not in ids:
         raise RuntimeError(f"router targets not deployed: {missing or spec['name']}")
     me = ids[spec["name"]]
@@ -145,7 +182,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", help="comma-separated agent names")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--rewire", action="store_true",
+                    help="only (re)wire the router ROUTE tables against the "
+                         "live agent set — run after create_delivery_agents.py")
+    ap.add_argument("--skip-routers", action="store_true",
+                    help="create/update agents but leave the ROUTE tables to "
+                         "a later --rewire pass (deploy.sh step [3])")
     args = ap.parse_args()
+
+    if args.rewire and args.skip_routers:
+        ap.error("--rewire and --skip-routers are mutually exclusive")
 
     manifest = json.loads((BUILD / "manifest.json").read_text())["agents"]
     if args.only:
@@ -163,24 +209,32 @@ def main() -> int:
     created: dict = {}
     failures: list[str] = []
     routers = [a for a in manifest if a["router_targets"]]
-    for spec in manifest:
-        try:
-            agent = ensure_agent(rt, spec, existing, args.dry_run)
-        except Exception as e:  # noqa: BLE001 - isolate per-agent failures
-            failures.append(spec["name"])
-            print(f"FAILED   {spec['name']}: {e}")
-            continue
-        if agent is not None:
-            created[spec["name"]] = agent
+    if not args.rewire:
+        for spec in manifest:
+            try:
+                agent = ensure_agent(rt, spec, existing, args.dry_run)
+            except Exception as e:  # noqa: BLE001 - isolate per-agent failures
+                failures.append(spec["name"])
+                print(f"FAILED   {spec['name']}: {e}")
+                continue
+            if agent is not None:
+                created[spec["name"]] = agent
     live = {**existing, **created}
-    for spec in routers:
-        try:
-            wire_router(rt, spec, live, args.dry_run)
-        except Exception as e:  # noqa: BLE001
-            failures.append(f"{spec['name']} (router wiring)")
-            print(f"FAILED   {spec['name']} router wiring: {e}")
+    if args.skip_routers:
+        print(f"routers  {[r['name'] for r in routers]} not wired "
+              f"(--skip-routers) — run `create_agents.py --rewire` after "
+              f"create_delivery_agents.py")
+    else:
+        for spec in routers:
+            try:
+                wire_router(rt, spec, live, args.dry_run, required=args.rewire)
+            except Exception as e:  # noqa: BLE001
+                failures.append(f"{spec['name']} (router wiring)")
+                print(f"FAILED   {spec['name']} router wiring: {e}")
 
-    print(f"\ndone: {len(manifest)} agents processed, "
+    processed = 0 if args.rewire else len(manifest)
+    print(f"\ndone: {processed} agents processed, "
+          f"{len(routers) if not args.skip_routers else 0} router(s) wired, "
           f"{len(failures)} failed" + (f": {failures}" if failures else ""))
     return 1 if failures else 0
 

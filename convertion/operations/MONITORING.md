@@ -52,6 +52,12 @@ of the workspace: `AppDependencies.Properties` = `dependencies.customDimensions`
 | Logic Apps run history | platform (90 days, Standard) | plus `LogicAppWorkflowRuntime` in the workspace for the long tail | — |
 | Region | all monitoring resources | same EU region as the platform (`AZURE_LOCATION`) | residency §3 of the guardrails |
 
+The horizons above are *log* retention and are set on the resources, not
+by a script: nothing in `RUNBOOK.md` or `scripts/` may shorten them (DORA Art.
+28 is a floor). Retention of the platform's own data — orphan vector stores
+and files, idle conversations, durable-memory notes past `retain_until` —
+is the separate monthly run in `RETENTION_AND_CLEANUP.md` §4.
+
 Trace content: tool inputs and message text are recorded only when content
 recording is enabled on the tracing exporter. It is **on** for this
 platform because the egress detector needs the Bing query text; the traces
@@ -147,6 +153,7 @@ contents (W5), Copilot publication age (FM-30), SharePoint sharing scope
 | Quality | verifier PASS rate per pipeline (7-day trend); approvals per tier; rework count | `verifier-fail-rate.kql`; `{list:ApprovalDecisions}` export |
 | Oversight | pending gates with age; expired gates; approver ≠ requester check (count of rows where equal must be 0) | `approval-sla.kql`; decisions list |
 | Data protection | egress hits (should be flat zero); content-filter blocks; tool calls per connection | `egress-detection.kql`; `AppDependencies` by `gen_ai.tool.name` |
+| Delivery pipelines | runs Failed/TimedOut/Cancelled; success rate per pipeline; which action breaks (render, upload, gate, verifier) | `../infra/kql/pipeline-failures.kql` (= `kqlPipelineFailed` in `alerts.bicep`); `LogicAppWorkflowRuntime` action completions |
 | Privileged access | ARM writes by caller; PIM activations (from the IAM report); KV human reads | `AzureActivity`; `AzureDiagnostics` |
 | Cost | tokens and estimated EUR per agent, per tier; month-to-date vs forecast | `latency-and-tokens.kql`; Cost Management |
 | KPIs | the weekly snapshot tiles of `KPIS.md` §3 (A1, Q1, E1a–c, E4, E5, R1, R4, R6, R7, R11) with green/amber/red thresholds | the queries named per KPI in `KPIS.md` §1 |
@@ -154,9 +161,18 @@ contents (W5), Copilot publication age (FM-30), SharePoint sharing scope
 The workbook is version-controlled like everything else (A.8.9):
 `operations/workbook.json` is the importable Azure Workbook definition
 (one section per row above, each tile bound to the same `kql/*.kql` text
-as the alert rules; workspace resource id supplied as the `Workspace`
-parameter at import). Re-export it into the repo on each change (Low-risk
-change, `CHANGE_MANAGEMENT.md` §1).
+as the alert rules). It is the **only** workbook definition in the kit —
+do not add a second copy under `operations/monitoring/`; extend this one.
+Two parameters drive every tile: `Workspace` (resource picker, set to
+`{baseName}-logs` at import) and `TimeRange`, substituted into each query
+as `{TimeRange:seconds}s` so one picker moves every section. Three
+deliberate exceptions, stated in the tile titles: the verifier 7-day trend
+and the 30-day token chart keep their declared window, and the two
+approval-SLA tiles clamp the lookback to at least the 7 d window of the
+`approval-sla` rule (`iff({TimeRange:seconds}s > 7d, …, 7d)`) so a 1 h
+selection still shows every breached gate. The alert-only final `where`
+of each `kql/*.kql` file is removed in the workbook copy (§3). Re-export it
+into the repo on each change (Low-risk change, `CHANGE_MANAGEMENT.md` §1).
 
 ## 6. Evidence produced for audits
 

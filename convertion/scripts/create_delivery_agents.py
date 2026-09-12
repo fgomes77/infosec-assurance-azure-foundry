@@ -8,6 +8,13 @@ Run AFTER create_agents.py and BEFORE attach_integrations.py (their tools
 and model tiers come from integrations/registry.json) and
 create_orchestrator.py (so the orchestrator connects to them too).
 
+These five agents are options 6-10 of the control-center menu
+(agents/overlays/enx-tprm-control-center.md), so they are ROUTE targets of
+`enx-tprm-control-center`. Because they only exist once this script has
+run, the router is wired in a later pass: `create_agents.py --rewire`
+(deploy.sh step [4b]). Running this script without that pass leaves the
+control-center routing only to the agents that existed before it.
+
 Each agent = persona preamble + agents/<name>_instructions.md + the
 approval gate, plus a knowledge vector store seeded with the methodology
 files it must share with the base agents (so thresholds/templates stay
@@ -193,6 +200,8 @@ def main() -> int:
             print(f"[dry-run] {name}: model={spec['model']}, "
                   f"knowledge files={len(know)}, code files={len(code)}, "
                   f"instructions {len(instructions)} chars")
+        print("[dry-run] control-center ROUTE table over these agents is "
+              "wired by `create_agents.py --rewire` (deploy.sh step [4b])")
         return 0
 
     if not ENDPOINT:
@@ -234,6 +243,8 @@ def main() -> int:
         record_version(agent)
         print(f"{'updated' if name in live else 'created'}  {agent.ref} "
               f"({agent.id})")
+    print("\nnext: `python3 create_agents.py --rewire` so the control-center "
+          "ROUTE table covers these agents (deploy.sh step [4b])")
     return 0
 
 

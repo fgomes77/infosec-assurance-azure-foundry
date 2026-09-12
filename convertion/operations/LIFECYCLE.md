@@ -187,6 +187,7 @@ behave the same.
 |---|---|---|
 | Before every `deploy.sh` (non-dry) | memory-store export (§3 step 2; delta D-LC-D1 automates it) | `operations/backups/{date}/manifest.json` filed under `Governance/Backups/` |
 | Monthly (M3) | SDK / image patch review; model-retirement notices | ticket or "no action" note in `Governance/Operations/{yyyy}-{mm}/` |
+| Monthly (M5) | Retention and cleanup: orphan `vs-*` stores and assistants files, idle conversations, durable-memory notes past `retain_until` (`RETENTION_AND_CLEANUP.md` §4; `scripts/cleanup_foundry.py`) | `Governance/Operations/{yyyy}-{mm}/retention-run.md` |
 | Quarterly | template inventory (`deprecated_on`, `last_approved` age), agent usage (retire candidates = zero runs in 90 days), pin review | `Governance/Operations/` quarterly note |
 | Semi-annual | re-sync (§3) when the export changed; restore test (`BACKUP_DR.md` §6) | release tag; restore-test note |
 | Annual | major-version review: invariants, environments, retirement of anything not used in 12 months; ISO 42001 AI-system impact assessment refresh | management-review input (`KPIS.md` §4) |

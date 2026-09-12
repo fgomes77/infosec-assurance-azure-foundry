@@ -196,3 +196,89 @@ def integration_tools(agent) -> list:
     return [t for t in (agent.tools or [])
             if tool_type(t) in ("openapi", "bing_grounding", "mcp",
                                 "azure_ai_search")]
+
+
+# ---------------------------------------------------------- tool de-duplication
+def _tool_dict(t) -> dict:
+    """Best-effort dict view of a tool definition (SDK model or raw dict)."""
+    if isinstance(t, dict):
+        return t
+    for meth in ("as_dict", "to_dict"):
+        fn = getattr(t, meth, None)
+        if callable(fn):
+            try:
+                got = fn()
+            except (TypeError, ValueError, AttributeError):
+                continue
+            if isinstance(got, dict):
+                return got
+    return {k: v for k, v in vars(t).items()
+            if not k.startswith("_")} if hasattr(t, "__dict__") else {}
+
+
+def _tool_name(t) -> str:
+    """The name that distinguishes two tools of the SAME type: the OpenAPI
+    function name, the MCP `server_label`, the AI Search index."""
+    d = _tool_dict(t)
+    for holder in (d, d.get(tool_type(t)) if isinstance(d.get(tool_type(t)), dict) else {},
+                   d.get("function") if isinstance(d.get("function"), dict) else {},
+                   d.get("openapi") if isinstance(d.get("openapi"), dict) else {}):
+        for key in ("name", "server_label", "index_name"):
+            val = holder.get(key) if isinstance(holder, dict) else None
+            if val:
+                return str(val)
+    for attr in ("name", "server_label"):
+        val = getattr(t, attr, None)
+        if val:
+            return str(val)
+    return ""
+
+
+def _tool_connections(t, _depth: int = 0) -> tuple:
+    """Every connection id/name reachable in the definition - what makes two
+    Bing / AI Search tools of the same type different objects."""
+    if _depth > 4:
+        return ()
+    found: list[str] = []
+    d = _tool_dict(t)
+    for key, val in (d.items() if isinstance(d, dict) else ()):
+        if isinstance(val, str) and "connection" in str(key).lower():
+            found.append(val)
+        elif isinstance(val, dict):
+            found += list(_tool_connections(val, _depth + 1))
+        elif isinstance(val, (list, tuple)):
+            for item in val:
+                if isinstance(item, (dict, str)):
+                    found += list(_tool_connections(item, _depth + 1)
+                                  if isinstance(item, dict) else ())
+    return tuple(sorted(set(found)))
+
+
+def tool_key(t) -> tuple:
+    """Identity of a tool definition: type + distinguishing name + the
+    connection(s) it binds. `file_search` / `code_interpreter` carry neither,
+    so the type alone is their key - which is correct, the service allows one
+    of each per agent (finding C3)."""
+    return (tool_type(t), _tool_name(t), _tool_connections(t))
+
+
+def dedupe_tools(tools: list, *, label: str = "") -> list:
+    """Drop duplicate tool definitions, keeping the FIRST occurrence.
+
+    Every create script composes its tool list from several sources - fresh
+    file_search/code_interpreter definitions, `integration_tools()` preserved
+    from the live agent, and a Bing/AI Search tool added by the script itself.
+    Without this filter a re-run can hand the service two `bing_grounding`
+    tools (or two `file_search` tools, which it refuses outright)."""
+    seen, out, dropped = set(), [], []
+    for t in tools or []:
+        key = tool_key(t)
+        if key in seen:
+            dropped.append(key[0] or "tool")
+            continue
+        seen.add(key)
+        out.append(t)
+    if dropped and label:
+        print(f"  {label}: dropped {len(dropped)} duplicate tool "
+              f"definition(s) ({', '.join(sorted(set(dropped)))})")
+    return out

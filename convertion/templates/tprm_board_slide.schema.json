@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tprm_board_slide",
+  "description": "Output contract of the tprm-slide-generator / pptx-executive-summary-ciso agents (Step 1, extract_pdf.py in the agent). Rendered by functions/delivery/renderers/tprm-board-slide/render.py, which runs the byte-verified generate_radar.py + generate_slide.js. Field names and semantics are taken from the skill's own references/data_schema.md and must not drift: generate_slide.js reads these exact keys. Scores are TPRM 10-scale residuals; slide colour thresholds are red >= 5.5, amber >= 4.0, green < 4.0, while the overall classification uses High >= 7.0 / Medium >= 4.0 (governance/RISK_THRESHOLDS.md).",
+  "type": "object",
+  "required": ["vendor", "report_date", "service_desc", "dora_scope", "criticality",
+               "overall_risk", "domain_scores", "top_risks", "full_register",
+               "mitigations", "perimeter", "findings"],
+  "properties": {
+    "vendor": { "type": "string", "minLength": 1, "description": "Vendor name exactly as in the OneTrust assessment; used in the title and header." },
+    "report_date": { "type": "string", "minLength": 4, "description": "Human-readable month + year, e.g. 'February 2026' — rendered in the header subtitle." },
+    "date": { "type": "string", "description": "Optional alias accepted by the Function's data quality gate (gates.tprm_board_slide) alongside footer_date / assessment_date." },
+    "footer_date": { "type": "string" },
+    "assessment_date": { "type": "string" },
+    "service_desc": { "type": "string", "description": "One line; shown in the Service & Deployment banner." },
+    "dora_scope": { "type": "boolean" },
+    "criticality": { "type": "string", "enum": ["Critical", "Not-Critical"] },
+    "overall_risk": { "type": "string", "enum": ["High", "Medium", "Low"], "description": "Severity of the maximum domain score (>= 7.0 High, >= 4.0 Medium, else Low); drives the OVERALL RISK KPI colour." },
+    "certifications": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Joined with ', '; an empty array renders as 'None'." },
+    "domain_scores": {
+      "type": "object",
+      "required": ["Cybersecurity", "Data Management", "IT", "Business Continuity", "Third-Parties"],
+      "properties": {
+        "Cybersecurity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "Data Management": { "type": "number", "minimum": 0, "maximum": 10 },
+        "IT": { "type": "number", "minimum": 0, "maximum": 10 },
+        "Business Continuity": { "type": "number", "minimum": 0, "maximum": 10 },
+        "Third-Parties": { "type": "number", "minimum": 0, "maximum": 10 }
+      },
+      "$comment": "Exactly these five keys (DOM_KEYS in generate_radar.py). Maximum residual among the risks mapped to the domain; 1.0 when no risk maps to it. A missing key silently becomes 1.0 in the radar — the Function's data gate rejects a payload with other than 5 numeric scores."
+    },
+    "top_risks": {
+      "type": "array", "maxItems": 3,
+      "items": {
+        "type": "object", "required": ["id", "score", "domain", "title"],
+        "properties": {
+          "id": { "type": "string" },
+          "score": { "type": "number", "minimum": 0, "maximum": 10 },
+          "domain": { "type": "string", "enum": ["Cybersecurity", "Data Management", "IT", "Business Continuity", "Third-Parties"] },
+          "title": { "type": "string" },
+          "detail": { "type": "string", "description": "Truncated to 80 characters on the slide." },
+          "residual": { "type": "number", "minimum": 0, "maximum": 10, "description": "Optional echo of score; the Function's data gate checks that the list is ordered by descending residual." }
+        }
+      },
+      "$comment": "Sorted by score descending; the slide renders at most three."
+    },
+    "full_register": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["id", "label", "score"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string", "maxLength": 12, "description": "Short label (Net, IAM, Incidents, Sec risks, Assets, Supply, BC/DR)." },
+          "score": { "type": "number", "minimum": 0, "maximum": 10 }
+        }
+      }
+    },
+    "mitigations": {
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["label", "detail", "status"],
+        "properties": {
+          "label": { "type": "string" },
+          "detail": { "type": "string" },
+          "status": { "type": "string", "enum": ["Pending", "Implemented"] }
+        }
+      },
+      "$comment": "First three rendered; any status other than 'Pending' renders as done."
+    },
+    "perimeter": {
+      "type": "object",
+      "description": "One entry per domain; internal = Euronext-owned controls, external = vendor-side controls. A missing domain defaults to mitigated/no alert.",
+      "additionalProperties": {
+        "type": "object", "required": ["internal", "external"],
+        "properties": {
+          "internal": { "$ref": "#/$defs/perimeterCell" },
+          "external": { "$ref": "#/$defs/perimeterCell" }
+        }
+      }
+    },
+    "findings": {
+      "type": "array", "maxItems": 3, "items": { "type": "string" },
+      "$comment": "Inline **bold** is parsed: the exact word Pending renders red, Implemented green, any other bold text blue."
+    }
+  },
+  "$defs": {
+    "perimeterCell": {
+      "type": "object", "required": ["text", "alert"],
+      "properties": {
+        "text": { "type": "string" },
+        "alert": { "type": "boolean", "description": "true -> amber bold (alerting); false -> green." }
+      }
+    }
+  }
+}

@@ -168,3 +168,102 @@ def test_b64_roundtrip_collect(tmp_path):
     (tmp_path / "b.pdf").write_bytes(b"D")
     prim, files = fa._collect(tmp_path, "pdf", "X.pdf")
     assert prim["fileName"] == "X.pdf" and base64.b64decode(prim["contentBase64"]) == b"D" and len(files) == 2
+
+
+# --------------------------- request contracts, OCR and the xlsx recalc gate
+class FakeReq:
+    def __init__(self, body):
+        self._b = body if isinstance(body, bytes) else json.dumps(body).encode()
+        self.headers = {}
+        self.url = "http://localhost/api/test"
+
+    def get_body(self):
+        return self._b
+
+
+def test_body_validates_extract_pdf_and_names_the_bad_field():
+    b = fa._body(FakeReq({"fileId": "asst-1", "model": "prebuilt-layout", "pages": "1-5"}), "extract_pdf")
+    assert b["model"] == "prebuilt-layout"
+    for bad in ({"fileId": "a", "model": "prebuilt-invoice"},     # not an allowed model
+                {"fileId": "a", "pages": "one"},                  # not a page range
+                {"model": "prebuilt-read"},                       # no file source at all
+                {"fileId": "a", "unexpected": 1}):                # additionalProperties
+        with pytest.raises(fa.Http) as e:
+            fa._body(FakeReq(bad), "extract_pdf")
+        assert e.value.status == 400
+
+
+def test_body_rejects_non_object_and_unparsable_bodies():
+    for bad in (b"", b"[1,2]", b"{oops"):
+        with pytest.raises(fa.Http) as e:
+            fa._body(FakeReq(bad), "fetch_evidence")
+        assert e.value.status == 400
+
+
+def test_extract_payload_survives_a_broken_first_block_and_rejects_scalars():
+    assert fa._extract_payload('```json\n{broken\n```\n```json\n{"b": 2}\n```', "docx") == {"b": 2}
+    assert fa._extract_payload('prose {"a": [1, 2]} tail', "docx") == {"a": [1, 2]}
+    for scalar in ('"a string"', "42", "   "):
+        with pytest.raises(fa.Http):
+            fa._extract_payload(scalar, "docx")
+
+
+def test_validate_schema_fails_closed_on_an_unreadable_schema(tmp_path, monkeypatch):
+    (tmp_path / "t.schema.json").write_text("{not json", encoding="utf-8")
+    monkeypatch.setattr(fa, "SCHEMA_DIRS", [tmp_path])
+    with pytest.raises(fa.Http) as e:
+        fa._validate_schema("t", {"any": 1})
+    assert e.value.status == 500
+
+
+def test_validate_schema_400_names_the_failing_path(tmp_path, monkeypatch):
+    (tmp_path / "t.schema.json").write_text(json.dumps(
+        {"type": "object", "required": ["title"],
+         "properties": {"title": {"type": "string"}}}), encoding="utf-8")
+    monkeypatch.setattr(fa, "SCHEMA_DIRS", [tmp_path])
+    with pytest.raises(fa.Http) as e:
+        fa._validate_schema("t", {"title": 7})
+    assert e.value.status == 400 and e.value.extra["path"] == ["title"]
+
+
+def _xlsx_files():
+    prim = {"fileName": "R.xlsx", "kind": "xlsx", "contentBase64": "b2xk"}   # "old"
+    return prim, [prim]
+
+
+def test_recalc_gate_is_reported_as_not_run_when_office_tools_is_absent(monkeypatch):
+    monkeypatch.setattr(fa, "OFFICE_TOOLS_BASE", "")
+    prim, files = _xlsx_files()
+    gate = fa._recalc_gate(prim, files)
+    assert gate["passed"] is None and "office-tools" in gate["reason"]
+
+
+def test_recalc_gate_replaces_the_bytes_with_the_recalculated_workbook(monkeypatch):
+    monkeypatch.setattr(fa, "OFFICE_TOOLS_BASE", "https://office.invalid/api")
+    monkeypatch.setattr(fa, "_office_tools", lambda p, payload, **kw: {
+        "gate": {"passed": True, "checks": []}, "total_errors": 0, "total_formulas": 12,
+        "contentBase64": "bmV3"})                                            # "new"
+    prim, files = _xlsx_files()
+    gate = fa._recalc_gate(prim, files)
+    assert gate["passed"] and files[0]["contentBase64"] == "bmV3" and prim["contentBase64"] == "bmV3"
+
+
+def test_recalc_gate_422s_on_excel_errors(monkeypatch):
+    monkeypatch.setattr(fa, "OFFICE_TOOLS_BASE", "https://office.invalid/api")
+    monkeypatch.setattr(fa, "_office_tools", lambda p, payload, **kw: {
+        "gate": {"passed": False, "checks": ["2 Excel error(s): #REF!"]}, "total_errors": 2})
+    prim, files = _xlsx_files()
+    with pytest.raises(fa.Http) as e:
+        fa._recalc_gate(prim, files)
+    assert e.value.status == 422 and e.value.extra["gate"] == "xlsx-recalc"
+
+
+def test_recalc_gate_is_a_noop_without_xlsx_output():
+    prim = {"fileName": "R.pptx", "kind": "pptx", "contentBase64": "eA=="}
+    assert fa._recalc_gate(prim, [prim]) == {"passed": True, "checks": []}
+
+
+def test_docintel_confidence_summarises_word_confidence():
+    c = fa._docintel_confidence({"pages": [{"words": [{"confidence": 0.9}, {"confidence": 0.7}]}]})
+    assert c["mean"] == 0.8 and c["min"] == 0.7 and c["words"] == 2
+    assert fa._docintel_confidence({"pages": []})["mean"] is None

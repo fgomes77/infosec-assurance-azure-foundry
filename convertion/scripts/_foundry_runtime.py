@@ -128,6 +128,29 @@ def ai_search_tool(connection_id: str, index_name: str) -> list:
             return []
 
 
+def bing_grounding_tool(connection_id: str) -> list:
+    """Bing grounding / Web Search tool definitions for a RESOLVED project
+    connection id, or [] when this SDK has no such tool.
+
+    `connection_id` must be the connection's **id**, not its name: the
+    create scripts resolve `BING_CONNECTION_NAME` through
+    `Runtime.connection_id()` first, so a missing connection is reported
+    instead of producing a tool that silently never grounds (finding C13
+    keeps the residual-risk note; this only makes the wiring real).
+    """
+    if not connection_id:
+        return []
+    try:
+        from azure.ai.agents.models import BingGroundingTool
+        return BingGroundingTool(connection_id=connection_id).definitions
+    except ImportError:
+        return []
+    except (TypeError, ValueError) as e:  # SDK shape changed across majors
+        print(f"note: Bing grounding tool not built for connection "
+              f"{connection_id}: {type(e).__name__}: {e}")
+        return []
+
+
 # --------------------------------------------------------------- SDK probing
 def sdk_version() -> str:
     try:

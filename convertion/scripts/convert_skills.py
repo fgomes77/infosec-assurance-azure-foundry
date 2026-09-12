@@ -130,10 +130,23 @@ FILE_SEARCH_EXT = {".c", ".cpp", ".cs", ".css", ".doc", ".docx", ".go",
                    ".html", ".java", ".js", ".json", ".md", ".pdf", ".php",
                    ".pptx", ".py", ".rb", ".sh", ".tex", ".ts", ".txt",
                    ".xml"}
-# Router skill: becomes a connected-agents router (create_agents.py wires it).
+# Router skill: create_agents.py gives it a deploy-time ROUTE table over these
+# agents (there are no connected agents on this runtime - finding C2).
+# The list IS the control-center menu of agents/overlays/enx-tprm-control-center.md:
+# options 1-5 are the exported workers, options 6-13 the Foundry-only delivery
+# systems. The last five are created by create_delivery_agents.py, which runs
+# AFTER create_agents.py - so the router is wired in a separate pass
+# (`create_agents.py --rewire`, deploy.sh step [4b]); wiring it in the first
+# pass would fail on targets that do not exist yet.
 ROUTER = {"enx-tprm-control-center": [
+    # options 1-5 (exported workers)
     "dpia", "ciso-reporting", "cyber-forum", "onetrust-form-b",
     "deepsearch-protocol",
+    # options 11-13 (exported workers, delivery menu)
+    "tprm-slide-generator", "tpsrca-assessment-engine", "ciso-executive-summary",
+    # options 6-10 (delivery agents - create_delivery_agents.py)
+    "ciso-global-report", "tpa-evidence-analyzer", "soc-report-analyzer",
+    "pentest-report-analyzer", "template-manager",
 ]}
 # Skills whose generators are Node.js — code_interpreter is Python-only.
 EXTERNAL_RUNTIME = {"tprm-slide-generator", "pptx-executive-summary-ciso",
