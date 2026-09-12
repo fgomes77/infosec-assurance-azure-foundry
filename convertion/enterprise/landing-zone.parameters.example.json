@@ -2,25 +2,65 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
   "parameters": {
-    "baseName": { "value": "infosecfoundry" },
-    "location": { "value": "swedencentral" },
-    "logAnalyticsName": { "value": "infosecfoundry-logs" },
-    "vnetName": { "value": "infosecfoundry-vnet" },
-    "privateEndpointSubnetName": { "value": "snet-pe" },
-    "keyVaultName": { "value": "infosecfoundry-kv" },
-    "foundryAccountName": { "value": "infosecfoundry-aif" },
-    "storageAccountName": { "value": "infosecfoundrysa" },
-    "docIntelName": { "value": "infosecfoundry-docintel" },
-    "enableAgentSubnet": { "value": true },
-    "agentSubnetAddressPrefix": { "value": "10.60.1.0/24" },
-    "cosmosAccountName": { "value": "{cosmos-account-name-or-empty}" },
-    "searchServiceName": { "value": "{search-service-name-or-empty}" },
-    "registryName": { "value": "{registry-name-or-empty}" },
-    "enablePrivateEndpoints": { "value": true },
-    "enableCmk": { "value": true },
-    "cmkKeyName": { "value": "infosec-foundry-cmk" },
-    "cmkPrincipalIds": { "value": [] },
-    "enableUsageExportWorkspace": { "value": false },
-    "usageExportWorkspaceId": { "value": "" }
+    "baseName": {
+      "value": "infosecfoundry"
+    },
+    "location": {
+      "value": "swedencentral"
+    },
+    "logAnalyticsName": {
+      "value": "infosecfoundry-logs"
+    },
+    "vnetName": {
+      "value": "infosecfoundry-vnet"
+    },
+    "privateEndpointSubnetName": {
+      "value": "snet-pe"
+    },
+    "keyVaultName": {
+      "value": "infosecfoundry-kv"
+    },
+    "foundryAccountName": {
+      "value": "infosecfoundry-aif"
+    },
+    "storageAccountName": {
+      "value": "infosecfoundrysa"
+    },
+    "docIntelName": {
+      "value": "infosecfoundry-docintel"
+    },
+    "enableAgentSubnet": {
+      "value": false
+    },
+    "agentSubnetAddressPrefix": {
+      "value": "10.60.1.0/24"
+    },
+    "cosmosAccountName": {
+      "value": ""
+    },
+    "searchServiceName": {
+      "value": ""
+    },
+    "registryName": {
+      "value": "{registry-name-or-empty}"
+    },
+    "enablePrivateEndpoints": {
+      "value": true
+    },
+    "enableCmk": {
+      "value": true
+    },
+    "cmkKeyName": {
+      "value": "infosec-foundry-cmk"
+    },
+    "cmkPrincipalIds": {
+      "value": []
+    },
+    "enableUsageExportWorkspace": {
+      "value": false
+    },
+    "usageExportWorkspaceId": {
+      "value": ""
+    }
   }
 }

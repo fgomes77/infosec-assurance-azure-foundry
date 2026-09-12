@@ -6,13 +6,20 @@
 // stay independently idempotent.
 //
 // What it adds (ENTERPRISE_BLUEPRINT.md decision table):
-//   NET-1  agents subnet `snet-agents` (/24, delegated Microsoft.App/environments)
-//          for BYO-VNet agent egress — network injection is set on the project
-//          at creation and cannot be changed later (shared delta D-EB3 passes the
-//          subnet id to main.bicep). Source: networking-options (GA, 2026-09-09).
-//   NET-2  private DNS zones + private endpoints for the BYO agent stores
-//          (Cosmos DB, AI Search) and the container registry that main.bicep
-//          leaves public; the zones are linked to the existing VNet.
+//   NET-1  agents subnet `snet-agents` — **SUPERSEDED**: infra/network.bicep
+//          creates this subnet and the `{baseName}-nsg-agents` NSG natively
+//          (same name, prefix, delegation and rules), and infra/main.bicep sets
+//          `networkInjections` on the account at creation. Set
+//          `enableAgentSubnet: false` when infra is deployed with
+//          `enablePrivateNetworking: true`; the two definitions are
+//          byte-equivalent, so leaving it true is idempotent but leaves two
+//          owners for one subnet. Source: networking-options (GA, 2026-09-09).
+//   NET-2  private DNS zones + private endpoints for the container registry
+//          that main.bicep leaves public. **Cosmos DB and AI Search private
+//          endpoints, DNS zones and diagnostics are created by infra/main.bicep
+//          + infra/agent-stores.bicep when `enableStandardAgentSetup` is true;
+//          leave `cosmosAccountName` and `searchServiceName` EMPTY in that case
+//          and keep only `registryName` here.**
 //   LOG-1  diagnostic settings for the resources main.bicep leaves without
 //          one (Document Intelligence, NSG, Cosmos DB, AI Search, registry) —
 //          Foundry itself already streams audit + allLogs (main.bicep).
