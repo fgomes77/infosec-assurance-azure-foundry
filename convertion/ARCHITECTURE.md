@@ -12,7 +12,7 @@ enforces how those outputs are produced, checked, and released.
 | Architecture | Where it lives here |
 |---|---|
 | **MCP** (connect to external systems) | `mcp-server/` exposes the environment to MCP clients; `integrations/mcp/enx-gateway.json` consumes the internal ENX gateway; OpenAPI tools cover the non-MCP systems (Jira, OneTrust, Graph, SecurityScorecard, IAF) |
-| **RAG** (ground answers in your data) | One vector store per agent (`vs-<agent>`) via file_search — a fixed service limit, so an agent cannot carry a second store. The advisor's single store is the combined knowledge store `vs-assurance-combined`; durable team memory is served beside it from the Azure AI Search index `kb-assurance-memory` through the AI Search tool (transition backend: the `vs-assurance-memory` store), and a Foundry IQ knowledge base over a Blob mirror of the knowledge files is the successor for shared knowledge — `enterprise/MEMORY_AND_LEARNING.md` §2 |
+| **RAG** (ground answers in your data) | One vector store per agent (`vs-<agent>`) via file_search — a fixed service limit, so an agent cannot carry a second store. The advisor's single store is the combined knowledge store `vs-assurance-combined`; durable team memory is served beside it from the Azure AI Search index `kb-assurance-memory` through the AI Search tool (transition backend: the `vs-assurance-memory` store), and a Foundry IQ knowledge base over a Blob mirror of the knowledge files is the successor for shared knowledge. Which of the two serves combined knowledge is selected by `KNOWLEDGE_SOURCE` (`setup/.env`: `vector-store` | `ai-search` | `none`) and which serves durable memory by `MEMORY_BACKEND` — `enterprise/MEMORY_AND_LEARNING.md` §2 |
 | **Skills** (packaged actions + logic) | The converted SKILL.md instruction sets + code_interpreter scripts/assets — the claude.ai skills preserved as agent capabilities |
 
 ## Design pattern per agent
@@ -55,7 +55,7 @@ bypassed.
 | Retries + error handling | `scripts/_azure_helpers.py` backoff on every upload/store call; per-agent failure isolation in create_agents.py; workflow runAfter failure paths |
 | Safety filters | A custom RAI policy on every model deployment, plus a second, stricter policy assigned **at agent level** (it overrides the deployment policy) for agents with web, SharePoint or OpenAPI tools, carrying Prompt Shields / indirect-attack (XPIA) detection over retrieved content — `enterprise/ENTERPRISE_BLUEPRINT.md` RAI-1 |
 | Deterministic constraints | Read-only OpenAPI tools (writes stripped); output-verifier rules; verify_conversion.py byte-fidelity gate in deploy.sh |
-| Memory/state | Foundry conversations (session) + vs-assurance-memory → kb-assurance-memory (durable, auditable, deletable) + per-agent and combined knowledge stores; native Memory (preview) not enabled; learning loop = signals → owner-reviewed proposals → new agent version (enterprise/MEMORY_AND_LEARNING.md) |
+| Memory/state | Foundry conversations (session) + vs-assurance-memory → kb-assurance-memory (durable, auditable, deletable) + one knowledge store per agent (platform limit); native Memory (preview) not enabled; learning loop = signals → owner-reviewed proposals → new agent version (enterprise/MEMORY_AND_LEARNING.md) |
 | Observability | Application Insights wired to the Foundry project (Bicep): traces, tokens, latency per response; Logic Apps run history evidences approvals |
 | Human oversight | Three-layer approval control — see governance/HUMAN_APPROVAL.md |
 
