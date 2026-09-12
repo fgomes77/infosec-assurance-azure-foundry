@@ -50,7 +50,7 @@ agent, 512 MB per file, 10,000 files per vector store
 
 | # | Check | Expected |
 |---|---|---|
-| D1 | Agent-level guardrail = registry `guardrail_policy` (`infosec-security-analysis` for report agents; `infosec-web-facing` for web/SharePoint/OpenAPI agents) | set; agent guardrail overrides the deployment's ([Guardrails](https://learn.microsoft.com/en-us/azure/foundry/guardrails/how-to-create-guardrails), GA, 2026-07-30) |
+| D1 | Agent-level guardrail = registry `guardrail_policy` (`infosec-security-analysis` for report agents; **`infosec-web-facing`** — indirect-attack / XPIA detection on the prompt — for every agent carrying web-search, osint-proxy, sharepoint-graph, sharepoint-grounding, confluence-cloud or enx-gateway-mcp) | set; the agent guardrail overrides the deployment's ([Guardrails](https://learn.microsoft.com/en-us/azure/foundry/guardrails/how-to-create-guardrails), GA, 2026-07-30). Both policies are created by `infra/main.bicep`; `scripts/verify_kit.py` fails the kit when the registry disagrees and `attach_integrations.py --dry-run` prints `rai=…` per agent. The pinned SDK does not set the assignment on update, so **this row is the assignment act** (finding C14 / D-EB7). |
 | D2 | Tracing visible in Operate > Tracing for a smoke-test run (`scripts/smoke_test.py --agent <agent>`) | spans with tool calls and tokens |
 | D3 | Continuous evaluation rule attached (see `guardrails-tracing-evaluations.md`) | yes for pipeline + advisory agents |
 | D4 | Golden-set evaluation run recorded before promotion (`../../operations/evaluation/golden-set.schema.json`) | run id in the change record |
