@@ -10,20 +10,48 @@ DORA/NIS2/ISO questions or the cyber-forum agent without leaving their chat.
 > Foundry Account Owner / Foundry Project Manager); the underlying role definition
 > GUIDs in `rbac.bicep` are unchanged — `enterprise/ENTERPRISE_BLUEPRINT.md` ID-1.
 
-## Option 1 — Copilot Studio agent calling the Foundry endpoint (recommended)
+## Option 0 — Native publish from Foundry (recommended, GA)
+
+**Decision 2026-09** (`../../enterprise/series/09-copilot-mcp-user-surfaces.md`):
+conversational advisors are published with the native Foundry
+**Publish → Teams and Microsoft 365 Copilot** flow. An Azure Bot Service
+resource `{baseName}-bot` is created by `../../infra/main.bicep` when
+`enableCopilotPublish = true`; tenant scope needs Microsoft 365 admin
+approval; the audience is restricted to `sg-infosec-foundry-users` through a
+Teams app policy.
+
+**Limitations to accept before choosing it:** no streaming and no citations in
+Microsoft 365 Copilot, no file upload there (use the pipelines), the SharePoint
+grounding tool does **not** work when published to Teams, and a private-network
+project needs the M365 public endpoint enabled.
+
+**Identity:** publishing creates a **distinct Entra Agent ID** per published
+agent — repeat its role assignments before traffic and record it in
+`../../team/ACCESS_REGISTER.md` ("Entra Agent ID principals", finding C7).
+
+Runbook: `../../enterprise/portal/copilot-studio-publishing.md`.
+Source: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/publish-copilot (GA, 2026-08-26).
+
+Option 1 (Copilot Studio) and Option 2 (declarative agent) below remain
+documented as the fallback for report requests and delegated (OBO) reads.
+
+## Option 1 — Copilot Studio agent calling the Foundry endpoint (fallback)
 
 1. In **Copilot Studio**, create a new agent (one per Foundry agent you want
    to surface, or one "ENX Assurance" agent that routes by topic).
 2. Add a **custom connector** (or an HTTP action inside a topic/agent flow)
    that calls the Foundry Agents REST API on your project endpoint:
    `https://{foundry-account}.services.ai.azure.com/api/projects/{project}` —
-   create thread → add user message → create run (with the target
-   `agent_id`) → poll run status → read the assistant message.
+   **Agents v2: create conversation → create response with `agent_reference`
+   (`{type:'agent_reference', name, version}`) → read `output_text`**
+   (`api-version=v1`). The thread/run sequence retired with the Assistants API
+   on 2026-08-26 and the classic agents surface retires 2027-03-31.
 3. Configure the connector's authentication as **Entra ID (OAuth)** against
    the Azure Cognitive Services audience, or use a Copilot Studio connection
    with a service-principal secret held in Azure Key Vault.
-4. In the Copilot Studio agent, wire the user's utterance into the thread
-   message and return the run's final message text as the agent reply.
+4. In the Copilot Studio agent, wire the user's utterance into the response
+   `input` and return `output_text` as the agent reply; pass the returned
+   `conversationId` back on follow-ups to keep context.
 5. **Publish** the Copilot Studio agent to the **Microsoft 365 Copilot**
    channel (and optionally the Teams channel). After admin approval in the
    Microsoft 365 admin center, users invoke it from Copilot chat / Teams via

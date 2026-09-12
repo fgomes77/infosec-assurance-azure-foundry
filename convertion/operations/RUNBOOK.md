@@ -69,14 +69,15 @@ Evidence goes to `Governance/Operations/{yyyy}-{mm}/` on the SharePoint site.
 | W5 | Memory store | `python3 ../scripts/memory_store.py list` | lists without error; no note older than the retention set in `../team/TEAM_MODEL.md` §13 |
 | W6 | Credential ages | `../team/access-review.sh --quick` (Key Vault secret *names* and dates only) | none past its rotation date in `../team/ACCESS_REGISTER.md` |
 | W7 | Cost | Cost Management, RG `rg-infosec-foundry`, week-over-week | within ±25 % of the monthly forecast unless a known campaign explains it |
+| W8 | Backup integrity | latest `operations/backups/{date}/manifest.json` (or the `backups/{date}` blob) vs the `memory_store.py list` count; age ≤ 1 day when `backup-job.bicep` runs, ≤ 7 days otherwise (`BACKUP_DR.md` §6) | counts equal; age within target |
 
 ### Monthly (owner; users consulted) — the ISMS operating rhythm
 
 | # | Activity | Input | Output |
 |---|---|---|---|
-| M1 | Evaluation review (`../ARCHITECTURE.md` "Evaluation and success metrics") | `kql/verifier-fail-rate.kql`, approval rework counts from `{list:ApprovalDecisions}`, grounding-rate sample | findings in `Governance/Operations/{yyyy}-{mm}/evaluation.md`; drift → `CHANGE_MANAGEMENT.md` re-sync |
-| M2 | Cost and tier review (`../governance/MODEL_ROUTING.md` rule 7) | `kql/latency-and-tokens.kql` (full table) | tier moves proposed as Tier C changes; advisory agents never move down |
-| M3 | Known-issue list refresh | `SUPPORT_MODEL.md` §6 | updated list posted in the Teams channel |
+| M1 | Evaluation review (`../ARCHITECTURE.md` "Evaluation and success metrics") | `kql/verifier-fail-rate.kql`, approval rework counts from `{list:ApprovalDecisions}`, grounding-rate sample; `operations/evaluation/run_evals.py` full run (`evaluation/EVALUATION.md` §6); run `python3 ../enterprise/memory/learning_loop.py --month {yyyy-mm} --out ../build/learning/{yyyy-mm}` and attach `proposal.md` to the evaluation note | findings in `Governance/Operations/{yyyy}-{mm}/evaluation.md`; drift → `CHANGE_MANAGEMENT.md` re-sync |
+| M2 | Cost and tier review (`../governance/MODEL_ROUTING.md` rule 7) | `kql/latency-and-tokens.kql` (full table); `FINOPS.md` §6 checklist; the `evaluation/run_evals.py` report of the month | tier moves proposed as Tier C changes; advisory agents never move down |
+| M3 | Known-issue list refresh + platform currency | `SUPPORT_MODEL.md` §6; run `python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run --horizon 180 --params ../infra/main.parameters.prod.json` and open a ticket for any deployment within 120 days of retirement | updated list posted in the Teams channel |
 | M4 | PIM activation report | Entra PIM audit | sent to `{upn:line-manager}` (team model §12.2) |
 
 Quarterly and annual items (access review, DR test, template inventory

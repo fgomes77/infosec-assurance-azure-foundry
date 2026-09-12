@@ -32,7 +32,7 @@ cycle, as deployer of a substantially modified system), Art. 26.
 | **Template (j)** | source template in the export + `../templates/registry.json` | C via `../workflows/template-update-approval.json` (visual before/after review; owner approves; deputy if the proposer is the owner) | `update_templates.py --dry-run`; `verify_conversion.py` re-run inside the script; renderer re-staged | `update_templates.py --template <id> --file … --approved-by … --approval-run <run>` (atomic, rolls back on failure) | previous version is the backup the script keeps; re-apply it with a new approval run |
 | **Integration credential / connection** | Key Vault secret version, Foundry `conn-*` target | owner + custodian (F8) — no PR for the secret value, PR for any scope/spec change | custodian confirms read-only scope; `ACCESS_REGISTER.md` row updated | new secret version → connection re-pointed → smoke test of the tool | re-point to the previous version (kept until the next rotation) |
 | **Infrastructure** | `../infra/main.bicep`, `main.parameters.json`, `../team/rbac.bicep`, `alerts.bicep`, Logic Apps definitions `../workflows/*.json`, `../functions/delivery/*` | C — owner; RBAC/consent changes also line manager (`TEAM_MODEL.md` §6) | `bicep build` + `az deployment group what-if`; JSON parse of workflow definitions; `func` local run for the Function; `access-review.sh --quick` after deploy shows no unexpected assignment | pipeline with the deploy SP (OIDC, `production` environment) | `what-if` of the previous commit, redeploy; Logic Apps keep run history across versions |
-| **Model tier / capacity** | `model_tier` in the registry; `modelCapacity`, model versions in Bicep | C — owner; downgrade of a report agent requires the comparison set | as Registry + Infrastructure | staged: one agent first, observe 1 week (`kql/latency-and-tokens.kql`, `kql/verifier-fail-rate.kql`) | revert the tier |
+| **Model tier / capacity** | `model_tier` in the registry; `modelCapacity`, model versions in Bicep | C — owner; downgrade of a report agent requires the comparison set; `enterprise/upgrade/check_model_lifecycle.py` clean; the tool-support row for the tier model pasted into the checklist | as Registry + Infrastructure | staged: one agent first, observe 1 week (`kql/latency-and-tokens.kql`, `kql/verifier-fail-rate.kql`) | revert the tier |
 | **Re-sync from a fresh claude.ai export** (F6) | `../../claude-account-export/` refresh | C — owner | `convert_skills.py` → `verify_conversion.py` must pass; diff of `build/manifest.json` vs baseline reviewed; comparison set for changed report agents | full `deploy.sh`; template registry versions bumped where sources changed | previous export tag → `deploy.sh` |
 | **Access** (groups, roles, Sites.Selected, CA, PIM) | `../team/rbac.bicep`, `../team/least-privilege/entra/groups.json`, access packages | line manager for privileged groups; owner for user groups | `provision_identity.sh --plan`; `what-if` | `provision_identity.sh --apply` / `rbac.bicep` | previous assignment set; `access_snapshot.sh` before/after |
 | **Memory deletion of another's note** | `vs-assurance-memory` | C `MEMORY_DELETE` — author, else owner; deputy when the owner requests | `memory_store.py list` shows the note id | `memory_store.py delete <file_id>` | none (deletion is the point) — record the note text hash in the ticket |
@@ -85,7 +85,7 @@ change:
 |---|---|---|
 | Inputs | one anonymised OneTrust PDF (b, c, d), one synthetic TPA evidence folder (d2), one SOC and one pentest report (e, f), one public supplier domain (a), the `smoke_test.py` prompts for g/h/i | `Governance/ComparisonSet/inputs/` (site) — synthetic or public data only |
 | Known-good outputs | the last approved output per pipeline, hashed | `Governance/ComparisonSet/baseline/{pipeline}/` |
-| Procedure | run each affected pipeline to the verifier (do **not** approve the gate — let it expire or reject it, so nothing is stored under a real supplier); download the verified JSON/HTML from the run; diff against baseline: structure, scores, thresholds, section count identical; wording differences on `chat`/`reasoning` tiers reviewed by the proposer and reviewer | diff attached to the PR |
+| Procedure | run each affected pipeline to the verifier (do **not** approve the gate — let it expire or reject it, so nothing is stored under a real supplier); download the verified JSON/HTML from the run; diff against baseline: structure, scores, thresholds, section count identical; wording differences on `chat`/`reasoning` tiers reviewed by the proposer and reviewer — executable as `python3 operations/evaluation/run_evals.py --golden operations/evaluation/golden-set.example.json` (`evaluation/EVALUATION.md` gate G1); the JSON + markdown report is the artefact attached to the PR | diff attached to the PR |
 | Pass criterion | verifier PASS on first attempt for every affected pipeline; no schema/threshold/section drift; reviewer signs the wording delta | PR comment |
 
 Control: ISO 42001 A.6.2.4 (verification and validation), A.8.4; ISO
@@ -114,7 +114,8 @@ Requirement(s):    a–j affected
 Risk class (§5):   low | medium | high
 Invariants:        read-only agents / approval before write / taxonomy / identities / EU / no-egress — unchanged (state why for high)
 Gates:             verify_conversion ✔  deploy.sh --dry-run ✔  bicep build ✔  json ✔  py_compile ✔
-Comparison set:    n/a | attached (pipelines: …)
+Comparison set:    n/a | attached (pipelines: …; eval reports: build/evals/{ticket}-control, -candidate — EVALUATION.md G1)
+Checklist:         enterprise/upgrade/UPGRADE_CHECKLIST.md filled and pasted below
 Rollout:           deploy.sh | attach_integrations --only | update_templates | rbac.bicep
 Rollback:          …
 Post-checks:       RUNBOOK W1–W4 planned on {date}
@@ -161,8 +162,9 @@ DORA Art. 9(4)(e), 17(2).
 | Per change | flow §3 | owner |
 | Weekly | post-checks of the week's changes (RUNBOOK W1–W4) | owner |
 | Monthly | tier/cost review → tier changes (RUNBOOK M2); known-issue list | owner |
-| Quarterly | template inventory review (`../templates/registry.json` consumers and `last_approved`), alert threshold review (`alerts.bicep` params), comparison-set refresh with the latest approved outputs | owner + one peer |
-| Semi-annual | re-sync from a fresh claude.ai export when the source skills changed (F6); restore test of vector stores from the export (the export *is* the backup — `deploy.sh` rebuilds every store) | owner |
+| Quarterly | template inventory review (`../templates/registry.json` consumers and `last_approved`), alert threshold review (`alerts.bicep` / `../infra/monitoring.bicep` params), comparison-set refresh with the latest approved outputs; improvement cycle review/plan/verify/report (`CONTINUOUS_IMPROVEMENT.md` §4) | owner + one peer |
+| Quarterly | platform currency review (`../enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md` §4): model retirement schedule, SDK changelog, API lifecycle, GA/preview page, preview-feature register; `python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run --params ../infra/main.parameters.prod.json` output filed under `Governance/Operations/{yyyy}-Qn/platform-currency.md` | owner + deputy |
+| Semi-annual | re-sync from a fresh claude.ai export when the source skills changed (F6); restore test per `BACKUP_DR.md` §6 (agents and knowledge stores rebuild from the export; `vs-assurance-memory` restores from the `backup_vector_stores.py` export) | owner |
 | Annual | full review of this process and of `HUMAN_APPROVAL.md` / `DATA_PROTECTION_GUARDRAILS.md`; ISO 42001 AI-system impact assessment refresh for the deployer role | owner + ISMS |
 
 ## 10. Shared deltas needed by this process (not applied here)

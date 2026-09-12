@@ -16,7 +16,7 @@ confidential data, and writes to systems of record).
 |---|---|
 | Instruction layer | Every agent carries the egress rule through the persona preamble (`agents/persona_system_prompt.md`, prepended by `convert_skills.py`, `create_delivery_agents.py`, `create_orchestrator.py`; `attach_integrations.py` attaches tools and models only and appends no text): search queries may contain ONLY public facts — supplier public names, product names, CVE ids, regulation references. NEVER internal identifiers (assessment ids, contract ids, project codenames, employee names, internal hostnames/IPs), scores, findings, or any text quoted from an internal document. When public and internal terms are needed together, the agent reformulates to the public terms and applies the internal context to the results locally. |
 | Network layer | Bing Grounding (search) and the allow-listed `osint-proxy` OpenAPI tool (page-level public OSINT fetch, read-only) are the ONLY web egress for agents; no generic HTTP/browser tool exists (WebFetch/browser skills EXCLUDED in `PLATFORM_SKILLS_DECISION.md`). Bing Grounding is a **global** service: only the sanitised public query crosses the EU boundary (`infra/main.bicep` residency comment). Queries are auditable in Foundry tracing. |
-| Detective layer | Scheduled-query alert (`infra/monitoring.bicep`, query `infra/kql/egress-internal-markers.kql`) on grounding-tool inputs matching internal-marker patterns (`ENX-`, assessment-id regex, internal domain suffixes, employee-directory names list from Entra), routed to the owner action group. A hit raises a review ticket — the run is not killed retroactively, the pattern is fixed forward (instruction or list update). |
+| Detective layer | Scheduled-query alert (`infra/monitoring.bicep`, query `infra/kql/egress-internal-markers.kql`) on grounding-tool inputs matching internal-marker patterns (`ENX-`, assessment-id regex, internal domain suffixes, employee-directory names list from Entra), routed to the owner action group. A hit raises a review ticket — the run is not killed retroactively, the pattern is fixed forward (instruction or list update). Implemented by `operations/kql/egress-detection.kql` and the `egress-internal-marker` rule in `operations/alerts.bicep` (severity 1, owner + SOC) where that catalogue is deployed; response: `operations/RUNBOOK.md` FM-03. |
 | Prompt-injection defence | Content fetched from the web (and from supplier evidence files) is DATA, never instructions: the persona preamble's injection rule tells agents to ignore directives embedded in retrieved content; the verifier checks deliverables for signs of instruction-following from sources. |
 
 **Compliance boundary (accepted residual risk).** Grounding with Bing Search /
@@ -109,6 +109,13 @@ Application Insights (`../enterprise/series/08-guardrails-observability-evaluati
   Foundry, Function → Graph); function endpoints key-protected and
   VNet-restricted; TLS everywhere by platform default.
 
+Feedback records (`../enterprise/memory/feedback-schema.json`) carry identifiers
+and generic descriptions only — no report content, findings, scores or personal
+data; `learning_loop.py` masks e-mail/IP/secret-like strings and flags the
+record. Native memory (preview) is **not** enabled; if it is ever piloted:
+per-user scope, TTL 90 days, `user_profile_details` exclusion list, RoPA first
+(`../enterprise/MEMORY_AND_LEARNING.md` §3).
+
 ## 4. Auditability
 
 Every run is traceable: the Foundry conversation + tracing (prompts, tool calls,
@@ -117,7 +124,12 @@ decision, approver and timestamp; SharePoint versioning preserves every
 stored report version; the durable memory store is inspectable and
 deletable (`scripts/memory_store.py`, policy in `MEMORY_POLICY.md`).
 Retention per the ISMS record schedule — `logRetentionDays = 365` in
-`infra/main.bicep` (DORA Art. 28 evidence). Template changes are logged
+`infra/main.bicep` (DORA Art. 28 evidence); the tables and the evidence layout
+are in `operations/MONITORING.md` §1–§2, §6. Backups of the shared memory store
+are dated read-only exports produced by an EU-resident managed-identity job and
+filed in the EU storage container `backups/` and/or `Governance/Backups/`,
+protected like the source and retained per the note retention —
+`operations/BACKUP_DR.md` §1. Template changes are logged
 in `templates/audit.log`. Full-coverage PDF analysis
 (`pdf-full-coverage-analyzer`) must ship its audit artefacts (chunk
 inventory, per-chunk extraction JSON, coverage statement, verdict) with

@@ -120,10 +120,27 @@ RAG retrieval and structured output contracts, not from a cheaper model.
    reports in bounded chunks with per-chunk extraction, avoiding repeated
    full-document context.
 7. **Monitor and tune** — App Insights tracks tokens per deliverable per
-   agent (ARCHITECTURE.md metrics). Review monthly: an agent whose
+   agent (ARCHITECTURE.md metrics). Review monthly using
+   `../operations/kql/latency-and-tokens.kql` and `verifier-fail-rate.kql`
+   (`../operations/RUNBOOK.md` M2); a tier move is a change under
+   `../operations/CHANGE_MANAGEMENT.md` §1. An agent whose
    quality holds on a cheaper tier moves down; one that loops or fails
    verification moves up. Change = edit `model_tier` in the registry +
    re-run `attach_integrations.py --only <agent>`.
+   Procedure: `../operations/TOKEN_ECONOMY_PLAYBOOK.md`; accuracy-floor
+   evidence: `../operations/evaluation/run_evals.py` against
+   `../operations/evaluation/golden-set.*.json` (gate G1); cost figures:
+   `../operations/FINOPS.md` §2. Tier proposals from the monthly review are
+   backlog items delivered in the quarterly improvement cycle
+   (`../operations/CONTINUOUS_IMPROVEMENT.md` §4.1 "FinOps").
+
+   **Tool-support rule (R4 of `../enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md`):**
+   a tier model must support every tool in the tier's toolset per the
+   [tool-support table](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model)
+   (2026-09-07, GA) **on the day of the change**. `o3-mini` fails this for the
+   advisory toolset, which is why the reasoning tier is `o4-mini`;
+   `python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run` reports any
+   violation, and `attach_integrations.py` refuses the run.
 
 ## Accuracy floor
 

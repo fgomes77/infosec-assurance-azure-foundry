@@ -51,8 +51,8 @@ param baseName string = 'infosecfoundry'
 ])
 param location string = 'swedencentral'
 
-@description('Environment profile: prod enforces private networking and Disabled public access (main.parameters.prod.json)')
-@allowed(['dev', 'prod'])
+@description('Environment profile: test and prod enforce private networking and Disabled public access (main.parameters.test.json / main.parameters.prod.json)')
+@allowed(['dev', 'test', 'prod'])
 param environmentName string = 'dev'
 
 // ------------------------------------------------------------ model tiers

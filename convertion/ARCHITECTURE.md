@@ -56,7 +56,7 @@ bypassed.
 | Safety filters | A custom RAI policy on every model deployment, plus a second, stricter policy assigned **at agent level** (it overrides the deployment policy) for agents with web, SharePoint or OpenAPI tools, carrying Prompt Shields / indirect-attack (XPIA) detection over retrieved content — `enterprise/ENTERPRISE_BLUEPRINT.md` RAI-1 |
 | Deterministic constraints | Read-only OpenAPI tools (writes stripped); output-verifier rules; verify_conversion.py byte-fidelity gate in deploy.sh |
 | Memory/state | Foundry conversations (session) + vs-assurance-memory → kb-assurance-memory (durable, auditable, deletable) + one knowledge store per agent (platform limit); native Memory (preview) not enabled; learning loop = signals → owner-reviewed proposals → new agent version (enterprise/MEMORY_AND_LEARNING.md) |
-| Observability | Application Insights wired to the Foundry project (Bicep): traces, tokens, latency per response; Logic Apps run history evidences approvals |
+| Observability | Application Insights wired to the Foundry project (Bicep): traces, tokens, latency per response; Logic Apps run history evidences approvals — alert catalogue and queries: `operations/MONITORING.md`; failure handling: `operations/RUNBOOK.md` |
 | Human oversight | Three-layer approval control — see governance/HUMAN_APPROVAL.md |
 
 ## Delivery pipelines (release path made executable)
@@ -82,6 +82,17 @@ token cost per deliverable, and grounding rate (answers citing a knowledge
 source). Review monthly in the ISMS operating rhythm; a falling first-pass
 rate on a report agent means its knowledge or instructions drifted — re-run
 `deploy.sh` from a fresh export and re-verify.
+
+The metrics are computed by `operations/evaluation/run_evals.py` against the
+golden set in `operations/evaluation/` (gates G0–G5 in `EVALUATION.md`). The
+full indicator set (adoption, quality, efficiency, risk/compliance) with
+formulas, sources, targets and the ISMS operating rhythm is
+`operations/KPIS.md`; the review cadence is `operations/RUNBOOK.md` §2 and
+`operations/CONTINUOUS_IMPROVEMENT.md`. Monthly,
+`enterprise/memory/learning_loop.py` aggregates feedback records, eval reports,
+verifier FAIL outcomes and approval rework into one owner-reviewed improvement
+proposal; every resulting change follows
+`enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md`.
 
 ## Cost as a design constraint (FinOps)
 

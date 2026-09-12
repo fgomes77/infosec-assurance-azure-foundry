@@ -38,7 +38,7 @@ Euronext data in web-search queries.
 | | `dev` | `test` (UAT) | `prod` |
 |---|---|---|---|
 | Resource group | `rg-infosec-foundry-dev` | `rg-infosec-foundry-test` | `rg-infosec-foundry` |
-| Parameter file | `infra/main.parameters.json` (`environmentName: dev`) | `infra/main.parameters.test.json` — **to be added** (shared delta S-01): copy of the prod file with `baseName` `infosecfdrytst`, `environmentName` `test`, budget 500 | `infra/main.parameters.prod.json` |
+| Parameter file | `infra/main.parameters.json` (`environmentName: dev`) | `infra/main.parameters.test.json` — **added**: copy of the prod file with `baseName` `infosecfdrytst`, `environmentName` `test`, `monthlyBudget` 500, `enableMcpHosting` false | `infra/main.parameters.prod.json` |
 | Network | public endpoint, no VNet | private endpoints + agent VNet, public access `Disabled` — identical to prod | private endpoints + agent VNet, public access `Disabled` |
 | Models | same three tiers, `DataZoneStandard`, lower capacity (10/10/20 K TPM) | prod capacities | as `main.parameters.prod.json` |
 | Connections (`conn-*`) | none — `attach_integrations.py --dry-run` only | read-only service accounts against **test tenants** where the custodian has one (Jira/Confluence sandbox, OneTrust test); otherwise the prod read-only account, approved by owner + custodian per connection (`team/ACCESS_REGISTER.md` row marked `test`) | prod read-only accounts |
@@ -162,7 +162,7 @@ Every step lists its own; the integration pass applies them. Identifiers
 
 | Id | File | Change (summary — literal text in the step) |
 |---|---|---|
-| S-01 | `infra/main.bicep`, new `infra/main.parameters.test.json` | add `test` to `environmentName` allowed values; test parameter file |
+| S-01 | `infra/main.bicep`, `infra/main.parameters.test.json` | **Applied** — `environmentName` allows `dev` / `test` / `prod`, and the test parameter file exists and passes `PARAMS=main.parameters.test.json ./infra/validate.sh`. |
 | S-02 | `infra/network.bicep`, `infra/main.bicep` | `agents` subnet delegated to `Microsoft.App/environments` (/24) + network-injection parameters; standard-setup resources behind `enableStandardAgentSetup` |
 | S-03 | `setup/provision.sh` | role name `Foundry User` in the printed hint |
 | S-04 | `setup/.env.example` | `FOUNDRY_API_VERSION=v1`, `AGENT_SETUP=basic|standard`, `SHAREPOINT_ADVISORY_ROOT_ITEM_ID`, group object ids, `APPROVAL_ROUTING_PATH` |

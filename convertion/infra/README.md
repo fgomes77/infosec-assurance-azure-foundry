@@ -26,7 +26,7 @@ secret values in the repository. Validate before every deploy:
 
 Parameter sets: `main.parameters.json` (dev: public access on, no VNet,
 placeholder images, `basic` Search SKU, policies off) and
-`main.parameters.prod.json` (private endpoints, public access disabled, images
+`main.parameters.test.json` (the prod profile with `baseName` `infosecfdrytst`, `environmentName` `test`, budget 500 and MCP hosting off — the pre-production rehearsal), `main.parameters.prod.json` (private endpoints, public access disabled, images
 pinned, MCP hosting, budget, team RBAC, standard agent setup, agent VNet
 injection, `Deny` policies, Defender alert routing).
 

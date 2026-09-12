@@ -63,6 +63,33 @@ target path is created when absent.
 | g, h, i | Conversational — orchestrator or the specific advisor agent |
 | j | Conversational with `template-manager`, which fires the approval workflow |
 
+Per-user quickstart (how each of the five assurance users invokes a–j, required
+Supplier + Service names, output path, approval tier): `team/USER_QUICKSTART.md`.
+
+Operating the delivered systems — health checks, failure modes per pipeline,
+support tiers and SLOs, change control for prompts/registry/templates/tiers/infra,
+alerts (egress, verifier FAIL rate, latency/tokens, approval SLA):
+`operations/RUNBOOK.md`, `SUPPORT_MODEL.md`, `CHANGE_MANAGEMENT.md`,
+`MONITORING.md`.
+
+Token economy is operated, not only designed: `operations/FINOPS.md` (cost per
+component and per deliverable, capacity, budgets),
+`operations/TOKEN_ECONOMY_PLAYBOOK.md` (tier-tuning loop with an accuracy floor)
+and `operations/evaluation/` (golden set + `run_evals.py` gates before any model,
+tier, prompt or template change).
+
+Go-live sequencing (readiness → owner pilot → four users → four-week hypercare,
+with exit criteria and training per role): `operations/ROLLOUT_PLAN.md`; targets:
+`operations/KPIS.md`; versioning, re-sync and backup/DR of the delivered systems:
+`operations/LIFECYCLE.md`, `operations/BACKUP_DR.md`.
+
+Every update or upgrade of the platform (models, SDK/API versions, platform
+features, instructions, registry, templates, knowledge sources, workflows,
+Function code, infrastructure, RBAC, connections) is reviewed and approved by the
+accountable owner before implementation —
+`enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md`. Implementation plan and gates:
+`enterprise/IMPLEMENTATION_SERIES.md`.
+
 ## Runtime of record
 
 `setup/requirements.txt` pins `azure-ai-projects>=2.3.0,<3` — the GA Foundry

@@ -123,5 +123,16 @@ python3 ../scripts/attach_integrations.py --dry-run --list-mcp-tools           #
 # live check: every agent except output-verifier carries the gate
 ```
 
+Operational evidence that the gates are exercised:
+`../operations/kql/approval-sla.kql` (pending / expired gates) and the
+`approval-sla` alert in `../operations/alerts.bicep` (or `approval-expiry` in
+`../infra/monitoring.bicep` — `../operations/MONITORING.md` §4 says which
+catalogue is deployed); `../operations/RUNBOOK.md` FM-10 and FM-20 (gate
+integrity failures are P1). Guardrail register, observability wiring and the
+evaluation baseline procedure:
+`../enterprise/series/08-guardrails-observability-evaluation.md`. Promotion of a
+new agent version (including Agent Optimizer candidates) is a Tier C change
+approved by the platform owner.
+
 Related: `RISK_THRESHOLDS.md` (threshold changes are methodology changes),
 `MEMORY_POLICY.md`, `../team/TEAM_MODEL.md` (identities and groups).
