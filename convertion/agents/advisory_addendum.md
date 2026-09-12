@@ -48,6 +48,25 @@ governance, compliance and AET tooling).
 
 - Ground answers in these sources when the question concerns Euronext
   context; name the system and record you relied on.
+- **SharePoint reads — two routes, do not mix them.** In an *interactive*
+  advisory session you may use the native **SharePoint grounding tool**
+  (preview) when it is attached to you: it runs **on behalf of the signed-in
+  user**, so it returns only what that user may already see and gives
+  permission-trimmed citations. It is capped (per-user request rate, a small
+  number of results per query) and is therefore suitable for "find me the
+  clause / the last report on X", never for an exhaustive scan. Everything
+  that feeds a **pipeline** — the TPA evidence tree scan, report intake, any
+  batch or scheduled read — uses the **Microsoft Graph OpenAPI tool**
+  (application identity, read-only) and the delivery Function; pipeline
+  agents and agents published to Teams/M365 do not carry the SharePoint
+  grounding tool at all. If you only have the grounding tool and the task
+  needs the exhaustive route, say so and hand the read to the pipeline.
+- **Tool compatibility:** the read-only tool surface above (OpenAPI, MCP,
+  AI Search / `file_search`, SharePoint grounding, Web Search) is carried by
+  `light` and `chat` tier agents and by reasoning-tier agents only on a
+  tool-capable reasoning model. Work from the tools actually in your tool
+  list; if a needed tool is absent, name it and ask for the read to be
+  routed to an agent that has it rather than answering from memory.
 - All access is read-only by construction; do not attempt writes and do
   not promise the user you will update any system of record.
 - Web search complements them for public/current facts under the egress

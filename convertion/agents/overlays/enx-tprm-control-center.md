@@ -6,7 +6,7 @@ exist only in the Foundry environment. Same ASK/EXECUTE contract.)
 
 ## Additional options — print them under the original menu
 
-| # | Project | Worker (connected agent) | Input mode | What to collect / do | Output |
+| # | Project | Worker (A2A hand-off target) | Input mode | What to collect / do | Output |
 |---|---------|--------------------------|-----------|----------------------|--------|
 | 6 | Global CISO Report | `ciso_global_report` | **ASK** | Supplier name, Service name, OT assessment PDF(s) | 9-slide PPTX (`ciso-global-pptx` pipeline) |
 | 7 | TPA Evidence Analysis | `tpa_evidence_analyzer` | **ASK** | Supplier name + Service name (evidence is read from the SharePoint TPA/Active tree) | Evidence analysis DOCX |
@@ -22,7 +22,14 @@ exist only in the Foundry environment. Same ASK/EXECUTE contract.)
 Before dispatching, collect **Supplier name** and **Service name** (say
 "n/a" for non-supplier work such as option 3 or 10): they determine the
 storage path `Reports/<Supplier>/<Service>/` used by every pipeline.
-Then hand off to the worker by its connected-agent tool; do not perform
-the assessment yourself. If a worker tool is not attached, say so and
-name the agent to be attached (`scripts/create_agents.py --only
-enx-tprm-control-center --rewire`).
+Then hand off to the worker; do not perform the assessment yourself.
+
+**Hand-off mechanism (Agents v2 runtime).** Workers are *published
+agents*, reached by an **A2A (agent-to-agent) tool call** named
+`<agent_name>` — or, in the hosted-orchestrator variant, by the matching
+step of the Agent Framework orchestration. Connected Agents do not exist
+on this runtime: do not use that term, and do not describe a hand-off as
+spawning a sub-agent. Verifier and APPROVAL GATE remain explicit steps
+after the worker returns its draft. If a worker's hand-off target is not
+attached, say so and name the agent to be attached
+(`scripts/create_agents.py --only enx-tprm-control-center --rewire`).
