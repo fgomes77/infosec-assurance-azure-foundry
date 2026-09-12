@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ciso_exec_summary_render",
+  "description": "Render-request contract of the ciso-executive-summary pack (Strategic Risk Intelligence Dashboard). The agent finishes the single-file HTML dashboard itself; this payload hands it to functions/delivery/renderers-src/ciso-exec-summary/render.py, which produces the A3 landscape PDF, the section PNGs and the governance PPTX from it. Named by that renderer's manifest.json. While the ciso-exec-summary pipeline delivers format 'html' with an empty renderTemplate, the HTML is gated by gates.ciso_exec_summary_html instead; this contract applies once the renderer is staged (registry: renderer_pending).",
+  "type": "object",
+  "required": ["html", "vendor", "assessment"],
+  "properties": {
+    "html": {
+      "type": "string", "minLength": 20000,
+      "pattern": "(?s)<html.*</html>",
+      "description": "The complete single-file dashboard: no external references except the cdnjs Chart.js build allowed by templates/enx-theme.json charts.cdn, no unfilled {{PLACEHOLDER}}, ends with </html>. gates.ciso_exec_summary_html re-checks all of this."
+    },
+    "vendor": { "type": "string", "minLength": 1, "description": "Supplier name; substituted into the PPTX generator's VENDOR constant at run time (the staged script is never edited)." },
+    "assessment": { "type": "string", "minLength": 1, "description": "OneTrust assessment name/id; substituted into the ASSESSMENT constant." },
+    "baseName": {
+      "type": "string", "pattern": "^[A-Za-z0-9]+$",
+      "description": "Optional file-name stem (alphanumeric only). Defaults to the vendor name stripped of non-alphanumerics; produces <base>_CISO_ExecSummary.html/.pdf and <base>_CISO_TPRM_Governance.pptx."
+    }
+  }
+}
