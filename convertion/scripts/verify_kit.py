@@ -169,7 +169,9 @@ def check_crossrefs(findings: list[str]) -> None:
         if src and not (CONV.parent / src).exists():
             findings.append(f"XREF     template {t['id']}: source {src} missing")
     for pid, cfg in pipes["pipelines"].items():
-        if manifest and cfg.get("agent") and cfg["agent"] not in known:
+        # "TRIGGER" = agent id supplied by the caller (advisory-file-delivery)
+        if manifest and cfg.get("agent") not in (None, "TRIGGER") \
+                and cfg["agent"] not in known:
             findings.append(f"XREF     pipeline {pid}: unknown agent {cfg['agent']!r}")
     for name in DELIVERY:
         if not (CONV / "agents" / f"{name}_instructions.md").is_file():

@@ -79,8 +79,11 @@ def main() -> int:
     ids = agent_ids(args)
     unresolved: set[str] = set()
     missing_agents: set[str] = set()
-    shared = {SHARED_MAP.get(k, k): resolve_env(v, unresolved)
-              for k, v in pipes.get("shared", {}).items() if not k.startswith("_")}
+    raw_shared = {k: resolve_env(v, unresolved)
+                  for k, v in pipes.get("shared", {}).items() if not k.startswith("_")}
+    # only SHARED_MAP keys are workflow parameters; the *Root keys are the
+    # lookup table for libraryRoot
+    shared = {SHARED_MAP[k]: v for k, v in raw_shared.items() if k in SHARED_MAP}
     if "verifierAgentId" in shared:
         name = shared["verifierAgentId"]
         shared["verifierAgentId"] = ids.get(name, f"{{agentId:{name}}}")
@@ -97,12 +100,14 @@ def main() -> int:
                 continue
             key = KEY_MAP.get(k, k)
             if k == "agent":
-                if v not in ids:
-                    missing_agents.add(v)
-                v = ids.get(v, f"{{agentId:{v}}}")
+                if v == "TRIGGER":
+                    v = ""                       # caller passes agentId
+                else:
+                    if v not in ids:
+                        missing_agents.add(v)
+                    v = ids.get(v, f"{{agentId:{v}}}")
             elif k == "libraryRoot":
-                v = shared.get(v, pipes["shared"].get(v, v))
-                v = resolve_env(v, unresolved)
+                v = raw_shared.get(v, v)
             values[key] = v
         for key, v in values.items():
             if key in params:
