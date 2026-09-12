@@ -52,11 +52,11 @@ param chatModelFormat string = 'OpenAI'
 param chatCapacity int = 50
 
 // ------------------------------------------------------------ reasoning tier
-@description('Reasoning-tier model name (registry model_tier "reasoning"). Must support every tool of the advisory toolset in the tool-support table (policy R4): o3-mini does NOT (no OpenAPI/MCP/Azure AI Search/SharePoint/Web Search) — re-select before production')
-param reasoningModelName string = 'o3-mini'
+@description('Reasoning-tier model name (registry model_tier "reasoning"). Must support every tool of the advisory toolset in the tool-support table (policy R4): o3-mini does NOT (no OpenAPI/MCP/Azure AI Search/SharePoint/Web Search) and is excluded by finding C4. Deployment of record = o4-mini, matching infra/main.bicep and integrations/registry.json model_tiers._deployment_of_record (alternate gpt-5-mini, then gpt-4.1); re-confirm the OpenAPI + MCP + Web Search columns on the day and record the row in the step-02 sign-off')
+param reasoningModelName string = 'o4-mini'
 @minLength(1)
-@description('Reasoning-tier model version — explicit, never empty (kit default was empty = provider default)')
-param reasoningModelVersion string = '{reasoning-model-version}'
+@description('Reasoning-tier model version — PINNED (finding C6), explicit, never empty: an unpinned deployment follows the provider default and silently changes validated deliverables. Must be a version of reasoningModelName, not of the rejected o3-mini; re-confirm with `az cognitiveservices model list -l <location> -o table` before the first deployment')
+param reasoningModelVersion string = '2025-04-16'
 @allowed(['OpenAI', 'Anthropic'])
 param reasoningModelFormat string = 'OpenAI'
 @minValue(1)
