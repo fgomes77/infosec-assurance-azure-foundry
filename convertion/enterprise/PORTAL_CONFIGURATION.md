@@ -82,6 +82,9 @@ principal. This page extends it to the objects the alert does not see.
 | Policy compliance | `azure-policy-assignments.bicep` outputs | `az policy state list -g {rg} --filter "complianceState eq 'NonCompliant'"` | non-compliant resources listed | daily summary; quarterly export as evidence |
 | Published agents / Bot Service | change log | Teams admin center app list; `az bot show` | publication without a change record | monthly |
 | Agent identities | `ACCESS_REGISTER.md` | project JSON `agentIdentityId`; Entra admin center > Agent ID | new blueprint/identity not in the register | quarterly access review |
+| Capability host (standard agent setup) | `infra/agent-stores.bicep` | `az rest --method get --url "https://management.azure.com{projectId}/capabilityHosts?api-version=2025-06-01"` | connection names must be `agent-cosmos` / `agent-search` / `agent-storage`; **ANY difference means the project was rebuilt** | after every platform change |
+| Agent network injection | `infra/main.bicep` | `az cognitiveservices account show -g {rg} -n {baseName}-aif --query properties.networkInjections` | scenario `agent`, `subnetArmId` = `snet-agents`, `useMicrosoftManagedNetwork` false | weekly |
+| Deployed agent versions | `build/agent-versions.json` (published by the release pipeline) | `gen_ai.agent.version` in run telemetry | `agent_version_not_in_manifest` alert (`infra/kql/agent-drift.kql`); an unpromoted version serving traffic is a P1 | hourly alert; restore the ledger before `scripts/verify_deployment.py` or the comparison is skipped |
 
 Procedure when drift is found: (1) capture the live JSON into the ticket
 (`{jira:INFOSEC-PLAT}-nnn`); (2) if it weakens an invariant (write tool,

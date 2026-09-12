@@ -62,3 +62,20 @@ target path is created when absent.
 | d2 | HTTP trigger with `supplierName` (+ optional `serviceName`); the agent enumerates the TPA Active tree itself |
 | g, h, i | Conversational — orchestrator or the specific advisor agent |
 | j | Conversational with `template-manager`, which fires the approval workflow |
+
+## Runtime of record
+
+`setup/requirements.txt` pins `azure-ai-projects>=2.3.0,<3` — the GA Foundry
+Agent Service (**agents / conversations / responses**, `api-version=v1`).
+Hand-offs between agents are the `ROUTE: <agent-name>` table that
+`scripts/create_orchestrator.py` injects and the caller executes as a second
+`responses.create` (Connected Agents do not exist on this runtime — findings
+C1, C2). The classic threads/runs pins (`azure-ai-projects==1.0.0`,
+`azure-ai-agents==1.1.0`) remain only as a documented fallback that
+`scripts/_foundry_runtime.py` detects automatically and `deploy.sh` step
+`[0b/8]` warns about; that surface retires **2027-03-31**.
+
+New `setup/.env` keys for this runtime: `FOUNDRY_API_VERSION=v1`,
+`KNOWLEDGE_SOURCE`, `MEMORY_BACKEND`, `SEARCH_SERVICE_ENDPOINT`,
+`SEARCH_CONNECTION_NAME`, `KNOWLEDGE_INDEX_NAME`, `MEMORY_INDEX_NAME`,
+`ENABLE_A2A_TOOL`.

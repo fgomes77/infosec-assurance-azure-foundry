@@ -21,6 +21,28 @@ az deployment group create \
   --parameters ../infra/main.parameters.json \
   --query "properties.outputs" --output json | tee provision-outputs.json
 
+# ---------------------------------------------------------------------------
+# Pass 2 (prod, finding C22): after enterprise/landing-zone.bicep has created
+# the CMK key and granted `Key Vault Crypto Service Encryption User` to the
+# Foundry, storage, Cosmos DB and AI Search identities, re-run this deployment
+# with the key URI so the account and the BYO stores adopt CMK:
+#   az deployment group create -g "$AZURE_RESOURCE_GROUP" \
+#     --template-file ../infra/main.bicep \
+#     --parameters ../infra/main.parameters.prod.json \
+#     cmkKeyUri="https://{baseName}-kv.{vaultSuffix}/keys/infosec-foundry-cmk"
+#
+# Defender for Cloud AI threat protection (finding C17) is a SUBSCRIPTION
+# setting, not a resource-group one:
+#   az deployment sub create -l "$AZURE_LOCATION" \
+#     --template-file ../infra/defender-ai.bicep \
+#     -p enableAiPlan=true enableAiUserPromptEvidence=false
+#
+# Standard agent setup (finding C5) is bound by an IMMUTABLE capability host:
+# NEVER run ../deploy.sh (agents) before this deployment has succeeded with
+# enableStandardAgentSetup=true — the host cannot be added once the first
+# agent exists, and deploy.sh's pre-flight refuses to continue without it.
+# ---------------------------------------------------------------------------
+
 ENDPOINT=$(python3 -c "import json;print(json.load(open('provision-outputs.json'))['projectEndpoint']['value'])")
 echo ""
 echo ">> Done. Add to your .env:"

@@ -403,14 +403,19 @@ and KV `SecretGet` during the window; owner post-review ≤ 5 business days;
 every activation is an entry in `ACCESS_REGISTER.md`. Control: ISO
 27001:2022 A.8.2, A.5.24–A.5.26; DORA Art. 9(4)(c), 11, 17.
 
-## 13. Threads and memory
+## 13. Conversations and memory
+
+(The runtime object is a Foundry **conversation**; classic threads/runs retire
+2027-03-31 — finding C1. "Thread" below is kept only where a tool still spells it
+that way.)
 
 | Topic | Convention |
 |---|---|
-| Thread ownership | one thread per (person, supplier, service, engagement / month); metadata `{owner_upn, supplier, service, system, engagement, classification:"internal", created}` set by the MCP server / Copilot connector / pipeline; playground threads named `<initials>/<Supplier>/<Service>/<yyyy-mm>` |
-| Visibility | threads are **team-visible** (project data plane); treat every thread as a shared working paper; a colleague may read a thread to take over an engagement |
+| Conversation ownership | one conversation per (person, supplier, service, engagement / month); metadata `{owner_upn, supplier, service, system, engagement, classification:"internal", created}` set by the MCP server / Copilot connector / pipeline; playground threads named `<initials>/<Supplier>/<Service>/<yyyy-mm>` |
+| Visibility | conversations are **team-visible** (project data plane); treat every thread as a shared working paper; a colleague may read a thread to take over an engagement |
 | Personal data | none beyond business role names already in the source; supplier contacts as role + company |
-| Uploads / retention | only the file the run needs; thread files deleted after approval when the source lives in SharePoint; threads deleted 90 days after their deliverable is approved and stored, and at 180 days of inactivity otherwise (monthly `../operations/` cleanup); the report, its Logic Apps run and the App Insights trace (≥ 1 year) are the record |
+| Uploads / retention | only the file the run needs; conversation files deleted after approval when the source lives in SharePoint; conversations deleted 90 days after their deliverable is approved and stored, and at 180 days of inactivity otherwise; the report, its Logic Apps run and the App Insights trace (≥ 1 year) are the record |
+| **How the 90 days is enforced (finding C5)** | With the standard agent setup (`../infra/agent-stores.bicep`) conversations and run state live in `{baseName}-cosmos` **in this subscription**, not in Microsoft-managed storage. Retention is therefore a **database policy, not a script**: the default TTL on the `run-state-v1` container of the `{project-workspace-id}-thread-message-store` database is set once, after the capability host has created its containers — `az cosmosdb sql container update … --ttl 7776000` (= `conversationRetentionDays × 86400`) — and the value is evidenced at the quarterly access review (item 12). Deleting a single conversation through the API remains the per-user path. |
 | Shared memory (`vs-assurance-memory`) | note = `YYYY-MM-DD \| <Supplier> \| <Service or -> \| decision/fact/position/follow-up \| <text> \| by {upn} \| review <YYYY-Qn>`; any user adds under own identity (the human act is the approval — `HUMAN_APPROVAL.md` scope notes); author deletes own; owner deletes any via recorded `MEMORY_DELETE`; quarterly prune by the owner; retention: supplier facts until exit + 1 year, decisions 5 years or 24 months where no decision is attached; RoPA entry owned by the owner, DPO informed (GDPR Art. 5(1)(c)) |
 | Never in memory | special-category data; personal data beyond role / company; credentials; hostnames / IPs; verbatim contract or supplier-document text; personal reminders |
 | Personal notes | **no personal store** on the platform (no per-user vector store, no personal memory — nothing to purge at offboarding, no per-user profiling); use OneNote / OneDrive or a `personal-working` thread deleted by its owner |

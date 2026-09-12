@@ -53,6 +53,11 @@ convertion/
 ├── integrations/              ← registry.json, 14 OpenAPI specs (openapi/),
 │                                mcp/, connections/, copilot/, CONNECTOR_DECISIONS.md
 ├── workflows/                 ← 16 Logic App definitions + pipelines.json
+├── ci/                        ← CI/CD: the gate script syntax_check.sh shared by
+│                                both pipelines, the Azure DevOps pipeline
+│                                azure-pipelines.yml, deploy_logicapps.sh, and
+│                                README.md explaining the PR gates, the OIDC
+│                                deploy and the secret scan
 ├── functions/delivery/        ← renderer + SharePoint storage Function
 ├── mcp-server/                ← MCP exposure of the platform (+ evals/)
 ├── templates/                 ← registry.json, deck schema, themes/, assets/, samples/
@@ -63,6 +68,12 @@ convertion/
 ├── evaluation/                ← golden/ and smoke/ sets
 ├── orchestrator/              ← orchestrator + advisor + MCP layer README
 └── sharepoint/                ← `Reports/<Supplier>/<Service>/` storage rules
+
+(repo root, outside this folder)
+├── .github/                   ← GitHub Actions workflow ci.yml (gates on every
+│                                PR, approved OIDC deploy on `main`),
+│                                gitleaks.toml, dependabot.yml
+└── .devcontainer/             ← dev container mirroring the CI toolchain
 ```
 
 ## Deployment — step by step (`deploy.sh` runs the same sequence)
@@ -74,6 +85,11 @@ convertion/
 # 1. Provision infrastructure (resource group, Foundry account+project, model)
 cd convertion/setup
 cp .env.example .env            # fill in subscription, region, names
+#    Runtime keys to review before the first deploy (all documented in
+#    .env.example): FOUNDRY_API_VERSION=v1, KNOWLEDGE_SOURCE, MEMORY_BACKEND,
+#    SEARCH_SERVICE_ENDPOINT, SEARCH_CONNECTION_NAME, KNOWLEDGE_INDEX_NAME,
+#    MEMORY_INDEX_NAME, ENABLE_A2A_TOOL, REASONING_MODEL_DEPLOYMENT_NAME
+#    (o4-mini — never o3-mini, finding C4).
 ./provision.sh
 
 # 2. Install script dependencies
@@ -212,7 +228,11 @@ in place (instructions and knowledge refreshed), new skills become new agents.
    equivalent inside an agent; use Azure Logic Apps or OpenAPI tools per
    integration (out of scope here, documented in MAPPING.md).
 6. **SDK drift:** `azure-ai-projects` evolves quickly; versions are pinned in
-   `setup/requirements.txt`. If a call signature has moved, check the
+   `setup/requirements.txt`, today `azure-ai-projects>=2.3.0,<3` (GA agents /
+   conversations / responses, `api-version=v1`). The classic threads/runs pins
+   (`azure-ai-projects==1.0.0`, `azure-ai-agents==1.1.0`) remain only as a
+   documented fallback that `scripts/_foundry_runtime.py` detects automatically
+   and `deploy.sh` step `[0b/8]` warns about (`STRICT_RUNTIME=1` makes it fail). If a call signature has moved, check the
    migration notes for the pinned major version. The runtime moves too: the
    classic threads/runs data plane retires 2027-03-31, so scripts and
    workflows target conversations/responses (`enterprise/ENTERPRISE_BLUEPRINT.md`
