@@ -24,8 +24,19 @@ confidential data, and writes to systems of record).
 - `attach_integrations.py` **strips every non-GET operation** from each
   OpenAPI spec at attach time unless the connection is named in that
   agent's `write_connections` — which no agent has. Confluence, Jira,
-  Jira Assets, SharePoint, OneTrust, Defender, SecurityScorecard, IAF:
-  agents physically cannot write, whatever they are asked.
+  Jira Assets, SharePoint, OneTrust, Defender (security monitoring),
+  Entra ID IAM, SecurityScorecard (risk monitoring), IAF
+  (governance/compliance/AET findings): agents physically cannot write,
+  whatever they are asked. Additional Euronext tooling (vulnerability
+  management, GRC platforms, AET) reaches agents only through the ENX
+  gateway MCP server or a new OpenAPI spec added under the same
+  read-only-by-construction pattern.
+- The registry's `advisory_read_only_toolset` applies this full read
+  surface uniformly to EVERY information-providing system (framework
+  advisors, cyber-forum, tpsrca, control-center, advisor), and the
+  persona preamble carries the read-only + egress rules into every agent
+  on the platform — the rules exist in the instructions layer, the tool
+  layer, and the credential layer at once.
 - The service accounts / app registrations behind the Foundry connections
   are themselves provisioned read-only (Confluence read scopes; Graph
   `Sites.Read.All`; OneTrust viewer role; Jira browse-only) — defence in

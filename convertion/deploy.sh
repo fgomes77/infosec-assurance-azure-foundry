@@ -33,7 +33,10 @@ python3 attach_integrations.py $DRY
 echo "==> [6/7] Creating advisor + orchestrator (+ memory store) $DRY"
 python3 create_orchestrator.py $DRY
 
-echo "==> [6b/7] Staging delivery-function renderers"
+echo "==> [6b/7] Applying advisory profile (file generation + read-only enterprise charter) $DRY"
+python3 apply_advisory_profile.py $DRY
+
+echo "==> [6c/7] Staging delivery-function renderers"
 python3 stage_renderers.py || echo "note: stage renderers after convert (see functions/delivery/README.md)"
 
 if [ -z "$DRY" ]; then

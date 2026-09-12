@@ -14,6 +14,18 @@ Azure catalogue evolves — the TIER structure is the contract):
 Assignment of record: the `model_tier` field per agent in
 `integrations/registry.json`, applied by `attach_integrations.py`.
 
+**Advisory pin (requirements g/h/i):** every information-providing system
+— the framework advisors (iso27001, iso42001, dora, nis2, eu-ai-act),
+cyber-forum, tpsrca-assessment-engine, enx-tprm-control-center and
+infosec-assurance-advisor — is PINNED to the `reasoning` tier (the
+registry's `advisory_read_only_toolset` lists them). These agents answer
+users directly, so quality of reasoning is the product; the monthly
+tier-tuning review below may move other agents down, never these. They
+also carry code_interpreter for Word/Excel/PowerPoint/HTML file
+generation (`scripts/apply_advisory_profile.py`), and file rendering
+stays deterministic code — token economy for advisory systems comes from
+RAG retrieval and structured output contracts, not from a cheaper model.
+
 ## Token-economy rules (already engineered into the platform)
 
 1. **Deterministic code over generation** — everything renderable is

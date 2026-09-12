@@ -1,53 +1,356 @@
 {
   "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows.",
   "connections": {
-    "jira-cloud":        { "type": "openapi", "spec": "integrations/openapi/jira-cloud.yaml",        "foundry_connection": "conn-jira-cloud" },
-    "jira-assets-cmdb":  { "type": "openapi", "spec": "integrations/openapi/jira-assets-cmdb.yaml",  "foundry_connection": "conn-jira-assets" },
-    "onetrust":          { "type": "openapi", "spec": "integrations/openapi/onetrust.yaml",          "foundry_connection": "conn-onetrust" },
-    "securityscorecard": { "type": "openapi", "spec": "integrations/openapi/securityscorecard.yaml", "foundry_connection": "conn-securityscorecard" },
-    "defender-graph":    { "type": "openapi", "spec": "integrations/openapi/defender-graph.yaml",    "foundry_connection": "conn-defender-graph" },
-    "sharepoint-graph":  { "type": "openapi", "spec": "integrations/openapi/sharepoint-graph.yaml",  "foundry_connection": "conn-sharepoint-graph" },
-    "iaf-api":           { "type": "openapi", "spec": "integrations/openapi/iaf-api.yaml",           "foundry_connection": "conn-iaf-api" },
-    "confluence-cloud":  { "type": "openapi", "spec": "integrations/openapi/confluence-cloud.yaml",  "foundry_connection": "conn-confluence" },
-    "enx-gateway-mcp":   { "type": "mcp",     "config": "integrations/mcp/enx-gateway.json" },
-    "web-search":        { "type": "bing_grounding", "foundry_connection": "bing-grounding" }
+    "jira-cloud": {
+      "type": "openapi",
+      "spec": "integrations/openapi/jira-cloud.yaml",
+      "foundry_connection": "conn-jira-cloud"
+    },
+    "jira-assets-cmdb": {
+      "type": "openapi",
+      "spec": "integrations/openapi/jira-assets-cmdb.yaml",
+      "foundry_connection": "conn-jira-assets"
+    },
+    "onetrust": {
+      "type": "openapi",
+      "spec": "integrations/openapi/onetrust.yaml",
+      "foundry_connection": "conn-onetrust"
+    },
+    "securityscorecard": {
+      "type": "openapi",
+      "spec": "integrations/openapi/securityscorecard.yaml",
+      "foundry_connection": "conn-securityscorecard"
+    },
+    "defender-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/defender-graph.yaml",
+      "foundry_connection": "conn-defender-graph"
+    },
+    "sharepoint-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/sharepoint-graph.yaml",
+      "foundry_connection": "conn-sharepoint-graph"
+    },
+    "iaf-api": {
+      "type": "openapi",
+      "spec": "integrations/openapi/iaf-api.yaml",
+      "foundry_connection": "conn-iaf-api"
+    },
+    "confluence-cloud": {
+      "type": "openapi",
+      "spec": "integrations/openapi/confluence-cloud.yaml",
+      "foundry_connection": "conn-confluence"
+    },
+    "enx-gateway-mcp": {
+      "type": "mcp",
+      "config": "integrations/mcp/enx-gateway.json"
+    },
+    "web-search": {
+      "type": "bing_grounding",
+      "foundry_connection": "bing-grounding"
+    },
+    "entra-iam-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/entra-iam-graph.yaml",
+      "foundry_connection": "conn-entra-iam"
+    }
   },
   "model_tiers": {
     "_comment": "Token-economy routing (governance/MODEL_ROUTING.md). Deployment names from setup/.env: LIGHT_MODEL_DEPLOYMENT_NAME (default gpt-4o-mini), MODEL_DEPLOYMENT_NAME (gpt-4o), REASONING_MODEL_DEPLOYMENT_NAME (o3-mini).",
-    "light":     "structured extraction, rendering hand-off, routing, folder/file bookkeeping",
-    "chat":      "standard report generation against fixed templates",
+    "light": "structured extraction, rendering hand-off, routing, folder/file bookkeeping",
+    "chat": "standard report generation against fixed templates",
     "reasoning": "OSINT research, risk scoring, evidence/SOC/pentest analysis, regulatory advisory"
   },
   "agents": {
-    "deepsearch-protocol":                  { "tools": ["web-search", "securityscorecard", "iaf-api", "enx-gateway-mcp"], "model_tier": "reasoning" },
-    "ai-deepsearch-osint-gathering-report": { "tools": ["web-search", "securityscorecard"], "model_tier": "reasoning" },
-    "cyber-forum":                          { "tools": ["web-search", "defender-graph", "jira-cloud", "enx-gateway-mcp"], "model_tier": "reasoning" },
-    "dpia":                                 { "tools": ["onetrust", "sharepoint-graph", "iaf-api"], "model_tier": "chat" },
-    "onetrust-form-b":                      { "tools": ["onetrust", "sharepoint-graph"], "model_tier": "chat" },
-    "ciso-reporting":                       { "tools": ["onetrust", "sharepoint-graph", "jira-cloud"], "model_tier": "chat" },
-    "ciso-executive-summary":               { "tools": ["onetrust", "sharepoint-graph"], "model_tier": "chat" },
-    "enx-tprm-control-center":              { "tools": ["enx-gateway-mcp"], "model_tier": "chat" },
-    "dora":                                 { "tools": ["web-search", "jira-assets-cmdb", "iaf-api"], "model_tier": "reasoning" },
-    "nis2":                                 { "tools": ["web-search"], "model_tier": "reasoning" },
-    "eu-ai-act":                            { "tools": ["web-search"], "model_tier": "reasoning" },
-    "iso27001":                             { "tools": ["web-search", "sharepoint-graph"], "model_tier": "reasoning" },
-    "iso42001":                             { "tools": ["web-search", "sharepoint-graph"], "model_tier": "reasoning" },
-    "tpsrca-assessment-engine":             { "tools": ["securityscorecard", "iaf-api", "jira-assets-cmdb"], "model_tier": "reasoning" },
-    "tprm-slide-generator":                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pptx-executive-summary-ciso":          { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pdf-full-coverage-analyzer":           { "tools": [], "model_tier": "reasoning" },
-    "whisperx-transcribe-diarize":          { "tools": [], "model_tier": "chat" },
-    "docx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pdf":                                  { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pptx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "xlsx":                                 { "tools": ["sharepoint-graph"], "model_tier": "light" },
-
-    "ciso-global-report":                   { "tools": ["onetrust", "jira-assets-cmdb", "sharepoint-graph"], "model_tier": "reasoning" },
-    "tpa-evidence-analyzer":                { "tools": ["sharepoint-graph"], "model_tier": "reasoning" },
-    "soc-report-analyzer":                  { "tools": [], "model_tier": "reasoning" },
-    "pentest-report-analyzer":              { "tools": [], "model_tier": "reasoning" },
-    "template-manager":                     { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-
-    "infosec-assurance-advisor":            { "tools": ["confluence-cloud", "jira-cloud", "jira-assets-cmdb", "sharepoint-graph", "onetrust", "defender-graph", "securityscorecard", "iaf-api", "enx-gateway-mcp", "web-search"], "model_tier": "reasoning", "_comment": "Requirement i: every enterprise source attached READ-ONLY (non-GET stripped; no write_connections). Web search only after query sanitisation per governance/DATA_PROTECTION_GUARDRAILS.md." }
+    "deepsearch-protocol": {
+      "tools": [
+        "web-search",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning"
+    },
+    "ai-deepsearch-osint-gathering-report": {
+      "tools": [
+        "web-search",
+        "securityscorecard"
+      ],
+      "model_tier": "reasoning"
+    },
+    "cyber-forum": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "dpia": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph",
+        "iaf-api"
+      ],
+      "model_tier": "chat"
+    },
+    "onetrust-form-b": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "ciso-reporting": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph",
+        "jira-cloud"
+      ],
+      "model_tier": "chat"
+    },
+    "ciso-executive-summary": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "enx-tprm-control-center": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "dora": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "nis2": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "eu-ai-act": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "iso27001": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "iso42001": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "tpsrca-assessment-engine": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning"
+    },
+    "tprm-slide-generator": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "pptx-executive-summary-ciso": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "pdf-full-coverage-analyzer": {
+      "tools": [],
+      "model_tier": "reasoning"
+    },
+    "whisperx-transcribe-diarize": {
+      "tools": [],
+      "model_tier": "chat"
+    },
+    "docx": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "pdf": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "pptx": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "xlsx": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "light"
+    },
+    "ciso-global-report": {
+      "tools": [
+        "onetrust",
+        "jira-assets-cmdb",
+        "sharepoint-graph"
+      ],
+      "model_tier": "reasoning"
+    },
+    "tpa-evidence-analyzer": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "reasoning"
+    },
+    "soc-report-analyzer": {
+      "tools": [],
+      "model_tier": "reasoning"
+    },
+    "pentest-report-analyzer": {
+      "tools": [],
+      "model_tier": "reasoning"
+    },
+    "template-manager": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat"
+    },
+    "infosec-assurance-advisor": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search"
+      ],
+      "model_tier": "reasoning",
+      "_comment": "Requirement i: full enterprise read surface, READ-ONLY (non-GET stripped; no write_connections). Web search only after query sanitisation per governance/DATA_PROTECTION_GUARDRAILS.md."
+    }
+  },
+  "advisory_read_only_toolset": {
+    "_comment": "Requirement g/h/i: EVERY information-providing (advisory/knowledge) system carries the full Euronext read surface - Confluence, Jira, CMDB, SharePoint, OneTrust, Defender (security monitoring), Entra IAM, SecurityScorecard (risk monitoring), IAF (governance/compliance/AET findings), ENX gateway MCP, sanitised web search. All READ-ONLY: non-GET stripped, no write_connections. apply_advisory_profile.py additionally appends agents/advisory_addendum.md (Word/Excel/PowerPoint/HTML file generation) and ensures code_interpreter.",
+    "tools": [
+      "confluence-cloud",
+      "jira-cloud",
+      "jira-assets-cmdb",
+      "sharepoint-graph",
+      "onetrust",
+      "defender-graph",
+      "entra-iam-graph",
+      "securityscorecard",
+      "iaf-api",
+      "enx-gateway-mcp",
+      "web-search"
+    ],
+    "agents": [
+      "iso27001",
+      "iso42001",
+      "dora",
+      "nis2",
+      "eu-ai-act",
+      "cyber-forum",
+      "tpsrca-assessment-engine",
+      "enx-tprm-control-center",
+      "infosec-assurance-advisor"
+    ]
   }
 }
