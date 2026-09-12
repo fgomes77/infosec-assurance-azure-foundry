@@ -9,7 +9,7 @@ param location string
 param logAnalyticsId string
 param projectEndpoint string
 
-@description('Container image built from mcp-server/ (python:3.12-slim + requirements). Placeholder until pushed')
+@description('Container image built from convertion/ with mcp-server/Dockerfile (the build context includes scripts/ — the server shares _foundry_runtime.py and memory_store.py with the deploy scripts, finding C1). Placeholder until pushed')
 param image string = '{registry}.azurecr.io/infosec-mcp:{tag}'
 
 @description('Registry login server (delivery.bicep output); AcrPull granted to the app identity')

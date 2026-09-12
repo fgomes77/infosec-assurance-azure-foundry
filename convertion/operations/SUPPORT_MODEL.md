@@ -58,7 +58,7 @@ personal data — thread ids and run ids only):
 System (a–j) / agent:        e.g. d2 tpa-evidence-analyzer
 What I did:                  trigger / prompt shape (no internal text)
 What happened:               error text, or "no answer after N min"
-Ids:                         thread_id / run id / Logic Apps run name / correlationId
+Ids:                         conversation_id (thread_id on the retiring classic runtime) / response id / Logic Apps run name / correlationId
 Impact:                      me only | several users | a due report (supplier, due date)
 Severity I think:            P1–P4 (RUNBOOK §3)
 Already tried:               re-run | re-login | peer check

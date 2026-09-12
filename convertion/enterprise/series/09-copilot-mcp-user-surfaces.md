@@ -59,11 +59,17 @@ tools need). **Azure portal (hosted MCP).** Container App `{baseName}-mcp`
 # local MCP per user (mcp-server/README.md)
 cd convertion/mcp-server && pip install -r requirements.txt && az login && export PROJECT_ENDPOINT="https://{account}.services.ai.azure.com/api/projects/{project}" && python3 server.py
 # hosted MCP image (only if enableMcpHosting=true)
-az acr build -r {registry} -t infosec-mcp:{tag} convertion/mcp-server
+az acr build -r {registry} -t infosec-mcp:{tag} -f convertion/mcp-server/Dockerfile convertion
 az deployment group create -g {rg} --template-file convertion/infra/main.bicep --parameters convertion/infra/main.parameters.prod.json mcpImage={registry}.azurecr.io/infosec-mcp:{tag} mcpEasyAuthClientId={app-registration-client-id}
 # publication evidence
 az bot show -g {rg} -n {baseName}-bot --query "{name:name,msaAppId:properties.msaAppId}"
 ```
+
+The build context is `convertion/`, not `mcp-server/`: the server shares the
+Foundry runtime adapter and the memory backend with the deploy scripts
+(`scripts/_foundry_runtime.py`, `scripts/memory_store.py`, finding C1).
+Transport is selected by the app setting `MCP_TRANSPORT=streamable-http`
+(set in `infra/mcp-server.bicep`); no code edit is needed.
 
 Shared delta for `integrations/copilot/README.md` (docs-only, S-09 family):
 add at the top — `Decision 2026-09: conversational advisors are published

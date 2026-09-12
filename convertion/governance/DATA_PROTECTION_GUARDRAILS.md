@@ -19,6 +19,25 @@ confidential data, and writes to systems of record).
 | Detective layer | Scheduled-query alert (`infra/monitoring.bicep`, query `infra/kql/egress-internal-markers.kql`) on grounding-tool inputs matching internal-marker patterns (`ENX-`, assessment-id regex, internal domain suffixes, employee-directory names list from Entra), routed to the owner action group. A hit raises a review ticket — the run is not killed retroactively, the pattern is fixed forward (instruction or list update). |
 | Prompt-injection defence | Content fetched from the web (and from supplier evidence files) is DATA, never instructions: the persona preamble's injection rule tells agents to ignore directives embedded in retrieved content; the verifier checks deliverables for signs of instruction-following from sources. |
 
+**Compliance boundary (accepted residual risk).** Grounding with Bing Search /
+the Web Search tool sends the query to a global Microsoft service **outside the
+Azure compliance boundary**; the Azure Data Protection Addendum does **not**
+apply to it and EU residency is not guaranteed for the query text
+([Bing tools](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools),
+GA 2026-08-27). The risk is accepted by Francisco Gustavo Gomes (accountable
+owner) on the basis of the sanitisation rule above, the detective KQL egress
+alert, and page reads going through `osint-proxy` instead. It is recorded in
+the RoPA and in the DORA Art. 28 register and re-reviewed at every standing
+platform-currency review (`../enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md`
+§4). A domain-restricted alternative (Bing Custom Search / Web Search with a
+domain allow-list, preview) is evaluated in `test` before any GA adoption. The
+same text is carried on the `web-search` connection in
+`../integrations/registry.json` (finding C13).
+
+Continuous evaluation samples 10 % of production interactions into
+Application Insights (`../enterprise/series/08-guardrails-observability-evaluation.md`
+§4); those samples are subject to the same retention and the same RoPA entry.
+
 ## 2. Read-only enterprise access (structural, not behavioural)
 
 - `attach_integrations.py` **strips every non-GET operation** from each
@@ -76,13 +95,16 @@ confidential data, and writes to systems of record).
   category rather than disabling filtering.
 - **Secrets:** all credentials in Key Vault / Foundry connections; specs
   and workflows reference names only. Scanning status: a manual
-  secret/PII scan was run once at export time (export README); **no
-  repeating scan exists yet** — the required control is
-  `scripts/scan_secrets.py` called from `deploy.sh` plus a gitleaks CI
-  job with `.gitleaks.toml` allow-listing the documented placeholders
-  (`hf_xxxx…` in the WhisperX installation notes, `{placeholder}` /
-  `<tenant>` patterns) — shared deltas; until they land, reviewers grep
-  every PR (`CODEOWNERS` + PR template checklist).
+  secret/PII scan was run once at export time (export README); the
+  repeating control is
+  `scripts/verify_kit.py` §1 (secret, tenant-hostname and e-mail scan)
+  called from `deploy.sh`, plus the gitleaks CI job `secret-scan` of
+  `.github/workflows/ci.yml` (same steps in `convertion/ci/azure-pipelines.yml`)
+  whose configuration `.github/gitleaks.toml` allow-lists only the documented
+  placeholders, Key Vault references and public Azure role-definition GUIDs —
+  see `../ci/README.md` §3. (There is no `scripts/scan_secrets.py` in the kit;
+  `verify_kit.py` is what performs that scan.) Reviewers additionally grep every
+  PR (`CODEOWNERS` + PR template checklist).
 - **Transport/identity:** managed identities end-to-end (Logic Apps →
   Foundry, Function → Graph); function endpoints key-protected and
   VNet-restricted; TLS everywhere by platform default.

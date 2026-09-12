@@ -50,7 +50,7 @@ agents in v1.`
 | `exchange-graph` | — (managed identity) | project MI | `{mi:infosecfoundry-proj}` | Exchange admins | `Mail.Read` **plus** an Exchange *application access policy* restricting it to the one shared mailbox `{mailbox:assurance-shared}` |
 | `iaf-api` | `conn-iaf-api` (custom keys) | `Authorization: Bearer …` (token from the internal IdP, rotated by a Logic App) or `X-API-Key` | `{app:infosec-foundry-iaf-ro}`; `kv-iaf-client-secret` / `kv-iaf-api-key` | `{upn:iaf-owner}` | scope `iaf.read` only — never `iaf.write` (writes happen only in `workflows/jira-finding-sync.json` after approval) |
 | `confluence-cloud` | `conn-confluence` (custom keys) | `Authorization: Basic …` or 3LO bearer with `read:confluence-content.all`, `read:confluence-space.summary` | `svc-infosec-foundry-ro-confluence`; `kv-confluence-api-token` | Confluence admin | space *view* only |
-| `enx-gateway-mcp` | `conn-enx-gateway` (custom keys **or** `user-entra` if the gateway accepts Entra tokens) | MCP tool: `server_url` `https://{enx-gateway-host}/mcp`, `allowed_tools` = the read tools, `require_approval: never` (justified by `readOnlyHint=true` on every allow-listed tool — `integrations/mcp/enx-gateway.json`) | `svc-infosec-foundry-ro-enxgw`; `kv-enx-gateway-token` | `{group:enx-gateway}` | gateway policy exposes the read toolset only to this project; token 90 d |
+| `enx-gateway-mcp` | `conn-enx-gateway` (custom keys **or** `user-entra` if the gateway accepts Entra tokens) | MCP tool: `server_url` `https://{enx-gateway-host}/mcp`, `allowed_tools` = the read tools, `require_approval` = the per-tool waiver object `{"never": {"tool_names": [...]}}` whose `tool_names` **equal** `allowed_tools` (justified by `readOnlyHint=true` on every allow-listed tool — `integrations/mcp/enx-gateway.json`); any other tool the gateway exposes therefore still requires human approval; auth via the project connection `conn-enx-gateway` (no run-time header token) | `svc-infosec-foundry-ro-enxgw`; `kv-enx-gateway-token` | `{group:enx-gateway}` | gateway policy exposes the read toolset only to this project; token 90 d |
 | `web-search` | `bing-grounding` (created by `main.bicep`, category `GroundingWithBingSearch`, ApiKey) | resource key wired by Bicep | `{baseName}-bing` | owner | outside the EU boundary — risk acceptance recorded in step 08 §5; sanitised queries only |
 | `osint-proxy` | `conn-osint-proxy` (custom keys) | header `x-functions-key` | Function key `kv-delivery-function-key` | owner | GET `/api/fetch_public_page` only; allow-list of public hosts in the Function |
 | `azure-devops` | `conn-azure-devops` (custom keys) | `Authorization: Bearer {PAT or Entra token}` for a Reader SP | `svc-infosec-foundry-ro-ado`; `kv-ado-token` | ADO admin | *Reader* on the project(s); no PR write |
@@ -144,13 +144,13 @@ module jira 'series-04-connection-customkeys.bicep' = {
 }
 ```
 
-Gap **G-04** (shared delta S-15): `integrations/mcp/enx-gateway.json` documents `attach_integrations.py --dry-run --list-mcp-tools` and a readOnlyHint check at attach time, but `scripts/attach_integrations.py` contains neither (no `tools/list` call, no `readOnlyHint` test). Until the integration pass adds them, V3 below is performed manually against the gateway's `tools/list` and the output is filed as evidence.
+**G-04 closed (shared delta S-15 applied).** `scripts/attach_integrations.py` implements `--list-mcp-tools`: per MCP connection it prints the resolved project connection (`project_connection` in `integrations/mcp/enx-gateway.json`, falling back to the registry's `foundry_connection`), the `require_approval` waiver set, and every allow-listed tool with its `readOnlyHint` (probed live via `tools/list` when not running `--dry-run`). It **fails the run** when a tool is not proven read-only, when the waiver set differs from `allowed_tools`, or when the project connection cannot be resolved. Allow-list entries still written as `{placeholders}` are reported as "template placeholder" and not failed — fill them at D9 and re-run before attaching. The same waiver-equality check runs unconditionally inside `build_tools()`, so an attach can never widen the waiver, and every key beginning with `_` is stripped before the tool definition is sent.
 
 Kit scripts, after the connections exist:
 
 ```bash
 python3 scripts/attach_integrations.py --dry-run                 # every OpenAPI tool shows [read-only]; unknown connections fail
-python3 scripts/attach_integrations.py --dry-run --list-mcp-tools   # gap G-04: flag documented in integrations/mcp/enx-gateway.json, not yet implemented (see below)
+python3 scripts/attach_integrations.py --dry-run --list-mcp-tools   # prints the waiver set, the resolved project connection and each tool's readOnlyHint; exits 1 on a violation
 python3 scripts/attach_integrations.py --only cyber-forum          # first live attach (dev/test), then the rest
 ```
 
@@ -168,7 +168,7 @@ python3 scripts/attach_integrations.py --only cyber-forum          # first live 
 |---|---|---|
 | V1 | Foundry portal → Connections | every row of §2 present (except the two deferred), no auth error |
 | V2 | `attach_integrations.py --dry-run` | `[read-only]` on every OpenAPI tool; `write_connections` absent for every agent |
-| V3 | ENX gateway `tools/list` (curl with the connection's token, or `attach_integrations.py --dry-run --list-mcp-tools` once G-04 is closed) | every allow-listed tool carries `readOnlyHint=true`; any that does not is removed from `allowed_tools` before attach |
+| V3 | `python3 scripts/attach_integrations.py --list-mcp-tools` (live probe; `--dry-run` prints without probing) | every allow-listed tool carries `readOnlyHint=true`; any that does not is removed from `allowed_tools` before attach |
 | V4 | Per connection, one read call through an agent in `test` (`smoke_test.py --agent cyber-forum --prompt "List the five most recent Defender incidents (titles only)"`) | tool call visible in tracing; data returned; **no** non-GET call possible (attempt `create an issue` → agent reports it cannot) |
 | V5 | Graph app roles: `az rest GET …/servicePrincipals/{MI}/appRoleAssignments` | exactly the roles of §3; none `ReadWrite` |
 | V6 | Custodian confirmations filed (`Governance/Implementation/{env}/04/custodian-{system}.md`) | one per row |

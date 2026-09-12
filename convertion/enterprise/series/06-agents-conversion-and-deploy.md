@@ -31,10 +31,10 @@ then 1–2 per environment). No countersign; UAT by the four users in
 |---|---|---|---|
 | A1 | `setup/requirements.txt`, `mcp-server/requirements.txt` | **S-06**: `azure-ai-projects>=2.3.0,<3` (2.6.0 current), remove `azure-ai-agents==1.1.0`, keep `azure-identity`, `python-dotenv`, `PyYAML`, `mcp` | `pip install -r`; `python3 -c "import azure.ai.projects as p; print(p.__version__)"` |
 | A2 | `scripts/create_agents.py`, `scripts/create_delivery_agents.py`, `scripts/create_orchestrator.py`, `scripts/apply_advisory_profile.py`, `scripts/attach_integrations.py` | replace `azure.ai.agents.models` imports and `agents_client.create_agent(...)`/`update_agent` with `project.agents.create_version(agent_name, definition=PromptAgentDefinition(model, instructions, tools))`; "idempotent by name" becomes "new immutable version per run, previous versions kept" | every script `--dry-run` unchanged in output; `verify_conversion.py` untouched (it checks build bytes, not the runtime) |
-| A3 | `scripts/smoke_test.py`, `mcp-server/server.py` | threads → `conversations.create()`; runs → `responses.create(conversation=…, input=…, extra_body={"agent_reference": {"name": …, "type": "agent_reference"}})`; MCP `thread_id` parameter renamed `conversation_id` (old name accepted for one release) | `smoke_test.py --agent dora --prompt …` returns text |
+| A3 | `scripts/smoke_test.py`, `mcp-server/server.py` | **Applied in `mcp-server/server.py`**: the server calls `scripts/_foundry_runtime.py` (`conversations` + `responses`, `agent_reference` with the promoted version); the MCP parameter is `conversation_id` and `thread_id` is still accepted and returned as a deprecated alias for one release. Original shape: threads → `conversations.create()`; runs → `responses.create(conversation=…, input=…, extra_body={"agent_reference": {"name": …, "type": "agent_reference"}})`; MCP `thread_id` parameter renamed `conversation_id` (old name accepted for one release) | `smoke_test.py --agent dora --prompt …` returns text |
 | A4 | `scripts/_azure_helpers.py` | file uploads through `project.get_openai_client().files.create(purpose="assistants")` and vector stores through the same client (`vector_stores.create`, `vector_stores.files.create`) — the upload cache (sha256 → file id) is unchanged | cache hit rate in the log |
-| A5 | `scripts/memory_store.py` | same client for `vs-assurance-advisor` (D5) | `memory_store.py list` |
-| A6 | `deploy.sh` | **S-10**: step `[0/7] runtime pre-flight` — `python3 -c "import azure.ai.projects as p, sys; sys.exit(0 if p.__version__.split('.')[0]=='2' else 1)"` | dry run |
+| A5 | `scripts/memory_store.py` | same client; store is `vs-assurance-memory` (staging) or the Search index `MEMORY_INDEX_NAME`, per `MEMORY_BACKEND` (§C) | `memory_store.py list` |
+| A6 | `deploy.sh` | **Applied as step `[0b/8]`** (`STRICT_RUNTIME=1` makes it blocking). Original **S-10**: step `[0/7] runtime pre-flight` — `python3 -c "import azure.ai.projects as p, sys; sys.exit(0 if p.__version__.split('.')[0]=='2' else 1)"` | dry run |
 
 Reference shape (validated with `py_compile`; confirm parameter names
 against the 2.x samples of the migrate page on the execution day):
@@ -92,18 +92,32 @@ workstation (`operations/CHANGE_MANAGEMENT.md` §2).
 
 ## C. Advisor stores (D5)
 
-`create_orchestrator.py` today attaches `vs-assurance-combined` (all skill
-knowledge + advisor knowledge packs) **and** `vs-assurance-memory`. With
-one vector store per agent, v1 uses a single store `vs-assurance-advisor`:
-knowledge files as before, memory notes uploaded by `memory_store.py` with
-the `MEMORY-` filename prefix so `memory_store.py list` filters them and
-deletion stays per-note (GDPR minimisation unchanged). The Foundry IQ
-knowledge-base route (Azure AI Search, `enterprise/memory-learning/` §2
-tier 4) is evaluated in `test` and adopted as a Tier C change if retrieval
-quality on the comparison set is equal or better. Shared delta for
-`orchestrator/README.md` §2 and `ARCHITECTURE.md` "RAG" row: `combined +
-memory` → `vs-assurance-advisor (knowledge + MEMORY-* notes; one store per
-agent is a platform limit)`.
+> **Implemented differently from the first draft — this is the shape of record.**
+> `scripts/create_orchestrator.py` attaches exactly ONE `file_search` store to
+> the advisor and it keeps its existing name **`vs-assurance-combined`** (all
+> skill knowledge + advisor knowledge packs). It is NOT renamed to
+> `vs-assurance-advisor`, and memory notes do **not** live inside it as
+> `MEMORY-*` files.
+
+One vector store per agent is a fixed service limit (limits page, 2026-09-07,
+GA), so durable memory cannot be a second `file_search` store. Two switches in
+`setup/.env` decide where each thing comes from:
+
+| Switch | Values | Effect |
+|---|---|---|
+| `KNOWLEDGE_SOURCE` | `vector-store` (default) / `ai-search` / `none` | combined knowledge from `vs-assurance-combined`, or from the Azure AI Search / Foundry IQ index `KNOWLEDGE_INDEX_NAME` (default `kb-assurance`), or not grounded |
+| `MEMORY_BACKEND` | `vector-store` (transition default) / `search-index` | durable memory in `vs-assurance-memory` as a **staging store managed by `scripts/memory_store.py` and no longer attached to the advisor**, or as documents in the Azure AI Search index `MEMORY_INDEX_NAME` (default `kb-assurance-memory`) read through the GA Azure AI Search tool |
+
+`scripts/memory_store.py` implements `add` / `list` / `delete` / `import` /
+`purge` identically on both backends with the same privacy filter, the same
+special-category rejection and the same `--approved-by` gate
+(`governance/MEMORY_POLICY.md` §2a). Deletion stays per note, so GDPR
+minimisation is unchanged. Moving `MEMORY_BACKEND` from `vector-store` to
+`search-index` is a Tier C change: export first
+(`operations/BACKUP_DR.md` §3), then re-import.
+
+The Foundry IQ knowledge-base route is evaluated in `test` and adopted as a
+Tier C change if retrieval quality on the comparison set is equal or better.
 
 ## D. Multi-agent routing without connected agents (D2)
 
@@ -132,11 +146,20 @@ agent is edited in the portal: a portal edit creates a version the
 
 ## F. Values captured into `setup/.env`
 
+The kit does **not** use `ADVISOR_VECTOR_STORE_ID` — the advisor's store is
+resolved by NAME. The implemented keys are:
+
 | Variable | Value |
 |---|---|
 | `FOUNDRY_API_VERSION` | `v1` |
-| `ORCHESTRATOR_AGENT_NAME`, `VERIFIER_AGENT_NAME` | `infosec-assurance-orchestrator`, `output-verifier` (names, not ids — the new API addresses agents by name:version; `workflows/pipelines.json` `agent` keys already use names) |
-| `ADVISOR_VECTOR_STORE_ID` | id of `vs-assurance-advisor` (read by `memory_store.py`) |
+| `ORCHESTRATOR_AGENT_NAME`, `VERIFIER_AGENT_NAME` | `infosec-assurance-orchestrator`, `output-verifier` (names, not ids — the new API addresses agents by `name:version`; `workflows/pipelines.json` `agent` keys already use names) |
+| `KNOWLEDGE_SOURCE` | `vector-store` \| `ai-search` \| `none` (§C) |
+| `MEMORY_BACKEND` | `vector-store` \| `search-index` (§C) |
+| `SEARCH_SERVICE_ENDPOINT` | endpoint of the Azure AI Search service (empty until `ai-search` / `search-index` is selected) |
+| `SEARCH_CONNECTION_NAME` | `ai-search` — the project connection of category `CognitiveSearch`; `infra/main.bicep` `searchConnectionName` must match |
+| `KNOWLEDGE_INDEX_NAME` | `kb-assurance` (alias accepted: `KNOWLEDGE_BASE_NAME`) |
+| `MEMORY_INDEX_NAME` | `kb-assurance-memory` |
+| `ENABLE_A2A_TOOL` | `false` — attach the A2A tool (preview) alongside the ROUTE table |
 
 ## G. Verification
 
