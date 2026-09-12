@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Quarterly access-review evidence collector (team/README.md §11).
+# Quarterly access-review evidence collector (team/TEAM_MODEL.md §15).
 # READ-ONLY: lists group memberships, role assignments, PIM-relevant
 # assignments, Foundry connections and Key Vault secret ages. Writes nothing
 # to Azure. Output goes to a dated folder you then file under
@@ -64,7 +64,7 @@ if [ -n "$ACCOUNT" ]; then
     | tee "$OUT/foundry-connections.txt"
 fi
 
-echo ">> [4] Key Vault secret ages (rotation table: team/README.md §6)"
+echo ">> [4] Key Vault secret ages (rotation table: team/TEAM_MODEL.md §10)"
 KV=$(az keyvault list -g "$RG" --query "[0].name" -o tsv 2>/dev/null || true)
 if [ -n "$KV" ]; then
   az keyvault secret list --vault-name "$KV" \
@@ -89,4 +89,4 @@ PY
 
 echo ""
 echo ">> Evidence written to $OUT — attach to Governance/AccessReviews/$(date -u +%Y)-Q$((($(date -u +%-m)-1)/3+1))/"
-echo ">> Reviewers: users/approvers groups = owner; owner/senior/pim/breakglass groups = line manager (team/README.md §11)."
+echo ">> Reviewers: users/approvers groups = owner; owner/senior/pim/breakglass groups = line manager (team/TEAM_MODEL.md §15)."

@@ -157,7 +157,7 @@ curl -s "https://{baseName}-la.azurewebsites.net/api/report-status/triggers/manu
 | V6 | `report-status` for V2–V5 run ids | `AWAITING_APPROVAL` / `STORED` / `DECIDED_NOT_STORED` as expected |
 | V7 | Key Vault references: Logic App *Configuration* | all six resolved (green); `keyvault-human-secret-read` alert shows only the owner's PIM window |
 | V8 | Routines: `onetrust-assessment-intake`, `scheduled-deepsearch`, `jira-finding-sync` in **disabled** state in `test` until UAT; enabled one at a time with their gates observed | run history per routine |
-| V9 | `operations/kql/approval-sla.kql`, `pipeline-failures.kql` return rows for the test runs | telemetry schema confirmed (RUNBOOK H9) |
+| V9 | `operations/kql/approval-sla.kql` and `infra/kql/pipeline-failures.kql` return rows for the test runs | telemetry schema confirmed (RUNBOOK H9) |
 
 **Rollback.** Disable the workflow instance (Logic Apps Standard Operator);
 redeploy the previous zip; run history is preserved across versions.

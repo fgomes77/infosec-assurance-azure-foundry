@@ -144,11 +144,13 @@ module jira 'series-04-connection-customkeys.bicep' = {
 }
 ```
 
+Gap **G-04** (shared delta S-15): `integrations/mcp/enx-gateway.json` documents `attach_integrations.py --dry-run --list-mcp-tools` and a readOnlyHint check at attach time, but `scripts/attach_integrations.py` contains neither (no `tools/list` call, no `readOnlyHint` test). Until the integration pass adds them, V3 below is performed manually against the gateway's `tools/list` and the output is filed as evidence.
+
 Kit scripts, after the connections exist:
 
 ```bash
 python3 scripts/attach_integrations.py --dry-run                 # every OpenAPI tool shows [read-only]; unknown connections fail
-python3 scripts/attach_integrations.py --dry-run --list-mcp-tools   # each allow-listed ENX gateway tool prints readOnlyHint=true
+python3 scripts/attach_integrations.py --dry-run --list-mcp-tools   # gap G-04: flag documented in integrations/mcp/enx-gateway.json, not yet implemented (see below)
 python3 scripts/attach_integrations.py --only cyber-forum          # first live attach (dev/test), then the rest
 ```
 
@@ -166,7 +168,7 @@ python3 scripts/attach_integrations.py --only cyber-forum          # first live 
 |---|---|---|
 | V1 | Foundry portal → Connections | every row of §2 present (except the two deferred), no auth error |
 | V2 | `attach_integrations.py --dry-run` | `[read-only]` on every OpenAPI tool; `write_connections` absent for every agent |
-| V3 | `attach_integrations.py --dry-run --list-mcp-tools` | all allow-listed tools carry `readOnlyHint=true`; the run fails on any that does not |
+| V3 | ENX gateway `tools/list` (curl with the connection's token, or `attach_integrations.py --dry-run --list-mcp-tools` once G-04 is closed) | every allow-listed tool carries `readOnlyHint=true`; any that does not is removed from `allowed_tools` before attach |
 | V4 | Per connection, one read call through an agent in `test` (`smoke_test.py --agent cyber-forum --prompt "List the five most recent Defender incidents (titles only)"`) | tool call visible in tracing; data returned; **no** non-GET call possible (attempt `create an issue` → agent reports it cannot) |
 | V5 | Graph app roles: `az rest GET …/servicePrincipals/{MI}/appRoleAssignments` | exactly the roles of §3; none `ReadWrite` |
 | V6 | Custodian confirmations filed (`Governance/Implementation/{env}/04/custodian-{system}.md`) | one per row |

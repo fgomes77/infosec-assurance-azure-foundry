@@ -21,7 +21,7 @@ and connectivity — [GA] https://learn.microsoft.com/en-us/azure/architecture/a
 |---|---|---|---|
 | Resource group | `rg-infosec-foundry-dev` | `rg-infosec-foundry-test` / `rg-infosec-foundry` | `setup/provision.sh` creates it from `AZURE_RESOURCE_GROUP` |
 | VNet | none (`enablePrivateNetworking=false`) | `{baseName}-vnet` `10.60.0.0/22` → subnets `private-endpoints`, `apps` (Functions / Logic Apps VNet integration), `container-apps` (MCP) — plus **new** `agents` /24 delegated to `Microsoft.App/environments` | `infra/network.bicep` (S-02 adds the subnet) |
-| Private DNS zones | — | `cognitiveservices`, `openai`, `aiservices`, `vault`, `blob`, `sites` (+ `search`, `documents` when standard setup) linked to the VNet; forwarders from the hub | `infra/network.bicep` `zoneNames`; `infra/private-endpoint.bicep` |
+| Private DNS zones | — | every zone in `infra/network.bicep` `zoneNames` (Cognitive Services / OpenAI / AI Services, Key Vault, Storage blob/table, Web Apps) plus `privatelink.search.windows.net` and `privatelink.documents.azure.com` with standard setup, linked to the VNet; forwarders from the hub | `infra/network.bicep` `zoneNames`; `infra/private-endpoint.bicep` |
 | Egress | public | hub firewall; agents subnet egress to the tool hosts of step 04 (Atlassian, OneTrust, SecurityScorecard, IAF, ENX gateway) and to Microsoft endpoints | firewall rules (landing zone) |
 | Region | `swedencentral` (default) — Agent Service + private VNet supported; every tool available; `italynorth` excluded because file search is unavailable there | `main.bicep` `@allowed` list |
 
@@ -127,7 +127,7 @@ then `az policy assignment create -n deny-global-sku --policy infosec-foundry-de
 |---|---|---|
 | V1 | `infra/validate.sh --what-if rg-infosec-foundry-test` with `PARAMS=main.parameters.test.json` | no errors; guard module passes (`publicNetworkAccess=Disabled` requires private networking) |
 | V2 | `az network vnet subnet show … -n agents --query delegations[0].serviceName` | `Microsoft.App/environments`; prefix is a /24 |
-| V3 | Private DNS zones linked (`az network private-dns link vnet list`) | six (or eight with standard setup) zones linked |
+| V3 | Private DNS zones linked (`az network private-dns link vnet list` for each zone in `zoneNames`) | every kit zone linked (+ search and documents zones with standard setup) |
 | V4 | `az policy state list --resource-group …` after a deliberate test deployment of a `GlobalStandard` SKU in `dev` | denied |
 | V5 | Hub firewall: from the `apps` subnet, TLS to the step-04 tool hosts succeeds; to arbitrary internet fails (test VM or Function `curl`) | as expected |
 

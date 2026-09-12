@@ -8,6 +8,11 @@ advisory_read_only_toolset:
      file-generation contract and the enterprise read-source charter.
   2. Ensure the code_interpreter tool is attached (python-docx, openpyxl,
      python-pptx run there), preserving all existing tools.
+  2b. Attach the combined knowledge store (vs-assurance-combined: every
+     skill's references + advisor-knowledge/ packs) as a SECOND
+     file_search store, so a framework advisor answering a cross-framework
+     question (DORA vs ISO 27005, NIS2 vs NIST CSF) is grounded in the
+     packs the export does not contain (governance/PERSONA-COVERAGE.md).
   3. Report tier/toolset status (the tools themselves are attached by
      attach_integrations.py from the same registry — run it first).
 
@@ -34,6 +39,7 @@ except ImportError:
 
 ENDPOINT = os.environ.get("PROJECT_ENDPOINT")
 MARKER = "# Advisory-system addendum"
+COMBINED_STORE = "vs-assurance-combined"
 
 REGISTRY = json.loads((CONV / "integrations" / "registry.json")
                       .read_text(encoding="utf-8"))
@@ -70,12 +76,30 @@ def main() -> int:
     agents_client = AIProjectClient(
         endpoint=ENDPOINT, credential=DefaultAzureCredential()).agents
     live = {a.name: a for a in agents_client.list_agents()}
+    combined = next((v.id for v in agents_client.vector_stores.list()
+                     if v.name == COMBINED_STORE), None)
+    if combined is None:
+        print(f"note: {COMBINED_STORE} not found (run create_orchestrator.py) "
+              f"- combined grounding not attached")
 
     for name in targets:
         agent = live.get(name)
         if agent is None:
             print(f"skip {name}: not deployed (run the create scripts first)")
             continue
+        # second file_search store: the combined knowledge base
+        resources = agent.tool_resources
+        res = (resources.as_dict() if hasattr(resources, "as_dict")
+               else dict(resources or {}))
+        fsr = dict(res.get("file_search") or {})
+        ids = list(fsr.get("vector_store_ids") or [])
+        if combined and combined not in ids:
+            ids.append(combined)
+        stores_changed = combined is not None and ids != list(
+            fsr.get("vector_store_ids") or [])
+        if ids:
+            fsr["vector_store_ids"] = ids
+            res["file_search"] = fsr
 
         instructions = agent.instructions or ""
         if MARKER not in instructions:
@@ -89,10 +113,17 @@ def main() -> int:
             tools += CodeInterpreterTool().definitions
 
         expect = REGISTRY["agents"].get(name, {})
+        has_fs = any(getattr(t, "type", None) == "file_search"
+                     or (isinstance(t, dict) and t.get("type") == "file_search")
+                     for t in tools)
+        if ids and not has_fs:
+            from azure.ai.agents.models import FileSearchTool
+            tools += FileSearchTool(vector_store_ids=ids).definitions
         agents_client.update_agent(agent.id, instructions=instructions,
-                                   tools=tools)
+                                   tools=tools, tool_resources=res or None)
         print(f"applied  {name}: addendum={'kept' if MARKER in (agent.instructions or '') else 'added'}, "
               f"code_interpreter={'kept' if has_ci else 'added'}, "
+              f"combined store={'added' if stores_changed else 'kept'}, "
               f"registry tier={expect.get('model_tier')} "
               f"(tools attached by attach_integrations.py)")
     return 0

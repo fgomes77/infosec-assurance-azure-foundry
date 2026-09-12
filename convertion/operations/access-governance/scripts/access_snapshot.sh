@@ -33,8 +33,9 @@ command -v az >/dev/null && command -v jq >/dev/null || { echo "need az + jq" >&
 
 # 1. Groups and members
 for g in sg-infosec-foundry-users sg-infosec-foundry-report-approvers \
-         sg-infosec-foundry-platform-approvers sg-infosec-foundry-platform-admins \
-         sg-infosec-foundry-breakglass sg-infosec-foundry-auditors; do
+         sg-infosec-foundry-senior-approvers sg-infosec-foundry-owner \
+         sg-infosec-foundry-admin-pim sg-infosec-foundry-breakglass \
+         sg-infosec-foundry-readers; do
   az ad group member list --group "$g" --query "[].{upn:userPrincipalName,type:'@odata.type',id:id}" -o json \
     > "$OUT/groups-$g.json" 2>/dev/null || echo "[]" > "$OUT/groups-$g.json"
   az ad group owner list --group "$g" --query "[].userPrincipalName" -o json \

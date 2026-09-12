@@ -97,9 +97,10 @@ done
 ```
 
 `least-privilege/scripts/provision_identity.sh --apply` automates 2a–2d
-from `least-privilege/entra/groups.json` once delta D-T3 (`TEAM_MODEL.md`
-§20) has re-keyed that file to the seven names above; until then use the
-commands here. Evidence: Entra audit log entries "Add group", "Add owner
+from `least-privilege/entra/groups.json` (re-keyed to the seven names
+above — delta D-T3 of `TEAM_MODEL.md` §20 is applied) and writes the
+object ids into `rbac.parameters.json`; the commands here are the manual
+equivalent. Evidence: Entra audit log entries "Add group", "Add owner
 to group", "Add member to group"; file the `az ad group show` output as
 `Governance/AccessReviews/{yyyy}-Q0/groups-baseline.json`.
 

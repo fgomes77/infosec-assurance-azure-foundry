@@ -1,4 +1,10 @@
-# Team, Ownership, Identity/RBAC and Approval Model
+# Team, Ownership, Identity/RBAC and Approval Model (operations-first lens)
+
+> **Superseded:** the authoritative model is `TEAM_MODEL.md` (identity,
+> RBAC, approvals, threads/memory, access review) and `RACI.md`; this file
+> is retained for its companion-file table and as the operations-first
+> lens that `TEAM_MODEL.md` §21 reconciles. Where the two differ,
+> `TEAM_MODEL.md` prevails (delta D-T4 applied).
 
 Operations-first design for the five people who run the InfoSec Assurance
 platform on Euronext's Azure AI Foundry. It starts from how the team works
@@ -31,7 +37,7 @@ Companion files in this folder:
 | Pedro Santos | `{upn:pedro.santos}` | Assurance user | Report approver |
 | José Meireles | `{upn:jose.meireles}` | Assurance user | Report approver |
 | Tânia Morais | `{upn:tania.morais}` | Assurance user | Report approver |
-| Deputy owner | `{upn:deputy}` — one of the four, nominated by the owner and recorded in `ACCESS_REGISTER.md` | Assurance user | Break-glass eligible; second approver for external-facing reports; code-owner reviewer of the owner's PRs |
+| Deputy approver | `{upn:deputy-approver}` — one of the four, nominated by the owner and recorded in `ACCESS_REGISTER.md` | Assurance user | Break-glass eligible; second approver for external-facing reports; code-owner reviewer of the owner's PRs |
 
 All five have the **same persona experience**: the preamble in
 `agents/persona_system_prompt.md` is agent-side and identical for every

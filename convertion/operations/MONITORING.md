@@ -121,9 +121,12 @@ contents (W5), Copilot publication age (FM-30), SharePoint sharing scope
 | Privileged access | ARM writes by caller; PIM activations (from the IAM report); KV human reads | `AzureActivity`; `AzureDiagnostics` |
 | Cost | tokens and estimated EUR per agent, per tier; month-to-date vs forecast | `latency-and-tokens.kql`; Cost Management |
 
-The workbook is exported as JSON into the repo on each change
-(`operations/workbook.json` — to be added when first built; Low-risk
-change) so it is version-controlled like everything else (A.8.9).
+The workbook is version-controlled like everything else (A.8.9):
+`operations/workbook.json` is the importable Azure Workbook definition
+(one section per row above, each tile bound to the same `kql/*.kql` text
+as the alert rules; workspace resource id supplied as the `Workspace`
+parameter at import). Re-export it into the repo on each change (Low-risk
+change, `CHANGE_MANAGEMENT.md` §1).
 
 ## 6. Evidence produced for audits
 
@@ -155,5 +158,5 @@ change) so it is version-controlled like everything else (A.8.9).
 | D-OPS-H1 | `governance/HUMAN_APPROVAL.md` | end of "Verifying the control" | `Operational evidence that the gates are exercised: operations/kql/approval-sla.kql (pending/expired gates) and the \`approval-sla\` alert in operations/alerts.bicep; RUNBOOK.md FM-10 and FM-20 (gate integrity failures are P1).` |
 | D-OPS-W1 | `workflows/README.md` | end of "Deployment" | `4. Enable diagnostic settings (category \`WorkflowRuntime\`) to the platform Log Analytics workspace: the operations alerts (operations/MONITORING.md §4) read \`LogicAppWorkflowRuntime\` and key on the action names \`Human_approval_gate\`, \`Wait_for_approval_*\` and \`Notify_verifier_fail\` — keep those names when editing definitions.` |
 | D-OPS-F1 | `functions/delivery/README.md` | end | `Monitoring: connect the app to \`{baseName}-appi\`; the \`delivery-function-5xx\` alert (operations/alerts.bicep) keys on \`AppRoleName\` containing \`fn-delivery\` — keep the app name \`{baseName}-fn-delivery\`.` |
-| D-OPS-T1 | `team/TEAM_MODEL.md` | §3 F7, F9, F12 "Derived requirement" cells | append `→ operations/RUNBOOK.md` (F7), `→ operations/MONITORING.md §5, RUNBOOK.md M1–M2` (F9), `→ operations/SUPPORT_MODEL.md` (F12) |
-| D-OPS-BG1 | `operations/access-governance/BREAK_GLASS.md` | §4 table | replace `(operations monitoring layer)` with `(operations/alerts.bicep; operations/MONITORING.md §4)`; group names per delta D-OP1 of the team model |
+| D-OPS-T1 | `team/TEAM_MODEL.md` | §3 F7, F9, F12 "Derived requirement" cells | **applied** (same folder set): `→ operations/RUNBOOK.md` (F7), `→ operations/MONITORING.md §5, RUNBOOK.md M1–M2` (F9), `→ operations/SUPPORT_MODEL.md` (F12) |
+| D-OPS-BG1 | `operations/access-governance/BREAK_GLASS.md` | §4 table | **applied**: `(operations/alerts.bicep; operations/MONITORING.md §4)`; group names per delta D-OP1 of the team model (also applied) |

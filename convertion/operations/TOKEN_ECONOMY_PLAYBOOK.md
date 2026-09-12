@@ -85,7 +85,7 @@ run is the RAG signal; output tokens are the contract signal (§4).
 | Upload cache | `build/upload-cache.json` (`_azure_helpers.UploadCache`, sha256 → file id) | re-uploads and duplicate vector-store files at every `deploy.sh` | cleared only on a full re-sync (F6) |
 | DeepSearch score history | `appendScoreHistory` on `deepsearch-report` (stored with the report) | re-running OSINT for a supplier assessed < 30 days ago — `scheduled-deepsearch` skips suppliers with a fresh report | freshness window is an instruction parameter, not a code path — record it in the ticket |
 | Comparison-set baseline | `Governance/ComparisonSet/baseline/{pipeline}/` (+ sha256 in the golden set) | regenerating known-good outputs for every evaluation | refresh quarterly (`CHANGE_MANAGEMENT.md` §9) |
-| Thread reuse | one thread per supplier/service topic per user (`../team/THREADS_MEMORY.md`) | re-explaining context; the thread carries the uploaded PDF | threads are per user (no sharing of uploaded Euronext files across users through threads) |
+| Thread reuse | one thread per supplier/service topic per user (`../team/TEAM_MODEL.md` §13) | re-explaining context; the thread carries the uploaded PDF | threads are per user (no sharing of uploaded Euronext files across users through threads) |
 | **Never cached** | Bing results containing Euronext-side context (none exist by design — queries are sanitised), verifier verdicts (each draft is verified), approval decisions | — | `DATA_PROTECTION_GUARDRAILS.md`; `HUMAN_APPROVAL.md` |
 
 ## 6. Off-peak batching

@@ -35,8 +35,8 @@ Act Art. 9 (life-cycle risk management, deployer of a modified system).
 | V12 | Model deployments (three tiers) | `main.bicep` `modelName/modelVersion`, `reasoningModel*`, `lightModel*`, `deploymentSku` | model name + explicit `modelVersion` (§5) | Foundry account `{baseName}-aif` | Bicep |
 | V13 | Foundry data-plane API version | `FOUNDRY_API_VERSION` app setting (workflows) / SDK pin (scripts) | `2025-05-01` | Logic Apps + scripts | Bicep app setting + `requirements.txt` |
 | V14 | Copilot Studio agent | `../integrations/copilot/README.md` | solution export `infosec-foundry-copilot-{release}.zip` in `Governance/Releases/` | `{env:infosec-foundry}` | manual republish after instruction changes (RUNBOOK FM-30) |
-| V15 | Monitoring rules and workbook | `alerts.bicep`, `kql/*.kql`, `workbook.json` | git | Azure Monitor | pipeline |
-| V16 | Approval policy and identity model | `../team/approval-policy.json`, `rbac.bicep`, `least-privilege/entra/groups.json` | git; `access_snapshot.sh` before/after | Entra / RBAC | `provision_identity.sh --apply`, `rbac.bicep` |
+| V15 | Monitoring rules and workbook | `alerts.bicep`, `kql/*.kql`, `workbook.json` (`{baseName}-ops`, `MONITORING.md` §5) | git | Azure Monitor | pipeline (`alerts.bicep`); workbook JSON imported through the Workbooks blade ("Advanced editor") until it is wrapped in a `Microsoft.Insights/workbooks` resource |
+| V16 | Approval policy and identity model | `../team/approval-policy.json`, `../team/rbac.bicep`, `../team/least-privilege/entra/groups.json` | git; `access_snapshot.sh` before/after | Entra / RBAC | `provision_identity.sh --apply`, `rbac.bicep` |
 
 Rule: every live object traces to one git commit through the identifiers
 above; anything that cannot (a hand edit in the portal) is drift and is

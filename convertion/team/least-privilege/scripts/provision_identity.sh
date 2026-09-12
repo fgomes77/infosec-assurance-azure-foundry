@@ -1,20 +1,27 @@
 #!/usr/bin/env bash
-# Provision / verify the Entra ID groups and role assignments of the
-# least-privilege team model (team/least-privilege/IDENTITY_RBAC.md).
+# Provision / verify the Entra ID groups and role assignments of the team
+# model of record (team/TEAM_MODEL.md §6 groups, §7 RBAC, §18 bootstrap).
 #
 #   ./provision_identity.sh --plan      print what would be created (default)
 #   ./provision_identity.sh --apply     create missing groups, set owners,
-#                                       write object ids into ../infra/rbac.parameters.json
+#                                       write object ids into team/rbac.parameters.json
+#                                       (created from rbac.parameters.example.json)
 #   ./provision_identity.sh --verify    compare live role assignments in the RG
 #                                       with the model; exit 1 on drift
+#                                       (called read-only from deploy.sh, delta D-D1)
 #
 # Requires: az CLI (az login as a Groups Administrator for --apply; any
 # reader of the RG for --verify), jq. Reads ../entra/groups.json and
 # ../../../setup/.env (AZURE_RESOURCE_GROUP). No secrets are read or written.
+# Groups that grant privilege (-owner, -senior-approvers, -admin-pim,
+# -breakglass) are owned by the line manager: --apply only reports their
+# owner/member placeholders; the IAM team executes those changes (§6).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 GROUPS_JSON="$HERE/../entra/groups.json"
-PARAMS_JSON="$HERE/../infra/rbac.parameters.json"
+PARAMS_JSON="$HERE/../../rbac.parameters.json"          # team/rbac.parameters.json (git-ignored copy of the example)
+PARAMS_EXAMPLE="$HERE/../../rbac.parameters.example.json"
+RBAC_BICEP="$HERE/../../rbac.bicep"
 ENV_FILE="$HERE/../../../setup/.env"
 MODE="${1:---plan}"
 
@@ -34,11 +41,13 @@ case "$MODE" in
     jq -r '.servicePrincipals[] | "  \(.name)\t \(.type)"' "$GROUPS_JSON"
     echo
     echo "Apply order: --apply (groups + owners) -> fill placeholders in $PARAMS_JSON"
-    echo "  -> az deployment group create -g $RG -f ../infra/rbac.bicep -p ../infra/rbac.parameters.json"
-    echo "  -> grant Sites.Selected (IDENTITY_RBAC.md §3) -> --verify"
+    echo "  -> az deployment group what-if -g $RG -f $RBAC_BICEP -p $PARAMS_JSON"
+    echo "  -> az deployment group create  -g $RG -f $RBAC_BICEP -p $PARAMS_JSON"
+    echo "  -> grant Sites.Selected to the three app identities (team/TEAM_MODEL.md §8) -> --verify"
     ;;
 
   --apply)
+    [ -f "$PARAMS_JSON" ] || cp "$PARAMS_EXAMPLE" "$PARAMS_JSON"
     for g in $(groups); do
       existing=$(az ad group list --display-name "$g" --query "[0].id" -o tsv)
       if [ -z "$existing" ]; then
@@ -57,7 +66,8 @@ case "$MODE" in
              az ad group owner add --group "$existing" --owner-object-id "$oid" >/dev/null 2>&1 || true ;;
         esac
       done
-      # Members (placeholders skipped the same way); eligible members are PIM-for-Groups, not direct members
+      # Members (placeholders skipped the same way); eligibleMembers are PIM-for-Groups
+      # eligibilities set by the IAM team in the PIM policy, never direct members
       for m in $(jq -r --arg g "$g" '.groups[]|select(.name==$g)|.members[]' "$GROUPS_JSON"); do
         case "$m" in
           \{*\}) echo "  member placeholder $m - replace in groups.json before apply" ;;
@@ -69,7 +79,7 @@ case "$MODE" in
       key="{objectId:$g}"
       tmp=$(mktemp); jq --arg k "$key" --arg v "$existing" 'walk(if . == $k then $v else . end)' "$PARAMS_JSON" > "$tmp" && mv "$tmp" "$PARAMS_JSON"
     done
-    echo "done - review $PARAMS_JSON, then deploy ../infra/rbac.bicep"
+    echo "done - review $PARAMS_JSON, then deploy $RBAC_BICEP (what-if first)"
     ;;
 
   --verify)
@@ -91,7 +101,7 @@ case "$MODE" in
     for g in $(groups); do
       az ad group show --group "$g" --query displayName -o tsv >/dev/null 2>&1 || { echo "MISSING group $g"; drift=1; }
     done
-    [ $drift -eq 0 ] && echo "OK: no drift against the least-privilege model" || { echo "drift detected"; exit 1; }
+    [ $drift -eq 0 ] && echo "OK: no drift against team/TEAM_MODEL.md §7" || { echo "drift detected - see team/TEAM_MODEL.md §15"; exit 1; }
     ;;
   *) echo "usage: $0 [--plan|--apply|--verify]" >&2; exit 2 ;;
 esac

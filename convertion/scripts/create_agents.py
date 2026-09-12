@@ -5,8 +5,12 @@ Run convert_skills.py first. Auth: DefaultAzureCredential (az login).
 Requires PROJECT_ENDPOINT and MODEL_DEPLOYMENT_NAME (env or setup/.env).
 
 Idempotent by agent name: an existing agent with the same name is updated
-(instructions, tools, fresh vector store); others are created. Router agents
-(connected agents) are wired last, once their targets exist.
+(instructions, tools, vector store reconciled in place - no orphan stores);
+others are created. Integration tools attached by attach_integrations.py
+are preserved on update. Alias twins (manifest "alias_of") are NOT
+deployed - the target agent answers for them (create_orchestrator.py
+registers the alias trigger). Router agents (connected agents) are wired
+last against the LIVE agent list, so --only <router> still wires.
 
 Usage:
     python3 create_agents.py                # everything in the manifest
@@ -41,7 +45,10 @@ def get_client():
                            credential=DefaultAzureCredential())
 
 
-from _azure_helpers import UploadCache, retry, upload_files as _upload
+sys.path.insert(0, str(HERE))
+from _azure_helpers import (UploadCache, file_map_block,  # noqa: E402
+                            integration_tools, kit_metadata, reconcile_store,
+                            upload_files as _upload)
 
 _CACHE = UploadCache(BUILD / "upload-cache.json")
 
@@ -56,10 +63,16 @@ def ensure_agent(agents_client, spec: dict, existing: dict, dry: bool):
     agent_dir = BUILD / "agents" / spec["name"]
     instructions = (BUILD / spec["instructions_file"]).read_text(encoding="utf-8")
 
+    if spec.get("alias_of"):
+        print(f"alias    {spec['name']} -> served by {spec['alias_of']} "
+              f"(not deployed)")
+        return None
     if dry:
         print(f"[dry-run] {spec['name']}: tools={spec['tools']} "
               f"knowledge={len(spec['knowledge_files'])} "
-              f"code={len(spec['code_files'])}")
+              f"package={spec['code_files']} "
+              f"({len(spec.get('code_tree_files', []))} files)"
+              + (" PLATFORM-SPECIFIC (not connected)" if spec.get("platform_specific") else ""))
         return None
 
     from azure.ai.agents.models import CodeInterpreterTool, FileSearchTool
@@ -68,9 +81,7 @@ def ensure_agent(agents_client, spec: dict, existing: dict, dry: bool):
     if spec["knowledge_files"]:
         kids = upload_files(agents_client, agent_dir,
                             spec["knowledge_files"], "knowledge")
-        vs = retry(agents_client.vector_stores.create_and_poll,
-                   file_ids=kids, name=f"vs-{spec['name']}",
-                   what=f"vector store vs-{spec['name']}")
+        vs = reconcile_store(agents_client, f"vs-{spec['name']}", kids)
         fs = FileSearchTool(vector_store_ids=[vs.id])
         tools += fs.definitions
         tool_resources.update(fs.resources)
@@ -80,14 +91,19 @@ def ensure_agent(agents_client, spec: dict, existing: dict, dry: bool):
         ci = CodeInterpreterTool(file_ids=cids)
         tools += ci.definitions
         tool_resources.update(ci.resources)
+        # names are lost on upload: tell the agent which id is its package
+        instructions += file_map_block(list(zip(spec["code_files"], cids)))
+    if spec["name"] in existing:
+        tools += integration_tools(existing[spec["name"]])  # keep attach_integrations work
 
     kwargs = dict(model=MODEL, name=spec["name"],
                   description=spec["description"] or None,
                   instructions=instructions,
                   tools=tools or None,
-                  tool_resources=tool_resources or None)
+                  tool_resources=tool_resources or None,
+                  metadata=kit_metadata())
     if spec["name"] in existing:
-        agent = agents_client.update_agent(existing[spec["name"]], **kwargs)
+        agent = agents_client.update_agent(existing[spec["name"]].id, **kwargs)
         print(f"updated  {spec['name']} ({agent.id})")
     else:
         agent = agents_client.create_agent(**kwargs)
@@ -96,13 +112,17 @@ def ensure_agent(agents_client, spec: dict, existing: dict, dry: bool):
 
 
 def wire_router(agents_client, spec: dict, ids: dict, dry: bool):
-    targets = ([t for t in spec["router_targets"] if t in ids] if not dry
-               else spec["router_targets"])
+    """Targets are resolved against the LIVE agents (merged with this run),
+    so `--only <router>` wires too; a missing target fails loudly."""
+    targets = spec["router_targets"]
     if not targets:
         return
     if dry:
         print(f"[dry-run] router {spec['name']} -> {targets}")
         return
+    missing = [t for t in targets if t not in ids]
+    if missing or spec["name"] not in ids:
+        raise RuntimeError(f"router targets not deployed: {missing or spec['name']}")
     from azure.ai.agents.models import ConnectedAgentTool
     tools = []
     for t in targets:
@@ -132,7 +152,7 @@ def main() -> int:
     if not args.dry_run:
         client = get_client()
         agents_client = client.agents
-        existing = {a.name: a.id for a in agents_client.list_agents()}
+        existing = {a.name: a for a in agents_client.list_agents()}
 
     created: dict = {}
     failures: list[str] = []
@@ -146,9 +166,10 @@ def main() -> int:
             continue
         if agent is not None:
             created[spec["name"]] = agent
+    live = {**existing, **created}
     for spec in routers:
         try:
-            wire_router(agents_client, spec, created, args.dry_run)
+            wire_router(agents_client, spec, live, args.dry_run)
         except Exception as e:  # noqa: BLE001
             failures.append(f"{spec['name']} (router wiring)")
             print(f"FAILED   {spec['name']} router wiring: {e}")

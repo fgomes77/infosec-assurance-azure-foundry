@@ -380,7 +380,7 @@ resource deployKvOfficer 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 // ==================================================== WORKLOAD IDENTITIES
 // Foundry account MI -> Key Vault (KV-backed connections)
 resource foundryKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(keyVault.id, foundry.identity.principalId, roles.keyVaultSecretsUser)
+  name: guid(keyVault.id, foundry.id, 'account-mi', roles.keyVaultSecretsUser) // MI principalId is runtime-only; key on the resource id
   scope: keyVault
   properties: {
     principalId: foundry.identity.principalId
@@ -391,7 +391,7 @@ resource foundryKvUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 // Foundry project MI -> App Insights metrics
 resource projectMetricsPublisher 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(appInsights.id, project.identity.principalId, roles.monitoringMetricsPublisher)
+  name: guid(appInsights.id, project.id, 'project-mi', roles.monitoringMetricsPublisher) // MI principalId is runtime-only; key on the resource id
   scope: appInsights
   properties: {
     principalId: project.identity.principalId

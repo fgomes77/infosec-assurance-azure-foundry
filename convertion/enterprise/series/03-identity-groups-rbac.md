@@ -14,7 +14,7 @@ identities** the new service creates automatically.
 
 | Fact | Status / source |
 |---|---|
-| Built-in roles renamed: `Azure AI User` → **Foundry User** (`53ca6127-db72-4b80-b1b0-d745d6d5456d`), `Azure AI Owner` → Foundry Owner, `Azure AI Account Owner` → Foundry Account Owner, project-manager role likewise; GUIDs unchanged | [GA] https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry (2026-09-10) |
+| Built-in roles renamed: `Azure AI User` → **Foundry User** (`53ca6127-db72-4b80-b1b0-d745d6d5456d`), `Azure AI Owner` → Foundry Owner, `Azure AI Account Owner` → Foundry Account Owner, and the project-manager role correspondingly; role ids are listed on the RBAC page (Foundry User keeps `53ca6127…`) — assign by GUID, as `team/rbac.bicep` does | [GA] https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry (2026-09-10) |
 | Agents / evaluations / workflows need Entra ID auth; API keys give no RBAC granularity | [GA] https://learn.microsoft.com/en-us/azure/foundry/concepts/general-availability (2026-09-09) |
 | **Microsoft Entra Agent ID is GA.** Foundry provisions an *agent identity blueprint* and a shared *project agent identity* (service principal) at first agent creation; publishing an agent creates a distinct blueprint + identity; RBAC on tools must be reassigned to that identity on publish | [GA] https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity (2026-08-25); https://learn.microsoft.com/en-us/entra/agent-id/whats-new-agent-id (2026-08-13) |
 | Conditional Access for data-plane access is supported but not on by default; CAF governance guidance for Foundry | [GA] https://learn.microsoft.com/en-us/azure/cloud-adoption-framework/ai/platform/governance (2026-06-25) |

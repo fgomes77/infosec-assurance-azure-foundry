@@ -1,5 +1,16 @@
 # Least-Privilege-First Team, Identity & Approval Model
 
+> **Superseded:** the authoritative model is `../TEAM_MODEL.md` and
+> `../RACI.md` (they merge this lens with the operations-first lens;
+> §21 records every decision). The `.md` files in this folder are kept
+> as the design record until the next quarterly review. Still **live**
+> here because `TEAM_MODEL.md` governs them: `entra/groups.json`
+> (groups of record, delta D-T3 applied) and
+> `scripts/provision_identity.sh` (deploys `../rbac.bicep`).
+> `infra/rbac.bicep`, `infra/rbac.parameters.json` and
+> `approvals/routing.json` are the superseded lens' equivalents of
+> `../rbac.bicep` and `../approval-policy.json` — do not deploy them.
+
 One of the lenses on the team/ownership model for the InfoSec Assurance
 Foundry platform (the operations-first lens is `../README.md`). This lens
 starts from the **minimum each role needs per system a–j and per Azure

@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://{tenant}/infosec-foundry/schemas/feedback-record.json",
+  "title": "InfoSec Assurance platform feedback record",
+  "description": "One feedback record about an agent output, a pipeline run or an advisory answer. Written by humans (portal thumbs export, Teams form, MCP client, SharePoint list {list:PlatformFeedback}) and by exports of platform signals (human-evaluation templates, continuous evaluation, verifier outcomes, approval decisions). Consumed offline by enterprise/memory/learning_loop.py. Rules: no report content, findings, scores, supplier confidential text or personal data beyond the submitter's UPN placeholder; identifiers only (run id, conversation id, agent, pipeline). Retention 24 months. See enterprise/MEMORY_AND_LEARNING.md section 4 and 6.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "timestamp", "source", "submitted_by", "agent", "category", "signal"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^fb-[0-9]{8}-[0-9a-f]{8}$",
+      "description": "fb-{yyyymmdd}-{8 hex}; assigned by the collector"
+    },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "string",
+      "enum": ["user_feedback", "end_user_thumbs", "human_eval_template", "continuous_evaluation", "golden_set_eval", "verifier_fail", "approval_rework", "support_post", "ai_concern"],
+      "description": "user_feedback = written by a team member; end_user_thumbs = gen_ai.evaluation.result events (preview); human_eval_template = reviewer answers in the agent Preview app (preview); continuous_evaluation = sampled evaluator scores (GA core); golden_set_eval = operations/evaluation/run_evals.py case below floor; verifier_fail = output-verifier FAIL finding; approval_rework = edit/rejection in {list:ApprovalDecisions}; ai_concern = ISO 42001 A.8.3 / EU AI Act Art. 26(7) concern (mandatory item)"
+    },
+    "submitted_by": {
+      "type": "string",
+      "pattern": "^\\{upn:[a-z0-9.-]+\\}$|^\\{system:[a-z0-9-]+\\}$",
+      "description": "Placeholder UPN of the human, or {system:<collector>} for exported platform signals"
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["portal", "mcp", "copilot", "pipeline", "teams", "sharepoint-list", "export"]
+    },
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Agent name as in integrations/registry.json (e.g. dora, deepsearch-protocol, infosec-assurance-advisor, output-verifier)"
+    },
+    "agent_version": {
+      "type": ["string", "null"],
+      "description": "Immutable agent version that produced the output (<name>:<version>), when known"
+    },
+    "pipeline": {
+      "type": ["string", "null"],
+      "description": "Entry of workflows/pipelines.json (e.g. deepsearch-report, dpia-dpo-report) or null for advisory answers"
+    },
+    "requirement": {
+      "type": ["string", "null"],
+      "enum": ["a", "b", "c", "d", "d2", "e", "f", "g", "h", "i", "j", null],
+      "description": "REQUIREMENTS.md item affected"
+    },
+    "run_id": { "type": ["string", "null"], "description": "Logic Apps run id or evaluation run id — identifiers only" },
+    "conversation_id": { "type": ["string", "null"], "description": "Foundry conversation id (never its content)" },
+    "category": {
+      "type": "string",
+      "enum": ["accuracy", "grounding", "citation", "structure", "threshold", "template", "tone-style", "tool-failure", "latency", "cost", "safety-block", "regulatory-claim", "injection-suspected", "personal-data", "usability", "other"],
+      "description": "Drives the change path chosen by learning_loop.py (see enterprise/memory/learning_loop.py CATEGORY_TO_CHANGE)"
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The measurable part. At least one of rating, thumbs, metric or verdict must be present",
+      "properties": {
+        "thumbs": { "type": ["string", "null"], "enum": ["up", "down", null] },
+        "rating": { "type": ["integer", "null"], "minimum": 1, "maximum": 5, "description": "1-5, e.g. 'would I sign this?'" },
+        "metric": { "type": ["string", "null"], "description": "Evaluator or golden-set metric name (groundedness, relevance, task_adherence, tool_call_accuracy, verifier_first_pass, ...)" },
+        "value": { "type": ["number", "null"] },
+        "floor": { "type": ["number", "null"] },
+        "verdict": { "type": ["string", "null"], "enum": ["PASS", "FAIL", "REWORK", "REJECTED", "APPROVED", null] },
+        "finding_code": { "type": ["string", "null"], "description": "Verifier rule id or rejection reason code — never the finding text about a supplier" }
+      },
+      "anyOf": [
+        { "required": ["thumbs"] },
+        { "required": ["rating"] },
+        { "required": ["metric"] },
+        { "required": ["verdict"] }
+      ]
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000,
+      "description": "What was wrong or good, in generic terms. Must not contain supplier confidential content, findings, scores, personal data, hostnames, credentials"
+    },
+    "expected": { "type": ["string", "null"], "maxLength": 500 },
+    "severity": { "type": "string", "enum": ["low", "medium", "high"], "default": "low" },
+    "ai_concern": {
+      "type": "boolean",
+      "default": false,
+      "description": "true = bias, wrong regulatory claim, hallucinated citation or suspected injection; mandatory backlog item, acknowledged the same day (CONTINUOUS_IMPROVEMENT.md S15)"
+    },
+    "invariant_touched": {
+      "type": ["string", "null"],
+      "enum": ["read-only-agents", "approval-before-write", "taxonomy", "identities", "eu-residency", "no-egress", null],
+      "description": "Set when the feedback suggests an invariant was or could be weakened; such items are never 'improvements' — they go to incident/risk-acceptance handling"
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 300 },
+      "maxItems": 10,
+      "description": "Run ids, trace ids, eval-report paths, ticket ids. No URLs to supplier documents"
+    },
+    "triage": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Filled by the owner (deputy when the owner submitted) — never by an agent",
+      "properties": {
+        "status": { "type": "string", "enum": ["new", "acknowledged", "accepted", "deferred", "declined", "duplicate", "incident"] },
+        "decided_by": { "type": ["string", "null"], "pattern": "^\\{upn:[a-z0-9.-]+\\}$" },
+        "decided_at": { "type": ["string", "null"], "format": "date-time" },
+        "ticket": { "type": ["string", "null"], "pattern": "^\\{jira:INFOSEC-PLAT\\}-[0-9]+$" },
+        "change_path": { "type": ["string", "null"], "enum": ["prompt", "registry", "template", "credential", "infra", "tier", "re-sync", "access", "memory-delete", "docs", "knowledge", "model", null] },
+        "reason": { "type": ["string", "null"], "maxLength": 500 }
+      }
+    },
+    "retain_until": {
+      "type": "string",
+      "format": "date",
+      "description": "timestamp + 24 months; the collector purges after this date"
+    }
+  },
+  "examples": [
+    {
+      "id": "fb-20260912-0a1b2c3d",
+      "timestamp": "2026-09-12T09:30:00Z",
+      "source": "user_feedback",
+      "submitted_by": "{upn:pedro.santos}",
+      "channel": "teams",
+      "agent": "dora",
+      "agent_version": "dora:14",
+      "pipeline": null,
+      "requirement": "g",
+      "run_id": null,
+      "conversation_id": "{conversation-id}",
+      "category": "citation",
+      "signal": { "thumbs": "down", "rating": 2 },
+      "description": "Answer cited an RTS article number that does not exist in the cited regulation; correct article was one number higher.",
+      "expected": "Citation resolves to the published article",
+      "severity": "medium",
+      "ai_concern": true,
+      "invariant_touched": null,
+      "evidence_refs": ["{trace-id}"],
+      "triage": { "status": "new", "decided_by": null, "decided_at": null, "ticket": null, "change_path": null, "reason": null },
+      "retain_until": "2028-09-12"
+    },
+    {
+      "id": "fb-20260905-9f8e7d6c",
+      "timestamp": "2026-09-05T16:02:11Z",
+      "source": "verifier_fail",
+      "submitted_by": "{system:verifier-export}",
+      "channel": "export",
+      "agent": "soc-report-analyzer",
+      "agent_version": "soc-report-analyzer:7",
+      "pipeline": "soc-report-summary",
+      "requirement": "e",
+      "run_id": "{run-id}",
+      "conversation_id": null,
+      "category": "structure",
+      "signal": { "verdict": "FAIL", "finding_code": "V-STRUCT-03" },
+      "description": "Required section missing on first pass; passed after regeneration.",
+      "expected": null,
+      "severity": "low",
+      "ai_concern": false,
+      "invariant_touched": null,
+      "evidence_refs": ["{run-id}"],
+      "triage": { "status": "new", "decided_by": null, "decided_at": null, "ticket": null, "change_path": null, "reason": null },
+      "retain_until": "2028-09-05"
+    }
+  ]
+}

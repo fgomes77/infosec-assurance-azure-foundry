@@ -36,8 +36,23 @@ except ImportError:
 ENDPOINT = os.environ.get("PROJECT_ENDPOINT")
 CHAT_MODEL = os.environ.get("MODEL_DEPLOYMENT_NAME", "gpt-4o")
 REASONING_MODEL = os.environ.get("REASONING_MODEL_DEPLOYMENT_NAME", "o3-mini")
+LIGHT_MODEL = os.environ.get("LIGHT_MODEL_DEPLOYMENT_NAME", "gpt-4o-mini")
+TIER_MODEL = {"light": LIGHT_MODEL, "chat": CHAT_MODEL, "reasoning": REASONING_MODEL}
 
 REGISTRY = json.loads((CONV / "integrations" / "registry.json").read_text())
+# Live agents that may legitimately lack a registry entry: the verifier
+# (registry example_agents.unmanaged_ok) and the orchestrator, whose tools
+# are owned by create_orchestrator.py. Any other unmanaged live agent FAILS
+# the run (registry _comment) - an unknown agent is an ungoverned tool surface.
+UNMANAGED_OK = set(REGISTRY.get("example_agents", {}).get("unmanaged_ok", [])) | {
+    "infosec-assurance-orchestrator"}
+
+
+def model_for(cfg: dict) -> str:
+    tier = cfg.get("model_tier", "chat")
+    if tier not in TIER_MODEL:
+        sys.exit(f"unknown model_tier {tier!r} (governance/MODEL_ROUTING.md)")
+    return TIER_MODEL[tier]
 
 
 def load_openapi_spec(rel: str, read_only: bool) -> dict:
@@ -104,7 +119,7 @@ def main() -> int:
 
     if args.dry_run:
         for name, cfg in wanted.items():
-            model = REASONING_MODEL if cfg["model_tier"] == "reasoning" else CHAT_MODEL
+            model = model_for(cfg)
             writes = cfg.get("write_connections", [])
             labelled = [t + ("" if t in writes
                              or REGISTRY["connections"][t]["type"] != "openapi"
@@ -136,7 +151,7 @@ def main() -> int:
                 not in ("openapi", "bing_grounding", "mcp")
                 or (getattr(t, "name", "") or (t.get("server_label", "")
                     if isinstance(t, dict) else "")) not in integration_names]
-        model = REASONING_MODEL if cfg["model_tier"] == "reasoning" else CHAT_MODEL
+        model = model_for(cfg)
         agents_client.update_agent(
             agent.id, model=model,
             tools=kept + build_tools(cfg["tools"],
@@ -144,6 +159,13 @@ def main() -> int:
         print(f"updated  {name}: +{cfg['tools']} model={model}")
 
     print(f"\ndone: {len(wanted)} agents processed")
+    if not args.only:
+        unmanaged = sorted(set(live) - set(REGISTRY["agents"]) - UNMANAGED_OK)
+        if unmanaged:
+            print(f"FAIL: live agents without a registry entry (add them to "
+                  f"integrations/registry.json or example_agents.unmanaged_ok): "
+                  f"{unmanaged}")
+            return 1
     return 0
 
 
