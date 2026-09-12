@@ -32,6 +32,12 @@ Files this model governs (companions in this folder and in
 | `least-privilege/entra/groups.json` | group definitions, owners, review cadence (§6; delta D-T3 applied — the seven groups of record) |
 | `least-privilege/scripts/provision_identity.sh` (`--plan/--apply/--verify`), `access-review.sh` (`--quick`) | provisioning and the read-only drift checks called from `deploy.sh` |
 | `ACCESS_REGISTER.md` | living register: people, groups, non-human identities, approved MCP clients, change log (§5, §10, §11) |
+| `entra-groups.md` | `az` / Graph commands that create the seven groups, PIM role settings, the CA policy, the access package and the quarterly Entra access reviews (§6, §15) |
+| `sharepoint-permissions.md` | site roles for the five + the three `Sites.Selected` grants with grant / list / revoke commands (§8, §9) |
+| `ONBOARDING.md`, `OFFBOARDING.md` | person-centric joiner / leaver checklists with evidence commands (§14); the admin runbook stays in `../operations/access-governance/ACCESS_LIFECYCLE.md` |
+| `USER_QUICKSTART.md` | one section per system a–j: invocation, inputs (Supplier + Service), output path, approval tier, portal map (§4, §12) |
+| `../operations/{RUNBOOK,SUPPORT_MODEL,CHANGE_MANAGEMENT,MONITORING}.md`, `kql/`, `alerts.bicep` | day-2 operation, support, change control (Tier C process), alert catalogue |
+| `least-privilege/` (`.md` files) | **historical design variant** — a different vocabulary (six groups, approval tiers 1/2/3); see its `README.md` for the name mapping and §21 for every decision. Only `least-privilege/entra/groups.json` and `least-privilege/scripts/provision_identity.sh` are live. |
 | `../operations/access-governance/ACCESS_LIFECYCLE.md`, `QUARTERLY_ACCESS_REVIEW.md`, `BREAK_GLASS.md`, `scripts/access_snapshot.sh` | runbooks for §14, §15 and §12.3 |
 
 Consolidation note for the maintainer: `README.md` §1–§15 and

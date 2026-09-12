@@ -1,0 +1,30 @@
+# Code owners — branch protection requires a Code Owners review on every PR
+# (convertion/operations/CHANGE_MANAGEMENT.md §2, §3 step 5; delta D-OPS-G2).
+#
+# Repository settings that make this file a control, not a comment:
+#   - Require a pull request before merging
+#   - Require review from Code Owners
+#   - Dismiss stale approvals when new commits are pushed
+#   - Require status checks to pass: the `gates` and `secret-scan` jobs of
+#     .github/workflows/ci.yml
+#   - Do not allow bypassing the above settings (no self-approval by the author)
+#
+# Placeholders only — replace {github:...} with the real GitHub handles at
+# bootstrap; convertion/team/ACCESS_REGISTER.md records who they map to.
+
+# The whole conversion kit is owned by the accountable platform owner.
+/convertion/                    @{github:francisco-gomes}
+
+# Areas that change who may do what, or what the platform is allowed to do,
+# additionally require the deputy approver (no self-approval for the owner's
+# own changes — convertion/team/TEAM_MODEL.md §21 "Owner's own platform change").
+/convertion/team/               @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/operations/         @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/governance/         @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/enterprise/         @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/infra/              @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/integrations/registry.json  @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/templates/registry.json     @{github:francisco-gomes} @{github:deputy-approver}
+
+# CI and secret-scanning configuration protect every other gate.
+/.github/                       @{github:francisco-gomes} @{github:deputy-approver}

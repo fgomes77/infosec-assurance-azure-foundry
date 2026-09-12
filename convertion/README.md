@@ -62,9 +62,20 @@ convertion/
 ├── mcp-server/                ← MCP exposure of the platform (+ evals/)
 ├── templates/                 ← registry.json, deck schema, themes/, assets/, samples/
 ├── governance/                ← 9 governance docs + index README
-├── operations/                ← runbook, FinOps, monitoring, lifecycle, backup/DR,
-│                                evaluation/, access-governance/, kql/, *.bicep
+├── operations/                ← day-2 operation of the delivered systems
+│   ├── RUNBOOK.md, SUPPORT_MODEL.md, CHANGE_MANAGEMENT.md, MONITORING.md
+│   ├── FINOPS.md, TOKEN_ECONOMY_PLAYBOOK.md, cost-budget.bicep
+│   ├── LIFECYCLE.md, BACKUP_DR.md, backup_vector_stores.py, backup-job.bicep
+│   ├── ROLLOUT_PLAN.md, KPIS.md, CONTINUOUS_IMPROVEMENT.md
+│   ├── evaluation/            ← golden set, EVALUATION.md, run_evals.py (gates)
+│   ├── access-governance/     ← lifecycle, quarterly review, break-glass
+│   ├── kql/                   ← egress, verifier fail rate, latency+tokens, SLA
+│   └── alerts.bicep           ← extended alert catalogue (see MONITORING.md §4)
 ├── team/                      ← team model, RACI, RBAC, access register, onboarding
+│   ├── USER_QUICKSTART.md     ← per-user guide to systems a–j (inputs, path, tier)
+│   ├── entra-groups.md, sharepoint-permissions.md ← executable identity /
+│   │                            site-permission setup
+│   └── least-privilege/       ← historical design variant (see its README)
 ├── evaluation/                ← golden/ and smoke/ sets
 ├── orchestrator/              ← orchestrator + advisor + MCP layer README
 └── sharepoint/                ← `Reports/<Supplier>/<Service>/` storage rules
@@ -274,4 +285,7 @@ systems under the EU AI Act, and brings them into scope of your AIMS if you
 run ISO/IEC 42001. The exported `iso42001` and `eu-ai-act` agents themselves
 contain the reference material to run that assessment; do it before
 production use. Log and monitor via Microsoft Foundry's built-in tracing +
-Azure Monitor.
+Azure Monitor. Day-2 operation (health checks, failure modes, severities),
+support tiers and SLOs, PR-based change control and the alert catalogue are in
+`operations/` (`RUNBOOK.md`, `SUPPORT_MODEL.md`, `CHANGE_MANAGEMENT.md`,
+`MONITORING.md`); the ownership and access model is `team/TEAM_MODEL.md`.

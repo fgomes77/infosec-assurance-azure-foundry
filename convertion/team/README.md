@@ -27,6 +27,11 @@ Companion files in this folder:
 | `custom-role.agent-consumer.json` | Optional custom data-plane role for assurance users (run agents, no agent authoring) |
 | `access-review.sh` | Read-only evidence collector for the quarterly access review |
 | `ACCESS_REGISTER.md` | Register template: people, groups, service accounts, connections, rotation dates |
+| `entra-groups.md` | Group creation (`az` / Graph), PIM role settings, CA policy, access package, quarterly Entra access reviews |
+| `sharepoint-permissions.md` | Site roles for the five, and the `Sites.Selected` grants for the delivery Function, the project MI and the Logic Apps MI |
+| `ONBOARDING.md` / `OFFBOARDING.md` | Joiner and leaver checklists with revocation evidence (admin runbook: `../operations/access-governance/ACCESS_LIFECYCLE.md`) |
+| `USER_QUICKSTART.md` | How each user invokes systems a–j: inputs, storage path, approval step, portal map |
+| `least-privilege/` | **Historical design variant** (six groups, approval tiers 1/2/3) kept as the design record; only `entra/groups.json` and `scripts/provision_identity.sh` are live — see its `README.md` |
 
 
 > Role names follow the current Foundry RBAC naming (Foundry User / Foundry Owner /

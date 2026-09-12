@@ -48,8 +48,31 @@ what the owner can change without weakening an invariant.
 | C13 | Private networking (prod profile) | VNet, ~8 private endpoints, private DNS | per endpoint-hour + data | €0 → €70 | prod only (`main.parameters.prod.json`) | `enablePrivateNetworking` |
 | C14 | Speech (WhisperX replacement) | `{baseName}-speech` | audio hours | €0 (off) | on-demand only | `enableSpeech` |
 | C15 | Static Web App (report viewer, optional) | `static-web-app.bicep` | Standard plan | €0 → €9 | — | `enableStaticWebApp` |
+| C17 | Cosmos DB NoSQL — standard agent setup (conversations + agent definitions) | `{baseName}-cosmos` | provisioned RU/s (≥ 3 000 RU/s for the agent containers) + storage | €0 (basic setup) → €120 (prod) | keep `conversationRetentionDays` at 90 d so the container TTL prunes; do not over-provision RU/s before load is observed | `enableStandardAgentSetup`, `cosmosThroughputLimitRuPerSecond` |
+| C18 | Azure AI Search — vector stores / knowledge base / durable-memory index | `{baseName}-search` | per replica-partition-hour (basic → standard) | €0 → €80 | one basic service until retrieval volume justifies standard | `enableStandardAgentSetup` / `enableKnowledgeSearch`, `searchSku` |
+| C19 | Defender for Cloud AI threat protection | subscription plan | per 1 M tokens after the 30-day trial | €0 → €25 | leave `AIPromptEvidence` OFF (also the DPO position) | `infra/defender-ai.bicep` `enableAiPlan` |
+| C20 | Microsoft Purview (DSPM for AI, audit, retention) | tenant | pay-as-you-go per policy / per asset | €0 → €30 | scope the policies to the Foundry workload only | tenant configuration |
+| C21 | Azure Bot Service (native Teams / M365 Copilot publish) | `{baseName}-bot` | F0 free tier; S1 if channel volume grows | €0 → €10 | F0 covers five users | `enableCopilotPublish` |
+| C22 | Metered Graph `assignSensitivityLabel` calls (finding C16) | delivery Function | per call (protected API, pay-as-you-go) | €1 → €5 | one call per delivered report of record only | `sensitivity_label` per template |
 | C16 | Alerts, budgets, action groups | `alerts.bicep`, `cost.bicep`, this folder | per rule-month, e-mail free | €5 | — | `enableMonitoring`, `enableBudget` |
 | | **Total (planning)** | | | **≈ €380 dev → ≈ €830 prod** | budget `monthlyBudget` = 1500 in `main.bicep` leaves ~45 % headroom for campaigns (bulk DeepSearch of a supplier portfolio) | |
+
+**EU Data Zone premium (COST-1).** From 2026-09-01 Microsoft raised EU Data Zone /
+non-US regional deployment prices — about 9 % above Global per a Tech Community
+post whose full text could not be read; **verify on the Azure pricing page before
+the next M2 review**. Accepted as the cost of residency: Global SKUs are denied by
+policy (`enterprise/azure-policy-assignments.bicep`).
+
+### Quota tiers and the provisioned decision rule
+
+Quota is governed by seven auto-upgrading tiers (Free, 1–6). Check quarterly with
+`GET .../providers/Microsoft.CognitiveServices/quotaTiers/default` and record the
+opt-out decision ([quotas & limits](https://learn.microsoft.com/en-us/azure/foundry/openai/quotas-limits), 2026-08-20).
+Capacity: start at 30/20/50 K TPM and raise **only** on sustained 429s (the
+`model-throttling-429` alert). Move the `chat` tier to `DataZoneProvisionedManaged`
+only after **three consecutive months** above the PTU break-even. Enable the
+`AzureOpenAIRequestUsage` diagnostic category for per-deployment attribution
+(`enterprise/landing-zone.bicep` `enableUsageExportWorkspace`).
 
 Reading: the **fixed platform (C6–C13) is 3–5× the token spend** at the
 five-user volume of §2. Token economy (`MODEL_ROUTING.md`) matters for
