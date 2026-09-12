@@ -1,1 +1,1 @@
-# Infosec-assurance-grc-tprm-soecialidt
+# infosec-assurance-azure-foundry
