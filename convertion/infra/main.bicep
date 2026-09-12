@@ -119,6 +119,18 @@ param enableDocumentIntelligence bool = true
 param enableSpeech bool = false
 
 // ------------------------------------------- standard agent setup (C5, STO-1)
+@description('ENX internal gateway MCP endpoint (finding C10: the MCP tool authenticates through the conn-enx-gateway project connection instead of run-time bearer headers — integrations/mcp/enx-gateway.json)')
+param enxGatewayMcpUrl string = 'https://{enx-gateway-host}/mcp'
+
+@description('Deploy the Foundry project connections (integrations/connections/connections.bicep). SECOND PASS ONLY: the keyed connections read their credentials from {baseName}-kv with keyVault.getSecret(), so the vault and the secrets of setup/SECRETS.md must already exist (bootstrap step 4). Pass 1 creates the vault with this false; the owner then loads the secrets and redeploys with it true — the same two-pass shape as cmkKeyUri (finding C22)')
+param deployConnections bool = false
+
+@description('Name of the project connection of category CognitiveSearch created with enableKnowledgeSearch. MUST equal SEARCH_CONNECTION_NAME in setup/.env — scripts/apply_advisory_profile.py and scripts/create_orchestrator.py resolve it by name')
+param searchConnectionName string = 'ai-search'
+
+@description('Provision Azure AI Search for the durable memory index MEMORY_INDEX_NAME and a future Foundry IQ knowledge base when the standard agent setup is NOT used (delta D-ML-4 / finding C3). With enableStandardAgentSetup = true the search service comes from agent-stores.bicep instead and this flag must stay false')
+param enableKnowledgeSearch bool = false
+
 @description('Standard agent setup: provision BYO Cosmos DB (conversations) + Azure AI Search (vector stores / knowledge base) and reuse {baseName}sa for files, bound to the project by an IMMUTABLE capability host (agent-stores.bicep). DECIDE BEFORE THE FIRST AGENT IS CREATED — changing it afterwards means recreating the project. false = basic setup (Microsoft-managed multitenant stores, still in-region)')
 param enableStandardAgentSetup bool = false
 
@@ -243,6 +255,9 @@ module guard 'guard.bicep' = {
 var roles = {
   keyVaultSecretsUser: '4633458b-17de-408a-b874-0445c86b69e6'
   monitoringMetricsPublisher: '3913510d-42f4-4e42-8a64-420c390055eb'
+  // Search Index Data Contributor — the project MI writes/reads the durable
+  // memory and knowledge indexes (delta D-ML-4 / finding C3)
+  searchIndexDataContributor: '8ebe5a00-799e-43f5-93ac-243d3dce84a7'
 }
 func roleId(id string) string => subscriptionResourceId('Microsoft.Authorization/roleDefinitions', id)
 
@@ -618,6 +633,72 @@ module agentStores 'agent-stores.bicep' = if (enableStandardAgentSetup) {
     searchSku: searchSku
     cmkKeyUri: cmkKeyUri
     searchCmkEnforcement: searchCmkEnforcement
+  }
+}
+
+// ------------------------- knowledge search without standard agent setup
+// Delta D-ML-4 / finding C3: one vector store per agent is a fixed service
+// limit, so combined knowledge and durable memory move to an Azure AI Search
+// index reached through the GA AI Search tool. With enableStandardAgentSetup
+// the service already exists (agent-stores.bicep) and this block stays off.
+resource knowledgeSearch 'Microsoft.Search/searchServices@2024-06-01-preview' = if (enableKnowledgeSearch && !enableStandardAgentSetup) {
+  name: '${baseName}-search'
+  location: location
+  sku: { name: 'basic' }
+  identity: { type: 'SystemAssigned' }
+  properties: {
+    replicaCount: 1
+    partitionCount: 1
+    disableLocalAuth: true
+    publicNetworkAccess: publicNetworkAccess == 'Disabled' ? 'disabled' : 'enabled'
+  }
+}
+
+resource knowledgeSearchConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01' = if (enableKnowledgeSearch && !enableStandardAgentSetup) {
+  parent: project
+  // Name matches SEARCH_CONNECTION_NAME (setup/.env, default 'ai-search');
+  // scripts/apply_advisory_profile.py and scripts/create_orchestrator.py
+  // resolve the connection BY NAME, never by id.
+  name: searchConnectionName
+  properties: {
+    category: 'CognitiveSearch'
+    authType: 'AAD'
+    isSharedToAll: true
+    target: 'https://${baseName}-search.search.windows.net'
+    metadata: {
+      ApiType: 'Azure'
+      ResourceId: enableKnowledgeSearch && !enableStandardAgentSetup ? knowledgeSearch.id : ''
+      location: location
+    }
+  }
+}
+
+resource knowledgeSearchIndexReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableKnowledgeSearch && !enableStandardAgentSetup) {
+  name: guid(resourceGroup().id, '${baseName}-search', project.id, roles.searchIndexDataContributor)
+  scope: knowledgeSearch
+  properties: {
+    principalId: project.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: roleId(roles.searchIndexDataContributor)
+  }
+}
+
+// --------------------------------- Foundry project connections (conn-*, C10)
+// SECOND PASS: the keyed connections read their credentials from the vault
+// created above, so the secrets must exist before this module is enabled.
+resource kvForConnections 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+  name: '${baseName}-kv'
+  dependsOn: [keyVault]
+}
+
+module projectConnections '../integrations/connections/connections.bicep' = if (deployConnections) {
+  name: 'project-connections'
+  params: {
+    foundryAccountName: foundry.name
+    projectName: last(split(project.name, '/'))
+    enxGatewayMcpUrl: enxGatewayMcpUrl
+    deliveryFunctionBaseUrl: 'https://${baseName}-fn-delivery.azurewebsites.net/api'
+    enxGatewayToken: kvForConnections.getSecret('enx-gateway-token')
   }
 }
 

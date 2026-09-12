@@ -33,8 +33,14 @@ DEST = CONV / "functions" / "delivery" / "renderers"
 
 # renderer folder -> source(s) in the verified build (first match wins)
 SOURCES = {
-    "dpia": ["build/agents/dpia/code-tree"],
-    "ciso-reporting": ["build/agents/ciso-reporting/code-tree"],
+    # renderers-src first: the runnable Python ports of generators the
+    # verified code-tree carries in a form the Function cannot execute
+    # (dpia: Node `docx`; ciso-reporting: generate_reports_v2.py needs the
+    # skill's own layout). The code-tree stays the visual reference.
+    "dpia": ["functions/delivery/renderers-src/dpia",
+             "build/agents/dpia/code-tree"],
+    "ciso-reporting": ["functions/delivery/renderers-src/ciso-reporting",
+                       "build/agents/ciso-reporting/code-tree"],
     "ciso-global": ["functions/delivery/renderers-src/ciso-global"],
     "evidence-summary": ["functions/delivery/renderers-src/evidence-summary"],
     "xlsx-generic": ["functions/delivery/renderers-src/xlsx-generic",

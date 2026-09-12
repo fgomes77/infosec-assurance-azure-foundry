@@ -74,7 +74,16 @@ PYPRE
 # NoAutoUpgrade (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md R1, R2).
 echo "==> [0c/8] Model lifecycle + pinned-version check (offline)"
 if [ -f ../enterprise/upgrade/check_model_lifecycle.py ]; then
-  python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run     --horizon "${LIFECYCLE_HORIZON:-180}"     --json ../build/lifecycle-report.json     || { echo "model lifecycle check FAILED: a pinned model version is empty, or a deployment retires within the ticket window. Open the change ticket (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md §4) or re-run with an updated retirement table."; exit 1; }
+  # Advisory by default (it reports pinned-version, retirement and
+  # tool-support findings that need an OWNER decision, not a failed build);
+  # LIFECYCLE_STRICT=1 makes it blocking — that is what the release pipeline
+  # sets (ci/README.md, finding C25).
+  if ! python3 ../enterprise/upgrade/check_model_lifecycle.py --dry-run \
+      --horizon "${LIFECYCLE_HORIZON:-180}" \
+      --json ../build/lifecycle-report.json; then
+    echo "!! model lifecycle findings are open: a pinned model version is empty, a deployment retires within the ticket window, or a tier model cannot carry its tools (finding C4). Open the change ticket (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md §4) or re-run with an updated retirement table."
+    [ -n "${LIFECYCLE_STRICT:-}" ] && exit 1
+  fi
 else
   echo "note: enterprise/upgrade/check_model_lifecycle.py not present - platform-currency check skipped"
 fi
@@ -93,6 +102,22 @@ python3 convert_skills.py $CONVERT_FLAGS
 echo "==> [2/8] Verifying conversion fidelity (templates, rules, gates) + kit consistency"
 python3 verify_conversion.py
 python3 verify_kit.py
+
+if [ -z "$DRY" ] && [ -z "${ALLOW_BASIC_AGENT_SETUP:-}" ]; then
+  echo "==> Pre-flight: capability host (standard agent setup, finding C5)"
+  # The capability host binds the project to the BYO Cosmos DB / AI Search /
+  # Storage and is IMMUTABLE once the first agent exists. Set
+  # ALLOW_BASIC_AGENT_SETUP=1 only for a dev project deliberately running the
+  # basic (Microsoft-managed) setup.
+  if [ -z "${PROJECT_RESOURCE_ID:-}" ]; then
+    echo "note: PROJECT_RESOURCE_ID not set (setup/.env) - capability-host check skipped"
+  elif ! az rest --method get \
+      --url "https://management.azure.com${PROJECT_RESOURCE_ID}/capabilityHosts?api-version=2025-06-01" \
+      --query "value[0].name" -o tsv 2>/dev/null | grep -q .; then
+    echo "!! No capability host on the project. Deploy infra/main.bicep with enableStandardAgentSetup=true FIRST - it cannot be added after the first agent exists."
+    exit 1
+  fi
+fi
 
 echo "==> [3/8] Creating/updating agents $DRY"
 python3 create_agents.py $DRY
