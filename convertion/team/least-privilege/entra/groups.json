@@ -1,0 +1,85 @@
+{
+  "_comment": "Entra ID security groups for the InfoSec Assurance Foundry platform (least-privilege lens: team/least-privilege/IDENTITY_RBAC.md §1). All groups: securityEnabled=true, mailEnabled=false, assigned membership (no dynamic rules), isAssignableToRole=false. UPNs are placeholders; object ids are filled by scripts/provision_identity.sh into infra/rbac.parameters.json. Controls: ISO 27001 A.5.15/A.5.16/A.5.18/A.8.2; DORA Art. 9(4)(c); NIS2 Art. 21(2)(i).",
+  "namingPrefix": "sg-infosec-foundry-",
+  "conditionalAccessPolicy": {
+    "name": "ca-infosec-foundry",
+    "targets": "all groups below",
+    "cloudApps": ["Microsoft Azure Management", "Azure AI Foundry / Azure Cognitive Services", "Office 365 SharePoint Online"],
+    "grant": ["mfa", "compliantDevice"],
+    "signInFrequencyHours": 12,
+    "blockLegacyAuth": true,
+    "controls": ["ISO 27001 A.8.5", "DORA Art. 9(4)(d)", "NIS2 Art. 21(2)(j)"]
+  },
+  "groups": [
+    {
+      "name": "sg-infosec-foundry-users",
+      "purpose": "Assurance users: Azure AI User on the Foundry project; SharePoint site members; Copilot Studio agent audience; hosted-MCP Easy Auth allowed group",
+      "owners": ["{upn:francisco.gomes}"],
+      "members": ["{upn:francisco.gomes}", "{upn:jose.mogollon}", "{upn:pedro.santos}", "{upn:jose.meireles}", "{upn:tania.morais}"],
+      "additionsRequestedBy": "line manager of the joiner via access package ap-infosec-foundry-user",
+      "additionsApprovedBy": "{upn:francisco.gomes}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "group owner" },
+      "grants": ["Azure AI User (project)", "SharePoint Members (site), Read on Reports/ Templates/ Governance/", "Copilot Studio agent", "MCP local (own az login) / hosted (Easy Auth)"]
+    },
+    {
+      "name": "sg-infosec-foundry-report-approvers",
+      "purpose": "Four-eyes approvers of tier-1 reports and Jira/IAF submissions; the approval flow resolves this group minus the requester",
+      "owners": ["{upn:francisco.gomes}"],
+      "members": ["{upn:francisco.gomes}", "{upn:jose.mogollon}", "{upn:pedro.santos}", "{upn:jose.meireles}", "{upn:tania.morais}"],
+      "additionsRequestedBy": "{upn:francisco.gomes} after the joiner's onboarding attestation",
+      "additionsApprovedBy": "{upn:francisco.gomes}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "group owner" },
+      "grants": ["May answer REPORT_DELIVERY tier-1, JIRA_CREATE, IAF_SUBMIT approval gates (approvals/routing.json)"]
+    },
+    {
+      "name": "sg-infosec-foundry-platform-approvers",
+      "purpose": "Approvers of template, platform, prompt and registry changes (tier 3); deputy is used only when the requester is the owner",
+      "owners": ["{group:entra-iam-team}"],
+      "members": ["{upn:francisco.gomes}", "{upn:deputy-approver}"],
+      "additionsRequestedBy": "{upn:francisco.gomes}",
+      "additionsApprovedBy": "{upn:line-manager}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:line-manager}" },
+      "grants": ["May answer TEMPLATE_UPDATE, PLATFORM_CHANGE, MEMORY_DELETE gates"]
+    },
+    {
+      "name": "sg-infosec-foundry-platform-admins",
+      "purpose": "PIM-eligible Azure privileged roles for platform maintenance (Azure AI Developer, Contributor, Key Vault Secrets Officer, Logic Apps Standard Developer/Operator, Website Contributor, Monitoring Contributor, Storage Blob Data Reader); permanent Reader + Log Analytics Reader",
+      "owners": ["{group:entra-iam-team}"],
+      "members": ["{upn:francisco.gomes}"],
+      "additionsRequestedBy": "{upn:line-manager}",
+      "additionsApprovedBy": "{group:entra-iam-team}",
+      "pim": { "eligible": true, "maxActivationHours": 8, "requireMfa": true, "requireJustification": true, "requireTicket": true, "approverForActivation": "none (self-activation, alerts to {upn:line-manager})" },
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:line-manager}", "pimActivationReview": "monthly" },
+      "grants": ["see infra/rbac.bicep"]
+    },
+    {
+      "name": "sg-infosec-foundry-breakglass",
+      "purpose": "Eligible-only membership granting the platform-admin role set to the deputy for a bounded window when the owner is unavailable or during a P1/P2 incident",
+      "owners": ["{group:entra-iam-team}"],
+      "members": [],
+      "eligibleMembers": ["{upn:deputy-approver}"],
+      "pim": { "eligible": true, "maxActivationHours": 8, "requireMfa": true, "requireJustification": true, "requireTicket": true, "approverForActivation": "{upn:line-manager} or {upn:ciso-delegate}" },
+      "accessReview": { "cadence": "each activation reviewed by {upn:francisco.gomes} within 5 business days; quarterly by {upn:line-manager}" },
+      "grants": ["same Azure roles as sg-infosec-foundry-platform-admins (PIM only)"]
+    },
+    {
+      "name": "sg-infosec-foundry-auditors",
+      "purpose": "Read-only evidence access for internal audit / certification bodies; empty outside audit engagements",
+      "owners": ["{upn:francisco.gomes}"],
+      "members": [],
+      "additionsRequestedBy": "{upn:head-of-internal-audit}",
+      "additionsApprovedBy": "{upn:francisco.gomes}",
+      "accessReview": { "cadence": "end of each engagement (remove); quarterly check that it is empty" },
+      "grants": ["Reader (RG)", "Log Analytics Reader", "Logic Apps Standard Reader", "SharePoint Visitors on Governance/"]
+    }
+  ],
+  "servicePrincipals": [
+    {
+      "name": "sp-infosec-foundry-deploy",
+      "type": "app registration with federated credential (GitHub Actions OIDC, environment prod) - no client secret",
+      "owner": "{upn:francisco.gomes}",
+      "roles": ["Contributor (RG)", "Role Based Access Control Administrator (RG, ABAC-constrained to the roles in infra/rbac.bicep)", "Azure AI Developer (Foundry account)", "Key Vault Secrets Officer (seeding only)", "Monitoring Contributor"],
+      "interactiveSignIn": false
+    }
+  ]
+}

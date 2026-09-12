@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "foundryAccountName": { "value": "{baseName}-aif" },
+    "projectName": { "value": "{baseName}-proj" },
+    "logAnalyticsName": { "value": "{baseName}-logs" },
+    "appInsightsName": { "value": "{baseName}-appi" },
+    "storageAccountName": { "value": "{baseName}sa" },
+    "keyVaultName": { "value": "{baseName}-kv" },
+    "deliveryFunctionName": { "value": "{delivery-function}" },
+    "logicAppName": { "value": "{logicapp-name}" },
+    "usersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-users}" },
+    "platformAdminsGroupObjectId": { "value": "{objectId:sg-infosec-foundry-platform-admins}" },
+    "breakglassGroupObjectId": { "value": "{objectId:sg-infosec-foundry-breakglass}" },
+    "auditorsGroupObjectId": { "value": "{objectId:sg-infosec-foundry-auditors}" },
+    "deployPrincipalId": { "value": "{objectId:sp-infosec-foundry-deploy}" },
+    "logicAppPrincipalId": { "value": "{objectId:mi-logicapp}" },
+    "deliveryFunctionPrincipalId": { "value": "{objectId:mi-delivery-function}" },
+    "mcpHostPrincipalId": { "value": "" },
+    "enablePim": { "value": true },
+    "pimEligibilityDuration": { "value": "P365D" }
+  }
+}
