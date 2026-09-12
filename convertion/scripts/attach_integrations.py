@@ -114,18 +114,56 @@ def check_tool_compatibility(name: str, cfg: dict) -> list[str]:
     return bad
 
 
+# The one documented exception to "GET only" (integrations/README.md "Read-only
+# rule of record", governance/HUMAN_APPROVAL.md Layer 1): five search APIs
+# express a QUERY as a POST because the query does not fit in a URL. They read
+# and never mutate. The flag `x-enx-read-only: true` on the operation is what
+# keeps it, and it is honoured ONLY for these operationIds — a spec author
+# cannot widen the rule by adding the flag to a write.
+READ_ONLY_POST_OPS = {
+    "searchIssuesJql",      # Jira Cloud - JQL search
+    "aqlSearchObjects",     # Jira Assets CMDB - AQL, the only query surface
+    "runHuntingQuery",      # Defender - KQL advanced hunting
+    "searchContent",        # SharePoint / Graph search
+    "codeSearch",           # Azure DevOps - code search
+}
+# Filled by load_openapi_spec, printed by --dry-run and audited by
+# verify_conversion.py: the standing evidence of what non-GET survived.
+KEPT_POSTS: list[str] = []
+
+
 def load_openapi_spec(rel: str, read_only: bool) -> dict:
     """Load a spec; unless write access was explicitly granted, strip every
     non-GET operation so the agent is technically incapable of submitting
-    (see governance/HUMAN_APPROVAL.md, Layer 1)."""
+    (see governance/HUMAN_APPROVAL.md, Layer 1).
+
+    The exception is a non-GET operation carrying `x-enx-read-only: true`
+    whose operationId is in READ_ONLY_POST_OPS. A flag on any other operation
+    is REFUSED loudly rather than honoured — silently trusting a flag in a
+    spec file would make the Layer-1 control editable by whoever edits the
+    spec, which is the opposite of a structural control.
+    """
     import yaml
     spec = yaml.safe_load((CONV / rel).read_text(encoding="utf-8"))
     if read_only:
         for path, ops in list(spec.get("paths", {}).items()):
             for verb in list(ops):
-                if verb.lower() not in ("get", "parameters"):
-                    del ops[verb]
-            if not any(v.lower() == "get" for v in ops):
+                if verb.lower() in ("get", "parameters"):
+                    continue
+                op = ops[verb]
+                if isinstance(op, dict) and op.get("x-enx-read-only") is True:
+                    op_id = op.get("operationId")
+                    if op_id in READ_ONLY_POST_OPS:
+                        KEPT_POSTS.append(
+                            f"{rel}: {verb.upper()} {path} ({op_id})")
+                        continue
+                    sys.exit(
+                        f"{rel}: {verb.upper()} {path} carries "
+                        f"x-enx-read-only but operationId {op_id!r} is not in "
+                        f"the allow-set {sorted(READ_ONLY_POST_OPS)} "
+                        f"(integrations/README.md 'Read-only rule of record')")
+                del ops[verb]
+            if not any(v.lower() != "parameters" for v in ops):
                 del spec["paths"][path]
     return spec
 
@@ -314,6 +352,15 @@ def main() -> int:
             guard = cfg.get("guardrail_policy", "infosec-security-analysis")
             print(f"[dry-run] {name}: +{labelled or ['(none)']} model={model} "
                   f"rai={guard}")
+        # Load every attached spec once so the read-only audit is populated
+        # even in --dry-run, where build_tools() returns early.
+        KEPT_POSTS.clear()
+        for key, conn in REGISTRY["connections"].items():
+            if conn.get("type") == "openapi" and conn.get("spec"):
+                load_openapi_spec(conn["spec"], read_only=True)
+        print("\n[dry-run] kept read-only POST operations:")
+        for line in sorted(set(KEPT_POSTS)) or ["  (none)"]:
+            print(f"  {line}")
         print(f"\n{len(wanted)} agents would be updated "
               f"(writes granted: "
               f"{sum(bool(c.get('write_connections')) for c in wanted.values())})")

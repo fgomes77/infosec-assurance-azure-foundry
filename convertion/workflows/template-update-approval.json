@@ -26,7 +26,8 @@
       },
       "applyPipelineUrl": {
         "type": "securestring",
-        "defaultValue": "{devops-or-container-job-trigger-that-runs-update_templates.py}"
+        "defaultValue": "{devops-or-container-job-trigger-that-runs-update_templates.py}",
+        "_comment": "Trigger URL of ci/azure-pipelines-apply-template.yml — the job that runs scripts/update_templates.py with the recorded approval, re-runs the offline gates and opens a PULL REQUEST. It never pushes to main: the PR is the submission of record and the platform owner merges it (governance/HUMAN_APPROVAL.md Layer 3). Held as a securestring from Key Vault."
       },
       "teamsWebhookUrl": {
         "type": "securestring",

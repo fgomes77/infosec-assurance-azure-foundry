@@ -1,0 +1,62 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "title": "Threat Intelligence Brief — managed file transfer",
+  "subtitle": "Advisory note for the InfoSec Assurance team",
+  "supplier": "Northwind Cloud Services BV",
+  "service": "Managed SFTP Gateway",
+  "reportDate": "2026-09-10",
+  "classification": "Euronext Internal",
+  "author": "infosec-assurance-advisor",
+  "sections": [
+    {
+      "heading": "Summary",
+      "level": 1,
+      "paragraphs": [
+        "Two advisories affecting managed file-transfer agents were published in the last quarter. Neither is confirmed exploited against the assessed service, but **patch evidence is missing**."
+      ],
+      "bullets": [
+        "Exposure: public SFTP endpoint restricted by IP allow-list.",
+        "Detection: transfer logs not yet ingested by the SOC.",
+        "Action: request patch evidence and complete log integration."
+      ]
+    },
+    {
+      "heading": "Advisories",
+      "level": 2,
+      "table": {
+        "columns": [
+          "Reference",
+          "Component",
+          "Severity",
+          "Status"
+        ],
+        "rows": [
+          [
+            "CVE-2026-11111",
+            "Transfer agent",
+            "7.5 High",
+            "Patched upstream"
+          ],
+          [
+            "CVE-2026-22222",
+            "Web console",
+            "5.3 Medium",
+            "Mitigated by network restriction"
+          ]
+        ]
+      }
+    },
+    {
+      "heading": "Recommendation",
+      "level": 1,
+      "paragraphs": [
+        "Proceed with conditions: obtain patch evidence before go-live and complete the SOC integration within the quarter."
+      ]
+    }
+  ],
+  "sources": [
+    "Public CVE records (allow-listed source)",
+    "Supplier advisory NWC-2026-004 (supplier trust centre)",
+    "convertion/governance/RISK_THRESHOLDS.md (banding)"
+  ]
+}

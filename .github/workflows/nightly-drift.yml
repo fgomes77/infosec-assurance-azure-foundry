@@ -1,0 +1,156 @@
+# Nightly drift + access snapshot — the detective control behind the preventive
+# ones (convertion/operations/MONITORING.md; verify_deployment.py docstring:
+# "Run as the last deploy step and nightly").
+#
+# Two questions asked every night against the live tenant, both READ-ONLY:
+#
+#   A. Has the deployment drifted from the verified build?
+#      `convertion/scripts/verify_deployment.py` compares every expected agent's
+#      instructions hash, tool set, model tier and promoted VERSION against
+#      what Foundry actually serves, and flags ONLY IN FOUNDRY agents (someone
+#      created one in the portal), OpenAPI tools that expose a non-GET
+#      operation (a write surface appeared on a read-only integration) and any
+#      registry agent that gained write_connections (findings C2, C19).
+#
+#   B. Has access drifted from the least-privilege model?
+#      `convertion/team/access-review.sh` snapshots role assignments, Entra
+#      group membership, Foundry connection auth types, Key Vault secret ages
+#      and managed identities (team/TEAM_MODEL.md §15). Nightly it is an early
+#      warning; the quarterly run is the ISO A.5.18 / DORA Art. 9(4)(c)
+#      evidence and is filed in SharePoint, not here.
+#
+# Identity: the same OIDC federated credential pattern as deploy.yml, but bound
+# to a READ-ONLY app (`vars.AZURE_READONLY_CLIENT_ID`, Reader + Directory
+# read). No `environment:` and no approval — this workflow can change nothing,
+# and gating a detective control behind a human would mean it stops running.
+# It falls back to the deploy identity only if no read-only one is configured.
+#
+# A red run is an operational finding, not a broken build: the job fails so the
+# owner is notified, and the RUNBOOK entry for drift says what to do.
+name: Nightly drift
+
+on:
+  schedule:
+    # 03:17 UTC — inside the EU maintenance window, off the hour so it does not
+    # queue behind everybody else's midnight cron.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-drift
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  drift:
+    name: Deployment drift + access snapshot
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      id-token: write        # OIDC federated credential — no stored secret
+      contents: read
+    env:
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      PROJECT_ENDPOINT: ${{ vars.PROJECT_ENDPOINT }}
+      FOUNDRY_ACCOUNT_NAME: ${{ vars.FOUNDRY_ACCOUNT_NAME }}
+      BASE_NAME: ${{ vars.BASE_NAME }}
+      FOUNDRY_API_VERSION: ${{ vars.FOUNDRY_API_VERSION }}
+      MEMORY_BACKEND: ${{ vars.MEMORY_BACKEND }}
+      KNOWLEDGE_SOURCE: ${{ vars.KNOWLEDGE_SOURCE }}
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Toolchain (data-plane SDK)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet \
+            -r convertion/setup/requirements.txt
+
+      - name: 'EU residency assertion (offline)'
+        run: python3 convertion/ci/tests/test_residency.py
+
+      # verify_deployment.py compares the LIVE agents against build/manifest.json
+      # and build/agent-versions.json, so the build has to exist on this runner.
+      - name: Rebuild the reference (offline convert + fidelity check)
+        run: |
+          set -euo pipefail
+          python3 convertion/scripts/convert_skills.py
+          python3 convertion/scripts/verify_conversion.py
+
+      - name: Azure login (read-only OIDC federated credential)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_READONLY_CLIENT_ID || vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: 'EU residency assertion (live — every resource in the resource group)'
+        run: python3 convertion/ci/tests/test_residency.py --live
+
+      - name: '[A] Deployment drift (live Foundry vs verified build)'
+        id: drift
+        run: |
+          python3 convertion/scripts/verify_deployment.py \
+            --json convertion/build/nightly-drift.json
+
+      - name: '[B] Access snapshot (role assignments, groups, connections, secret ages)'
+        id: access
+        if: always()
+        env:
+          ACCESS_REVIEW_OUT: ${{ github.workspace }}/convertion/build/access-review/nightly
+        run: convertion/team/access-review.sh
+
+      # The snapshot carries real user principal names. The unredacted evidence
+      # belongs in SharePoint Governance/AccessReviews/, never in a build
+      # artefact — mask the local part before anything is uploaded
+      # (governance/DATA_PROTECTION_GUARDRAILS.md: no e-mail address leaves the
+      # tenant boundary).
+      - name: Redact principal names before upload
+        if: always()
+        run: |
+          set -euo pipefail
+          snapshot="convertion/build/access-review/nightly"
+          [ -d "$snapshot" ] || exit 0
+          find "$snapshot" -type f -print0 | xargs -0 -r sed -i -E \
+            's/[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})/<redacted>@\1/g'
+          echo "redacted $(find "$snapshot" -type f | wc -l) file(s)"
+
+      - name: Publish the nightly evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-drift-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 90
+          path: |
+            convertion/build/nightly-drift.json
+            convertion/build/access-review/nightly/**
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Nightly drift — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo ""
+            echo "| Check | Result |"
+            echo "|---|---|"
+            echo "| Deployment drift (verify_deployment.py) | ${{ steps.drift.outcome }} |"
+            echo "| Access snapshot (access-review.sh) | ${{ steps.access.outcome }} |"
+            echo ""
+            echo "A failure is an operational finding: follow \`convertion/operations/RUNBOOK.md\`."
+            echo "Unredacted access evidence stays in SharePoint \`Governance/AccessReviews/\`."
+          } >> "$GITHUB_STEP_SUMMARY"

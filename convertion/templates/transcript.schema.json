@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://euronext.internal/infosec-assurance/templates/transcript.schema.json",
+  "title": "Diarized meeting/interview transcript (template `transcript`)",
+  "description": "Contract accepted by functions/delivery/renderers-src/transcript/render.py. The renderer emits transcript.md, transcript.html and transcript.docx from one payload. Exactly one turn source must be present: `turns`, `segments`, or the Azure AI Speech batch shape (`recognizedPhrases`, with `combinedRecognizedPhrases` as the undiarized fallback). Everything else is envelope metadata, all optional, house style applied when absent. The renderer never invents, summarises or corrects speech: `summary`, `actions` and `notes` are written upstream by the agent step and passed through verbatim.",
+  "type": "object",
+  "properties": {
+    "title": {"type": "string", "description": "Document title. Defaults to a house-style title built from supplier/service/date."},
+    "supplier": {"type": "string", "description": "Supplier name as used in Reports/<Supplier>/. Placeholder names only in samples."},
+    "service": {"type": "string", "description": "Service name as used in Reports/<Supplier>/<Service>/."},
+    "recordingDate": {"type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+    "classification": {"type": "string", "description": "Footer classification, e.g. 'Euronext Internal'."},
+    "locale": {"type": "string", "description": "BCP-47 tag of the spoken language, e.g. 'en-GB', 'pt-PT'."},
+    "engine": {"type": "string", "description": "What produced the transcript, e.g. 'Azure AI Speech batch transcription (diarization on)'."},
+    "speakerNames": {
+      "type": "object",
+      "description": "Diarization label -> person or role. This is an assertion about who spoke, so it is supplied in the approved contract, never guessed by the renderer (the governed equivalent of the skill's relabel_speakers.py).",
+      "additionalProperties": {"type": "string"}
+    },
+    "participants": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "array", "items": {"type": "string"}, "description": "Written by the agent step, not by the renderer."},
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": {"type": "string"},
+          "owner": {"type": "string"},
+          "due": {"type": "string", "format": "date"}
+        },
+        "required": ["action", "owner"],
+        "additionalProperties": false
+      }
+    },
+    "notes": {"type": "array", "items": {"type": "string"}, "description": "Processing notes, e.g. that pt-BR normalisation was applied upstream."},
+    "sources": {"type": "array", "items": {"type": "string"}},
+
+    "turns": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/turn"},
+      "description": "Shape A — WhisperX / format_transcript.py."
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/turn"},
+      "description": "Shape C — already-normalised segments."
+    },
+    "recognizedPhrases": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Shape B — Azure AI Speech v3.2 batch result.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "speaker": {"type": "integer", "minimum": 1},
+          "channel": {"type": "integer"},
+          "offset": {"type": "string", "description": "ISO-8601 duration, e.g. 'PT12.3S'."},
+          "offsetInTicks": {"type": "number", "description": "100-ns ticks."},
+          "duration": {"type": "string"},
+          "durationInTicks": {"type": "number"},
+          "nBest": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "display": {"type": "string"},
+                "lexical": {"type": "string"},
+                "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+              },
+              "required": ["display"]
+            }
+          }
+        },
+        "required": ["nBest"]
+      }
+    },
+    "combinedRecognizedPhrases": {
+      "type": "array",
+      "description": "Undiarized fallback used only when recognizedPhrases carries no speaker labels.",
+      "items": {
+        "type": "object",
+        "properties": {"display": {"type": "string"}, "channel": {"type": "integer"}},
+        "required": ["display"]
+      }
+    },
+
+    "duration": {"type": ["string", "number"], "description": "ISO-8601 duration or seconds."},
+    "duration_seconds": {"type": "number", "minimum": 0},
+    "durationInTicks": {"type": "number", "minimum": 0},
+    "language": {"type": "string"},
+    "model": {"type": "string"},
+    "compute_type": {"type": "string"},
+    "diarized": {"type": "boolean"},
+    "speakers": {"type": "array", "items": {"type": ["string", "integer"]}},
+    "source": {"type": "string"}
+  },
+  "anyOf": [
+    {"required": ["turns"]},
+    {"required": ["segments"]},
+    {"required": ["recognizedPhrases"]},
+    {"required": ["combinedRecognizedPhrases"]}
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "turn": {
+      "type": "object",
+      "properties": {
+        "speaker": {"type": ["string", "integer"], "description": "Diarization label; mapped to a person through speakerNames."},
+        "start": {"type": "number", "minimum": 0, "description": "Seconds from the start of the recording."},
+        "end": {"type": "number", "minimum": 0},
+        "text": {"type": "string"},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "required": ["speaker", "start", "text"],
+      "additionalProperties": false
+    }
+  }
+}

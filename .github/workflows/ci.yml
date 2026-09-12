@@ -6,8 +6,12 @@
 # On every pull request the kit must prove, on a clean runner and entirely
 # OFFLINE, that it still converts the claude.ai export faithfully and that
 # nothing in it is inconsistent, unparsable or secret-bearing. On main the
-# same gates run again and a deploy job — OIDC only, no stored credential —
-# waits for the `production` environment approval of the accountable owner.
+# same gates run again, and only then does .github/workflows/deploy.yml pick
+# the run up (`workflow_run` on success) and wait for the `production`
+# environment approval of the accountable owner — OIDC only, no stored
+# credential. Deployment lives in its own workflow so that this one can be
+# read, reviewed and reasoned about as what it is: a gate that never touches
+# Azure. The nightly detective half is .github/workflows/nightly-drift.yml.
 #
 # Equivalent pipeline for Azure DevOps: convertion/ci/azure-pipelines.yml.
 # Both call the same scripts, so the two can never diverge.
@@ -61,6 +65,12 @@ jobs:
           bicep --version
 
       - name: '[1] Convert skills from the claude.ai export'
+        # The gate builds the FULL set so the fidelity check covers every agent.
+        # Building is not deploying: governance/THIRD_PARTY_IP.md §2 gates the
+        # conversion so nobody ships the Anthropic-licensed agents unaware, and
+        # deploy.sh requires the same variable to be set deliberately.
+        env:
+          ACCEPT_ANTHROPIC_LICENSE: '1'
         run: python3 convertion/scripts/convert_skills.py
 
       - name: '[2] Verify conversion fidelity (templates, rules, gates)'
@@ -71,6 +81,19 @@ jobs:
 
       - name: '[4] Syntax gate (python, json, yaml, javascript, bicep, shell)'
         run: convertion/ci/syntax_check.sh
+
+      - name: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'
+        run: python3 convertion/ci/tests/test_residency.py
+
+      - name: '[4c] Self-knowledge pack is in step with the kit'
+        run: python3 convertion/scripts/build_self_knowledge.py --check
+
+      - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
+        run: |
+          python3 -m pip install --quiet pytest jsonschema
+          python3 -m pytest convertion/functions/delivery/tests \
+            convertion/functions/office-tools/tests \
+            convertion/scripts/tests -q
 
       - name: '[5] Infrastructure policy gate (EU residency, C5/C6/C11/C12/C22)'
         run: convertion/infra/validate.sh
@@ -143,79 +166,9 @@ jobs:
           retention-days: 30
           path: ${{ runner.temp }}/gitleaks-*.sarif
 
-  deploy:
-    name: Deploy (production)
-    needs: [gates, secret-scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    # The approval gate: `production` requires the accountable owner's review
-    # before this job starts (team/TEAM_MODEL.md F5, L11).
-    environment: production
-    permissions:
-      id-token: write           # OIDC federated credential — no stored secret
-      contents: read
-    env:
-      # Repository/environment VARIABLES (not secrets): none of these is
-      # confidential, and keeping them as variables keeps the rule "no secret
-      # in this repository" true end to end.
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      PROJECT_ENDPOINT: ${{ vars.PROJECT_ENDPOINT }}
-      FOUNDRY_ACCOUNT_NAME: ${{ vars.FOUNDRY_ACCOUNT_NAME }}
-      LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.LOG_ANALYTICS_WORKSPACE_NAME }}
-      APP_INSIGHTS_NAME: ${{ vars.APP_INSIGHTS_NAME }}
-      BASE_NAME: ${{ vars.BASE_NAME }}
-      OWNER_ALERT_EMAIL: ${{ vars.OWNER_ALERT_EMAIL }}
-      ACTION_GROUP_ID: ${{ vars.ACTION_GROUP_ID }}
-      BUDGET_START_DATE: ${{ vars.BUDGET_START_DATE }}
-      DELIVERY_FUNCTION_APP_NAME: ${{ vars.DELIVERY_FUNCTION_APP_NAME }}
-      FOUNDRY_API_VERSION: ${{ vars.FOUNDRY_API_VERSION }}
-      MEMORY_BACKEND: ${{ vars.MEMORY_BACKEND }}
-      KNOWLEDGE_SOURCE: ${{ vars.KNOWLEDGE_SOURCE }}
-      STRICT_RUNTIME: '1'       # refuse the retiring classic runtime (C1)
-      LIFECYCLE_STRICT: '1'     # an open model-lifecycle finding fails the release (C4/C6/C25)
-      CI: 'true'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Toolchain (data-plane SDK + bicep)
-        run: |
-          python3 -m pip install --disable-pip-version-check --quiet \
-            -r convertion/setup/requirements.txt
-          curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
-            -o "${RUNNER_TEMP}/bicep"
-          sudo install -m 0755 "${RUNNER_TEMP}/bicep" /usr/local/bin/bicep
-
-      - name: Azure login (OIDC federated credential, no secret)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Strict pre-flight (classic runtime and lifecycle findings are blocking)
-        run: cd convertion && ./deploy.sh --dry-run
-
-      - name: Deploy (convert → verify → agents → integrations → checks)
-        run: cd convertion && ./deploy.sh
-
-      - name: Publish the deployed agent versions (release evidence, C19)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-versions-${{ github.sha }}
-          if-no-files-found: warn
-          retention-days: 365
-          path: |
-            convertion/build/agent-versions.json
-            convertion/build/manifest.json
+  # The deploy job that used to live here is now
+  # .github/workflows/deploy.yml. It triggers on `workflow_run` when THIS
+  # workflow completes successfully on `main`, so the gate order is unchanged
+  # (gates + secret-scan green → production approval → deploy.sh), and a
+  # deployment can no longer be started by editing this file alone: the two
+  # workflows are separately owned in CODEOWNERS.

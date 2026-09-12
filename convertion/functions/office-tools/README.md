@@ -110,3 +110,16 @@ the stored record opens with the numbers a reviewer approved.
 - Diagnostics go to the same Log Analytics workspace as the delivery Function
   (`infra/delivery.bicep` `diagnostics`); `FunctionAppLogs` carry file names
   and gate outcomes only, never document content.
+
+## Where this is referenced
+
+Four other files describe this container. On the next image change, check them
+together — that is what this list is for:
+
+| File | What it says about office-tools |
+|---|---|
+| `../../README.md` | folder layout + the Azure inventory entry `{baseName}-office` |
+| `../../MAPPING.md` | the "local binary toolchain" row of the Non-skill components table — the decision record for why this container exists |
+| `../../workflows/README.md` | where it sits in the render chain |
+| `../../infra/README.md` | the `stage_toolchain.py` → `az acr build` build step, and the app-settings paragraph (`OFFICE_TOOLS_BASE_URL` / `OFFICE_TOOLS_KEY` on the delivery app only) |
+| `../../agents/document_agents_addendum.md`, `../../agents/overlays/_foundry-environment.md` | which endpoint lives on which app, and that agents never call either app directly |

@@ -77,3 +77,28 @@ Full field reference: `templates/README.md`.
 - Threshold or scoring changes inside a template (e.g. moving the red
   band) additionally require the user to confirm the methodology change
   explicitly, since they alter results, not just presentation.
+
+## Open approval-run item — two recorded template defects
+
+These are already recorded in `templates/registry.json` `notes`; they are
+yours to carry through one approval cycle, not to fix silently. Both make
+`gates.deepsearch_dashboard` fail on an **otherwise correct** report:
+
+1. `templates/assets/deepsearch-dashboard.html` — `<body>` carries no
+   `data-overall-score` attribute. Approved fix:
+   `<body data-overall-score="{{OVERALL_SCORE}}">`, plus an `OVERALL_SCORE`
+   entry in `templates/deepsearch_dashboard.schema.json` and in
+   `templates/samples/deepsearch-html-dashboard.json`.
+2. `templates/assets/deepsearch-dashboard.html` **and**
+   `templates/assets/tpsrca-report.html` — the header comment contains the
+   literal string `{{PLACEHOLDERS}}`, which the gate reports as "placeholder
+   text present" whenever the producing agent keeps the comment. Approved fix:
+   reword both comments without brace tokens.
+
+Until they land, a producing agent can only pass the gate by adding the body
+attribute itself and deleting the comment — which the "fill the placeholders
+only" rule forbids. So do not advise an agent to work around it; run the
+cycle. Both belong in **one** review package (same asset, same gate): state
+that in step 4's impact list, and attach the output of
+`python3 evaluation/run_regression.py` before and after as the evidence that
+the change fixes the gate and breaks nothing else.

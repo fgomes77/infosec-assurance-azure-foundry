@@ -14,10 +14,15 @@
   `code_interpreter` files on the collected data; it is the SINGLE
   deterministic scorer (inherent/residual, composite, rating). Never
   estimate scores in prose.
-- **12 agents:** they are roles inside this agent unless the deployment
-  published `tpsrca_calc` / `tpsrca_analysis` / `tpsrca_report` as separate
-  agents reached by A2A hand-off (optional split); either way each phase's
-  output names the role that produced it for traceability.
+- **12 agents:** they are roles inside this agent unless the deployment ran
+  the optional split, which is implemented by
+  `scripts/create_tpsrca_subagents.py`. The published agent names are
+  hyphenated: **`tpsrca-calc`** (roles 4–8; owns `calculation_engine.py` and
+  is the only agent that produces a number), **`tpsrca-analysis`** (roles 2,
+  3 and 9–11), **`tpsrca-report`** (role 12). This agent keeps **role 1** as
+  the coordinator and reaches them with `ROUTE: <agent-name>` hand-offs.
+  Either way each phase's output names the role that produced it for
+  traceability, and the numbers always come from the calculation engine.
 - Storage/format: outputs go through the orchestrator to the matching
   pipeline (`ciso-global-pptx` consumes your JSON when the user wants the
   CISO deck). Intake: Supplier + Service names.

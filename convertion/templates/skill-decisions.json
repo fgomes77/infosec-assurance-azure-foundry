@@ -513,7 +513,7 @@
       "record": "convertion/MAPPING.md",
       "owner": "{upn:francisco.gomes}",
       "date": "2026-09-12",
-      "superseded_by": "convertion/scripts/memory_store.py + governance/MEMORY_POLICY.md"
+      "superseded_by": "convertion/scripts/memory_store.py + convertion/governance/MEMORY_POLICY.md + convertion/governance/MEMORY_IMPORT.md"
     },
     {
       "id": "export/algorithmic-art",
@@ -860,7 +860,7 @@
       "record": "convertion/governance/PLATFORM_SKILLS_DECISION.md",
       "owner": "{upn:francisco.gomes}",
       "date": "2026-09-12",
-      "superseded_by": "convertion/scripts/memory_store.py",
+      "superseded_by": "convertion/scripts/memory_store.py + convertion/governance/MEMORY_IMPORT.md",
       "duplicate_of": "export/import-memory"
     },
     {

@@ -21,7 +21,6 @@ Function App '{copilot-wrapper-function}') with host.json + requirements.txt.
 """
 from __future__ import annotations
 
-import base64
 import html
 import json
 import logging

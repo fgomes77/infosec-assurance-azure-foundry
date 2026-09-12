@@ -12,7 +12,8 @@
 # Placeholders only — replace {github:...} with the real GitHub handles at
 # bootstrap; convertion/team/ACCESS_REGISTER.md records who they map to.
 
-# The whole conversion kit is owned by the accountable platform owner.
+# The whole conversion kit is owned by the accountable platform owner —
+# Francisco Gustavo Gomes (convertion/team/ACCESS_REGISTER.md, RACI "A").
 /convertion/                    @{github:francisco-gomes}
 
 # Areas that change who may do what, or what the platform is allowed to do,
@@ -26,5 +27,16 @@
 /convertion/integrations/registry.json  @{github:francisco-gomes} @{github:deputy-approver}
 /convertion/templates/registry.json     @{github:francisco-gomes} @{github:deputy-approver}
 
-# CI and secret-scanning configuration protect every other gate.
+# CI and secret-scanning configuration protect every other gate: whoever can
+# edit these can edit what "green" means.
 /.github/                       @{github:francisco-gomes} @{github:deputy-approver}
+/.gitleaks.toml                 @{github:francisco-gomes} @{github:deputy-approver}
+/.pre-commit-config.yaml        @{github:francisco-gomes} @{github:deputy-approver}
+/convertion/ci/                 @{github:francisco-gomes} @{github:deputy-approver}
+
+# The deployment path and the nightly detective control are listed separately
+# from the rest of /.github/ so that a change to either is visible as such in
+# the review request (they were one file until the deploy job moved out of
+# ci.yml). The EU-residency assertion both call is under /convertion/ci/ above.
+/.github/workflows/deploy.yml        @{github:francisco-gomes} @{github:deputy-approver}
+/.github/workflows/nightly-drift.yml @{github:francisco-gomes} @{github:deputy-approver}

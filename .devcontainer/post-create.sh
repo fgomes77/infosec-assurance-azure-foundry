@@ -42,6 +42,11 @@ if ! command -v gitleaks >/dev/null 2>&1; then
     || echo "   note: gitleaks install failed — the CI job still scans every PR"
 fi
 
+echo ">> pre-commit hooks (local mirror of the CI gates)"
+python3 -m pip install --quiet pre-commit \
+  && (cd "$ROOT" && pre-commit install && pre-commit install --hook-type pre-push) \
+  || echo "   note: pre-commit install failed — run it by hand (convertion/ci/README.md §4)"
+
 echo ">> Node renderer dependencies (delivery Function renderers)"
 for pkg in "$ROOT"/convertion/functions/delivery/renderers-src/*/package.json; do
   [ -f "$pkg" ] || continue
@@ -61,9 +66,18 @@ Toolchain ready. The gates CI runs on every PR, in order:
   python3 convertion/operations/evaluation/run_evals.py --dry-run
   cd convertion && ./deploy.sh --dry-run
 
-  gitleaks detect --no-git --source . --config .github/gitleaks.toml --redact
+  python3 convertion/ci/tests/test_residency.py
+  python3 convertion/scripts/build_self_knowledge.py --check
+  python3 -m pytest convertion/functions/delivery/tests \
+    convertion/functions/office-tools/tests convertion/scripts/tests -q
 
-All of them are offline. Nothing in this container holds a credential:
+  gitleaks detect --no-git --source . --config .github/gitleaks.toml --redact
+  python3 convertion/scripts/scan_secrets.py
+
+The pre-commit hooks are installed (commit and pre-push), so the hygiene
+checks, gitleaks and the syntax/residency/kit gates run locally before a
+push. They are a convenience mirror, not the authority — CI is
+(`convertion/ci/README.md` §4). All of them are offline. Nothing in this container holds a credential:
 `az login` uses your own identity, and no secret is ever committed
 (convertion/governance/DATA_PROTECTION_GUARDRAILS.md §3).
 NOTE

@@ -14,6 +14,10 @@ schedule, GDPR Art. 30 RoPA and DORA Art. 28 evidence needs.
 
 Writers: humans only (or their client acting on an explicit instruction).
 Agents cannot call `save_memory` (`HUMAN_APPROVAL.md` scope notes).
+The line-by-line filter contract behind `save_memory` and behind a bulk
+`memory_store.py import` — what each pattern drops, the `--approved-by`
+and `MAX_BATCH` guards, and the GDPR article mapping — is
+`MEMORY_IMPORT.md`.
 
 ## 2. Note header (required — shared delta for `memory_store.py` / `server.py`)
 
@@ -48,9 +52,10 @@ change: export first (`operations/BACKUP_DR.md` §3), then re-import.
 
 | Control | Mechanism | Owner |
 |---|---|---|
-| Retention / purge | `memory_store.py purge --older-than <date>` (shared delta) run by a monthly Logic App recurrence `workflows/memory-retention.json` (shared delta); notes past `retain_until` are deleted and the run summary posted to the owner | `{upn:owner}` |
+| Retention / purge | **`scripts/cleanup_foundry.py`** is the executing script. Every horizon comes from `setup/.env`: `RETENTION_CONVERSATION_APPROVED_DAYS` (90), `RETENTION_CONVERSATION_IDLE_DAYS` (180), `RETENTION_ORPHAN_FILE_DAYS` (30), `RETENTION_ORPHAN_STORE_DAYS` (30), `RETENTION_MEMORY_MONTHS` (24) — no horizon is hard-coded. The previously-deferred `memory_store.py purge --older-than` delta is **satisfied** by `cleanup_foundry.py --memory --apply --approved-by "{upn:…}"`: the same named-human gate, notes deleted only past their own `retain_until`, both backends (vector store and search index). Reminder-only monthly workflow: `../workflows/memory-retention.json` — it never runs `--apply`, because the purge needs a named approver an unattended workflow cannot hold. Procedure, rehearsal and evidence: `../operations/RETENTION_AND_CLEANUP.md` §4, run monthly as RUNBOOK M5; `--dry-run` is offline and makes no Azure call. | `{upn:owner}` |
 | Deletion on request (data subject / supplier exit) | `memory_store.py list` → `delete <file-id>` by `subject`; evidence = run output attached to the request ticket | `{upn:owner}` / DPO channel |
 | Backup / restore | `memory_store.py export` / `import` to the immutable EU blob container (`operations/BACKUP_DR.md` §3) — weekly | as in BACKUP_DR |
+| Import of an external memory export | `memory_store.py import --from-file <export> --dry-run` then `--approved-by "{upn:…}"`; rules in `MEMORY_IMPORT.md` | `{upn:owner}` |
 | Access | write: `{group:assurance-users}` via the MCP server / CLI with Entra token; read: advisor + orchestrator agents only; no Copilot direct read | `team/TEAM_MODEL.md` |
 | Injection defence | notes are DATA (persona injection rule); prompt-injection detection on retrieval per `enterprise/memory-learning/` | platform |
 | Feedback records | `{list:PlatformFeedback}` + `build/learning/inbox/` per `../enterprise/memory/feedback-schema.json` — ids and generic descriptions only, no report content, 24-month retention | `{upn:owner}` |

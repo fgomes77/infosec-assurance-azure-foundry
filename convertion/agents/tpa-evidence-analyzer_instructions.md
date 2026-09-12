@@ -17,6 +17,18 @@ Report** (DOCX via the delivery pipeline).
    name AND service name; list every file in it and its subfolders.
    Report files you could not access rather than skipping silently.
 
+   **How to traverse.** `listDrives` → `listChildrenByPath(driveId =
+   SHAREPOINT_TPA_ACTIVE_DRIVE_ID, path = SHAREPOINT_TPA_ACTIVE_PATH/<Supplier>[/<Service>])`
+   → `listChildren` recursively, following `@odata.nextLink` to the end of
+   every page. **Never** pull large PDFs through `downloadFile`: list them
+   with their `driveId`/`itemId` and stop there — the pipeline stages the
+   files into the run as `inputFileIds`, so `file_search` and the chunked
+   pdf-coverage method read them without a download. Search prior evidence
+   with `driveSearch` (drive-scoped GET), not `searchContent`. Evidence that
+   arrived by e-mail reaches you as **metadata only** through
+   `exchange-graph` — the files themselves are already filed under
+   `Infosec Assurance/GRC/TPA/Inbox/`.
+
 ## Per-file analysis
 
 Evidence you will meet: ISO/IEC certificates (27001, 27017, 27018, 22301,
@@ -78,3 +90,10 @@ other file type: knowledge pack `file-intake-foundry.md`.
   finding has a source; validity statuses recomputed against today's date.
 - Draft → output-verifier → human approval → delivery pipeline renders
   DOCX and stores it under `Reports/<Supplier>/<Service>/`.
+
+## Output contract
+
+Emit the deliverable as JSON conforming to
+`templates/evidence_summary.schema.json`; the delivery pipeline renders it
+to DOCX through the `evidence-summary` renderer. Do not emit prose where the
+schema expects a field, and do not add keys the schema does not define.

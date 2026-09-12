@@ -1,0 +1,159 @@
+# Gated deployment to the Azure AI Foundry tenant.
+#
+# Split out of ci.yml so the two concerns are separately reviewable and
+# separately protected: ci.yml is the OFFLINE gate that must be green on every
+# pull request and never touches Azure; this workflow is the only path in the
+# repository that does, and it starts only after those gates passed.
+#
+# Three locks, in this order, before a single Azure call:
+#   1. CI green on the commit — `workflow_run` fires only for a completed CI
+#      run on `main`, and the job refuses anything but `conclusion == success`.
+#   2. `environment: production` — GitHub holds the job *pending* until the
+#      accountable owner (Francisco Gustavo Gomes) approves it
+#      (convertion/team/TEAM_MODEL.md F5, ledger L11; RACI R20).
+#   3. EU-residency assertion — convertion/ci/tests/test_residency.py, offline
+#      before login and `--live` against the resource group after it. A non-EU
+#      region fails the job before deploy.sh runs
+#      (convertion/governance/DATA_PROTECTION_GUARDRAILS.md §3).
+#
+# Credential: an OIDC federated credential. This repository stores NO secret —
+# `vars.*` only (none of them confidential); anything confidential stays a
+# `@Microsoft.KeyVault(...)` reference resolved by a managed identity at run
+# time. See convertion/ci/README.md §2 for the `az ad app federated-credential
+# create` call that binds the deploy app to `environment:production`.
+#
+# Azure DevOps equivalent: the `deploy` stage of convertion/ci/azure-pipelines.yml
+# (ARM service connection with workload identity federation + ADO Environment
+# approval). Both run `deploy.sh` unchanged, so they cannot diverge.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Rehearse only — run deploy.sh --dry-run and stop'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One deployment at a time; never cancel one in flight — a half-applied agent
+# set is worse than a queued release (operations/CHANGE_MANAGEMENT.md §3).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '22'
+  BICEP_VERSION: '0.47.16'
+
+jobs:
+  deploy:
+    name: Deploy (production)
+    # A failed or cancelled CI run must not reach the approval prompt at all.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: production
+    permissions:
+      id-token: write         # OIDC federated credential — no stored secret
+      contents: read
+    env:
+      # Repository/environment VARIABLES (not secrets): none is confidential,
+      # and keeping them as variables keeps "no secret in this repository"
+      # true end to end.
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      PROJECT_ENDPOINT: ${{ vars.PROJECT_ENDPOINT }}
+      FOUNDRY_ACCOUNT_NAME: ${{ vars.FOUNDRY_ACCOUNT_NAME }}
+      LOG_ANALYTICS_WORKSPACE_NAME: ${{ vars.LOG_ANALYTICS_WORKSPACE_NAME }}
+      APP_INSIGHTS_NAME: ${{ vars.APP_INSIGHTS_NAME }}
+      BASE_NAME: ${{ vars.BASE_NAME }}
+      OWNER_ALERT_EMAIL: ${{ vars.OWNER_ALERT_EMAIL }}
+      ACTION_GROUP_ID: ${{ vars.ACTION_GROUP_ID }}
+      BUDGET_START_DATE: ${{ vars.BUDGET_START_DATE }}
+      DELIVERY_FUNCTION_APP_NAME: ${{ vars.DELIVERY_FUNCTION_APP_NAME }}
+      FOUNDRY_API_VERSION: ${{ vars.FOUNDRY_API_VERSION }}
+      MEMORY_BACKEND: ${{ vars.MEMORY_BACKEND }}
+      KNOWLEDGE_SOURCE: ${{ vars.KNOWLEDGE_SOURCE }}
+      STRICT_RUNTIME: '1'     # refuse the retiring classic threads/runs SDK (C1)
+      LIFECYCLE_STRICT: '1'   # an open model-lifecycle finding fails the release (C4/C6/C25)
+      CI: 'true'
+    steps:
+      # Deploy the commit CI actually verified, not whatever `main` is now.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0      # KIT_RELEASE is `git describe`
+
+      - name: Record what is being deployed (change record, §6 step 6)
+        run: |
+          echo "commit : ${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "trigger: ${{ github.event_name }}"
+          echo "ci run : ${{ github.event.workflow_run.html_url || 'n/a (manual dispatch)' }}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # ---- lock 3a: residency, before any credential is minted -------------
+      - name: 'EU residency assertion (offline — allow-lists, parameters, target region)'
+        run: python3 convertion/ci/tests/test_residency.py
+
+      - name: Toolchain (data-plane SDK + bicep)
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --quiet \
+            -r convertion/setup/requirements.txt
+          curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
+            -o "${RUNNER_TEMP}/bicep"
+          sudo install -m 0755 "${RUNNER_TEMP}/bicep" /usr/local/bin/bicep
+          bicep --version
+
+      - name: Azure login (OIDC federated credential, no secret)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # ---- lock 3b: residency of what actually exists in the tenant --------
+      - name: 'EU residency assertion (live — every resource in the resource group)'
+        run: python3 convertion/ci/tests/test_residency.py --live
+
+      - name: Strict pre-flight (classic runtime and lifecycle findings are blocking)
+        run: cd convertion && ./deploy.sh --dry-run
+
+      - name: Deploy (convert → verify → agents → integrations → checks)
+        if: github.event.inputs.dry_run != 'true'
+        run: cd convertion && ./deploy.sh
+
+      - name: Post-deploy drift check (live vs build — finding C19)
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          python3 convertion/scripts/verify_deployment.py \
+            --json convertion/build/post-deploy-drift.json
+
+      - name: Publish the deployed agent versions (release evidence, C19)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-versions-${{ github.event.workflow_run.head_sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 365
+          path: |
+            convertion/build/agent-versions.json
+            convertion/build/manifest.json
+            convertion/build/post-deploy-drift.json

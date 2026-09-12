@@ -1,0 +1,148 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "meta": {
+    "supplier": "Northwind Cloud Services BV",
+    "service": "Managed SFTP Gateway",
+    "assessment_id": "9001",
+    "assessment_date": "2026-08-28",
+    "report_date": "2026-09-10",
+    "criticality": "Non-critical",
+    "classification": "Euronext Internal — CISO"
+  },
+  "contract_owner": {
+    "name": "TO CONFIRM — Contract Owner",
+    "entity": "Euronext Group Technology",
+    "role": "Service owner",
+    "source": "CMDB business service object (sample)"
+  },
+  "enx_entities": [
+    {
+      "entity": "Euronext Group entity A",
+      "usage": "user",
+      "data_types": "Operational file exchange metadata"
+    },
+    {
+      "entity": "Euronext Group entity B",
+      "usage": "user+impacted",
+      "data_types": "Counterparty reference data"
+    }
+  ],
+  "service_description": {
+    "summary": "Managed SFTP gateway used to exchange operational files with market participants.",
+    "delivery_model": "SaaS, EU region, single tenant per customer",
+    "data_processed": "Operational file payloads and transfer metadata; no special-category personal data",
+    "connectivity": "Public endpoint restricted by IP allow-list; SSO via the corporate IdP"
+  },
+  "supplier_description": {
+    "profile": "EU-headquartered private software company, ~300 staff, managed file transfer only.",
+    "certifications": [
+      "ISO 27001",
+      "SOC 2 Type II (under NDA)"
+    ],
+    "sub_outsourcing": "Hyperscaler hosting in the EU; sub-processor list not published (open action)."
+  },
+  "risk_resume": {
+    "posture_bullets": [
+      "Maximum residual 5.2 (Medium) driven by vulnerability management.",
+      "External perimeter certified; internal treatment plans open.",
+      "DORA in scope — Art. 30 addendum outstanding."
+    ],
+    "risk_counts": {
+      "high": 0,
+      "medium": 2,
+      "low": 4
+    },
+    "controls_status": [
+      {
+        "domain": "Cybersecurity",
+        "implemented": 8,
+        "partial": 2,
+        "missing": 1
+      },
+      {
+        "domain": "Data Management",
+        "implemented": 6,
+        "partial": 1,
+        "missing": 0
+      },
+      {
+        "domain": "IT",
+        "implemented": 7,
+        "partial": 0,
+        "missing": 0
+      },
+      {
+        "domain": "Business Continuity",
+        "implemented": 4,
+        "partial": 2,
+        "missing": 1
+      },
+      {
+        "domain": "Third-Parties",
+        "implemented": 5,
+        "partial": 1,
+        "missing": 1
+      }
+    ],
+    "key_gaps": [
+      "Patch evidence for two advisories",
+      "Published sub-processor list",
+      "DR test evidence"
+    ]
+  },
+  "exposure": {
+    "internal": [
+      {
+        "node": "Corporate IdP federation",
+        "risk": "green",
+        "note": "Conditional access enforced"
+      },
+      {
+        "node": "SOC log ingestion",
+        "risk": "amber",
+        "note": "Integration pending"
+      }
+    ],
+    "external": [
+      {
+        "node": "Public SFTP endpoint",
+        "risk": "amber",
+        "note": "IP allow-list only"
+      },
+      {
+        "node": "Hyperscaler hosting (fourth party)",
+        "risk": "green",
+        "note": "EU region"
+      }
+    ]
+  },
+  "scores": {
+    "inherent": 7.5,
+    "residual": 5.2,
+    "driver_note": "Residual driven by vulnerability management and the open DR evidence."
+  },
+  "enx_actions": [
+    {
+      "id": "A1",
+      "action": "Sign the Art. 30 contractual addendum.",
+      "priority": "High",
+      "target_date": "2026-10-15",
+      "owner": "TO CONFIRM — Contract Owner"
+    },
+    {
+      "id": "A2",
+      "action": "Obtain patch evidence for the two open advisories.",
+      "priority": "High",
+      "target_date": "2026-10-01",
+      "owner": "TO CONFIRM — Contract Owner"
+    },
+    {
+      "id": "A3",
+      "action": "Complete SOC log integration.",
+      "priority": "Medium",
+      "target_date": "2026-11-30",
+      "owner": "TO CONFIRM — Contract Owner"
+    }
+  ],
+  "recommendation": "Proceed with conditions"
+}

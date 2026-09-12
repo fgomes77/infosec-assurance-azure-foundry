@@ -15,9 +15,13 @@ the rules; the executable implementation is the Azure Function in
 | DPO deliverables | `Reports/DPO/<Supplier>/<Service>/` | pipeline b |
 | Evidence repository (read-only input) | `Infosec Assurance/GRC/TPA/Active/<Supplier>[/<Service>]/` | tpa-evidence-analyzer (d2) |
 | Template library (managed by req. j) | `Templates/` | template-manager |
+| Advisory deliverables (g/h, living documents) | `Advisory/<Framework-or-Topic>/<Subtopic>/` | pipeline `advisory-file-delivery` (`SHAREPOINT_ADVISORY_ROOT_ITEM_ID`) |
+| Threat-intel briefs not tied to a vendor | `Reports/General/Threat-Intel/` | pipeline `cyber-forum-brief` |
+| Evidence received by e-mail | `Infosec Assurance/GRC/TPA/Inbox/<Supplier>/<Service>/` | workflow `mailbox-intake` (a human moves it to `TPA/Active/`) |
+| Personal morning briefs | the user's own OneDrive `/Morning Brief/` (7-day retention) | workflow `morning-brief` |
 
 Configure the actual site id and library root once in
-`../setup/.env` (`SHAREPOINT_SITE_ID`, `SHAREPOINT_REPORTS_ROOT`); the
+`../setup/.env` (`SHAREPOINT_SITE_ID`, `SHAREPOINT_REPORTS_ROOT_ITEM_ID`); the
 Function and the workflows read them from parameters — no hard-coded ids.
 
 ## The folder rule (verbatim requirement)
@@ -54,6 +58,39 @@ Properties this guarantees:
   before lookup, so "Acme Corp." and "Acme Corp. " land in one folder.
   Matching is case-insensitive (SharePoint folder names are).
 
+## HTML dashboards in the Reports library
+
+The DeepSearch and CISO executive-summary dashboards are stored as
+**self-contained `.html` files**. SharePoint serves an `.html` file as a
+download rather than rendering it inline; that is the accepted default —
+the downloaded file is byte-identical to the artefact the agent produced and
+opens locally with no network access. Rendered hosting is optional
+(`../infra/static-web-app.bicep`, `enableStaticWebApp`: an EU-region Azure
+Static Web App with Entra Easy Auth serving approved dashboards from the
+deliverables container — **not deployed by default**). Registered HTML
+templates must therefore never reference a CDN script (Chart.js and any
+other vendor library is inlined), so the file opens offline and no Euronext
+data is fetched from the web.
+
+Naming convention mapping: the claude.ai-era Google Drive path
+`TPA Ai/{Supplier}/TPSRCA_*.html` maps to
+`Reports/<Supplier>/<Service>/DeepSearch_*.html` here.
+
+## Lists written only by the delivery Function
+
+Both lists live on the same site and are written **exclusively by the
+delivery Function's managed identity, after the human approval gate** — no
+Logic App connector and no agent can write to them.
+
+| List | Columns |
+|---|---|
+| `TPRM Portfolio` | `SupplierName`, `ServiceName`, `TPAStatus` (`Ongoing` \| `Complete`), `LastDeepSearchUrl`, `LastCisoDeckUrl`, `UpdatedBy`, `UpdatedAt` — upserted on `SupplierName`+`ServiceName` by `POST /api/portfolio_update` |
+| `TPSRCA History` | `SupplierName`, `ServiceName`, `AssessmentDate`, `Composite`, `ReportType`, `ReportUrl`, `RunId` — append-only via `POST /api/history_append` |
+
+The `Supplier Watchlist` list (read by `workflows/scheduled-deepsearch.json`)
+carries `SupplierName`, **`ServiceName`** (text) and **`Active`** (Yes/No) in
+addition to its existing columns; the Logic App reads it and never writes it.
+
 ## File naming
 
 `<ReportType>_<Supplier>_<Service>_<YYYY-MM-DD>.<ext>` — e.g.
@@ -69,6 +106,13 @@ After upload the pipeline creates an organisation-scoped view link
 and to the Teams notification. No anonymous links, ever.
 
 ## Permissions
+
+**Google Drive → SharePoint (Graph) mapping.** Agents are read-only
+(`Sites.Selected` read: `listDrives`, `listChildren`, `listChildrenByPath`,
+`getItemByPath`, `driveSearch`, small-file download); the delivery Function's
+managed identity is the only writer (`Sites.Selected` write); share links are
+organisation-scoped view links; the DPO library `Reports/DPO/` carries unique
+permissions (DPO Visitors read, delivery MI write, no agent access).
 
 The delivery Function's managed identity is the ONLY writer
 (`Sites.Selected` granted write on the InfoSec Assurance site). Agents hold
@@ -88,6 +132,13 @@ no `sensitivity_label` is configured for the report type
 the pipeline skips the call and the library default stands. Labelling is a
 write, so it stays with the one writer — no agent and no Logic App connector
 ever labels a file.
+
+**Bootstrap.** `../scripts/sharepoint_bootstrap.py` (see
+`../functions/delivery/README.md`) performs the `Sites.Selected` grant and
+prints `SHAREPOINT_SITE_ID`, `SHAREPOINT_REPORTS_DRIVE_ID`,
+`SHAREPOINT_REPORTS_ROOT_ITEM_ID`, `SHAREPOINT_DPO_ROOT_ITEM_ID`,
+`SHAREPOINT_ADVISORY_ROOT_ITEM_ID` and `SHAREPOINT_TEMPLATES_REVIEWS_ITEM_ID`
+for `../setup/.env`.
 
 Per-user site roles for the five assurance users, the owner and the DPO, the
 custom "Contribute (no delete)" level, the unique permissions on `Reports/`,

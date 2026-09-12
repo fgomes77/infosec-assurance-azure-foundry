@@ -1,0 +1,46 @@
+{
+  "title": "Supplier security review — follow-up interview",
+  "supplier": "Placeholder Supplier A",
+  "service": "Managed Detection and Response",
+  "recordingDate": "2026-09-03",
+  "classification": "Euronext Internal",
+  "locale": "en-GB",
+  "engine": "Azure AI Speech batch transcription (diarization on, EU region)",
+  "speakerNames": {
+    "Speaker 1": "Assurance lead (Euronext)",
+    "Speaker 2": "Security manager (supplier)"
+  },
+  "participants": [
+    "Assurance lead (Euronext)",
+    "Security manager (supplier)"
+  ],
+  "summary": [
+    "The supplier confirmed the SOC 2 Type 2 report covers the managed detection service for the period ending 2026-06-30.",
+    "Two of the five CUECs in the report are the responsibility of Euronext and were not previously tracked.",
+    "The supplier could not confirm whether sub-processor personnel are in scope of the certificate; this is left open."
+  ],
+  "actions": [
+    {"action": "Record the two Euronext-side CUECs in the controls register", "owner": "Assurance lead", "due": "2026-09-17"},
+    {"action": "Request the sub-processor scope statement in writing", "owner": "Security manager", "due": "2026-09-24"}
+  ],
+  "notes": [
+    "Speaker labels were mapped from the diarization output in the approved contract, not inferred by the renderer.",
+    "No normalisation was applied to the recognised text."
+  ],
+  "sources": [
+    "Recording filed under Infosec Assurance/GRC/TPA/Active/Placeholder Supplier A/Managed Detection and Response/"
+  ],
+  "language": "en-GB",
+  "diarized": true,
+  "duration_seconds": 184.4,
+  "speakers": ["Speaker 1", "Speaker 2"],
+  "turns": [
+    {"speaker": "Speaker 1", "start": 0.0, "end": 11.2, "text": "Thanks for making the time. I want to close two points from the evidence review: the period the SOC 2 report covers, and the complementary user entity controls.", "confidence": 0.94},
+    {"speaker": "Speaker 2", "start": 11.9, "end": 24.6, "text": "Of course. The Type 2 report covers the twelve months ending on the thirtieth of June this year, and the managed detection service is in scope for the whole period.", "confidence": 0.92},
+    {"speaker": "Speaker 1", "start": 25.1, "end": 38.0, "text": "Good. There are five CUECs listed. My reading is that two of them sit with us rather than with you — the ones about alert triage windows and about maintaining the asset inventory we send you.", "confidence": 0.93},
+    {"speaker": "Speaker 2", "start": 38.7, "end": 49.3, "text": "That is correct. Those two are entity responsibilities. The other three are ours and they are covered by the controls tested in the report.", "confidence": 0.95},
+    {"speaker": "Speaker 1", "start": 50.0, "end": 62.5, "text": "Last one. Does the certificate scope include the personnel of your sub-processors, or only your own staff?", "confidence": 0.91},
+    {"speaker": "Speaker 2", "start": 63.2, "end": 78.4, "text": "I would have to check that with our compliance team. I do not want to answer from memory on something that goes into your assessment.", "confidence": 0.90},
+    {"speaker": "Speaker 1", "start": 79.0, "end": 88.1, "text": "Understood. I will record it as open and we will take the written scope statement when you have it.", "confidence": 0.94}
+  ]
+}

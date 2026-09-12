@@ -150,10 +150,17 @@ def list_agents() -> list[dict]:
 
 
 @mcp.tool()
-def save_memory(note: str) -> str:
+def save_memory(note: str, subject: str = "", author: str = "") -> str:
     """Persist a durable team-memory note (decision, supplier fact, agreed
     position) into the team's durable memory. One self-contained fact per
-    call; no special-category or personal data."""
+    call; no special-category or personal data.
+
+    `subject` is the deletion handle — use the SharePoint `<Supplier>` or
+    `<Supplier>/<Service>` name for supplier notes so a later GDPR Art. 17
+    request can delete by subject (governance/MEMORY_POLICY.md §2). `author`
+    is the caller's UPN; it is written into the note header. The reply names
+    the stored note's id, so the caller can cite what to delete without a
+    separate `memory_store.py list` run (delta D-MI-M1)."""
     text = note.strip()
     if not text:
         return "nothing to store"
@@ -163,10 +170,16 @@ def save_memory(note: str) -> str:
         if SPECIAL_CATEGORY.search(text):
             return ("rejected: the note contains special-category or "
                     "personal data (governance/MEMORY_POLICY.md)")
+        subj = subject.strip()
+        who = author.strip() or os.environ.get("MEMORY_AUTHOR_UPN", "")
         if memory_backend() == "search-index":
-            return f"stored as {SearchBackend().add(text)}"
-        rt = runtime()
-        return f"stored as {store_note(rt, find_store(rt), text)}"
+            note_id = SearchBackend().add(text, author=who, subject=subj)
+        else:
+            rt = runtime()
+            note_id = store_note(rt, find_store(rt), text,
+                                 author=who, subject=subj)
+        return (f"stored as {note_id} — delete it with "
+                f"`memory_store.py delete {note_id.split()[0]}`")
     except SystemExit as exc:   # memory_store exits on missing config
         return f"not stored: {exc}"
     except Exception as exc:    # noqa: BLE001

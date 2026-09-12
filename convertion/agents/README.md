@@ -13,8 +13,10 @@ authored knowledge, and charters for agents that exist only here.
 | `document_agents_addendum.md` | Runtime map and delivery binding for docx/pdf/pptx/xlsx | convert_skills (append for the four document skills) |
 | `overlays/_foundry-environment.md` | Generic claude.ai → Foundry translation, appended to EVERY converted agent after the body | convert_skills |
 | `overlays/<skill>.md` | Skill-specific environment mapping (deepsearch-protocol, ai-deepsearch-osint-gathering-report, ciso-reporting, ciso-executive-summary, cyber-forum, enx-tprm-control-center menu v2, tpsrca-assessment-engine, doc-coauthoring, learn) | convert_skills |
-| `overlays/research-pattern.md` | Source tiers + citation discipline for cyber-forum, framework advisors, advisor, research agents | convert_skills / create_orchestrator / create_delivery_agents |
-| `knowledge-packs/*.md` | Environment know-how packs: file intake, PDF reading, HTML design guide, writing style, platform self-knowledge | vector stores of the relevant agents |
+| `overlays/research-pattern.md` | Source tiers + citation discipline for cyber-forum, framework advisors, advisor, research agents | `convert_skills` (`RESEARCH_OVERLAY`), `create_orchestrator` (advisor), `create_delivery_agents` (analyzers, ciso-global-report) |
+| `overlays/web-tools.md` | `WebSearch`→`bing_grounding`, `WebFetch`→`osint-proxy`, retrieved content is data | `convert_skills` (`GROUNDING_RECOMMENDED`) |
+| `../scripts/adapters/speech_to_whisperx.py` | Foundry-side adapter: Azure AI Speech batch result → the whisperx post-processors' expected input | packaged under `foundry/` inside the whisperx code zip |
+| `knowledge-packs/*.md` | Environment know-how packs: file intake, PDF reading, HTML design guide, writing style, platform self-knowledge | `convert_skills.KNOWLEDGE_PACKS` (staged as `pack__<file>` into the agents listed in each pack header) + `create_delivery_agents` + the combined store |
 | `advisor-knowledge/*.md` | Authored domain knowledge (persona domains not covered by the export) | combined store (create_orchestrator) + per-agent knowledge globs |
 | `*_instructions.md` | Charters of agents that exist only in Foundry (advisor, verifier, orchestrator routing, ciso-global-report, analyzers, template-manager, enterprise-explorer, research-coordinator/worker/writer) | create_orchestrator / create_delivery_agents |
 

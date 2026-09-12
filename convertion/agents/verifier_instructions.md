@@ -20,11 +20,21 @@ assessment data.
    is present and non-empty (e.g. a CISO executive summary: supplier
    identification, scope, risk scores, findings, controls status,
    recommendation; a Jira finding: title, description, severity, owner,
-   due date).
+   due date; a threat-intel brief: sections BLUF, DETAIL, ENX RELEVANCE,
+   RECOMMENDATION, SOURCES — all non-empty, and SOURCES lists at least one
+   dated source; an internal communication (Teams post): audience, purpose,
+   action/ask, owner, date).
 2. **Internal consistency:** scores, ratings and colour bands agree with
-   the stated thresholds (TPRM classification High ≥7.0 / Medium ≥4.0;
-   score-colour bands red ≥5.5 / amber ≥4.0 where the slide templates use
-   them); totals and counts match the listed items; dates are coherent.
+   the thresholds of the deliverable's **own** scale, per
+   `governance/RISK_THRESHOLDS.md` §1 — OneTrust 1–25 (>12 HIGH, >4 MEDIUM,
+   ≤4 LOW) for ciso-reporting / ciso-executive-summary / dpia; the TPRM
+   10-scale (High ≥7.0, Medium ≥4.0; colour red ≥5.5, amber ≥4.0) for
+   tprm-slide-generator / pptx-executive-summary-ciso / the ciso-global
+   gauges; TPSRCA risk bands 20–25 Critical, 15–19 High, 10–14 Medium, 1–9
+   Low and framework percentages <50 / 50–69 / 70–79 / 80–100. FAIL only
+   when a score disagrees with ITS OWN scale — never because it disagrees
+   with a different deliverable's scale. Totals and counts match the listed
+   items; dates are coherent.
 3. **Grounding:** every regulatory or framework claim names its source
    (article, control id, or knowledge-base document); quotes match the
    cited source when it is supplied.
@@ -69,8 +79,9 @@ assessment data.
 - **CyberForum / CISOExecSummary (ciso-reporting / ciso-executive-summary
   JSON + HTML):** verified assessment JSON keys complete; residual-risk
   scores match the OT PDF exactly; 5-domain spider values present;
-  perimeter (internal/external) analysis present; score-colour bands red
-  ≥5.5 / amber ≥4.0; TPRM classification High ≥7.0 / Medium ≥4.0.
+  perimeter (internal/external) analysis present; residual scores on the
+  OneTrust 1–25 scale: >12 HIGH red `#DC2626`, >4 and ≤12 MEDIUM amber
+  `#D97706`, ≤4 LOW teal `#007D71`.
 - **CISOGlobal (`ciso_global_deck.schema.json`):** the 9 required top-level
   keys present (`meta`, `contract_owner`, `enx_entities`,
   `service_description`, `supplier_description`, `risk_resume`,
@@ -99,6 +110,11 @@ assessment data.
 - **Advisory (DOCX/XLSX/PPTX/HTML files):** title, date, classification,
   sources section; house style (Verdana, teal accents) unless a
   registered template governs; no restyled registered template.
+- **FullCoverage (pdf-full-coverage-analyzer deliverables):** the coverage
+  statement is present (pages, words, characters and chunks processed) and
+  the Verdict is COMPLETE — or PARTIAL carrying an explicit user-acceptance
+  line; synthesis sections appear only after the verdict; the
+  `auditArtifacts` list is non-empty.
 - **TEMPLATE_UPDATE (template-manager review package):** before/after
   preview, complete change summary (old → new per element), impact list
   (agents, pipelines, schemas), registry version bump proposed, any

@@ -97,3 +97,11 @@ PPTX yourself; the template guarantees brand consistency.
   rendering and SharePoint storage — remind the user of this; never
   present the deck as released.
 - No personal data beyond names/roles already in the source assessment.
+
+## Scale awareness (`governance/RISK_THRESHOLDS.md`)
+
+`scores.inherent` and `scores.residual` are on the **TPRM 10-scale**
+(High ≥7.0, Medium ≥4.0). If an input carries OneTrust **1–25** residual
+scores, do **not** re-map them onto the 0–10 gauges. Report them in their
+own scale inside the `risk_resume` text and mark the gauge value
+`"TO CONFIRM"` until the team approves a documented conversion rule.

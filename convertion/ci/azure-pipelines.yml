@@ -1,6 +1,13 @@
-# Azure DevOps equivalent of .github/workflows/ci.yml — same scripts, same
-# order, same gates, so whichever platform the team's repository lives on the
-# evidence is identical (operations/CHANGE_MANAGEMENT.md §6 step 6).
+# Azure DevOps equivalent of .github/workflows/ci.yml + deploy.yml — same
+# scripts, same order, same gates, so whichever platform the team's repository
+# lives on the evidence is identical (operations/CHANGE_MANAGEMENT.md §6
+# step 6). GitHub splits gates and deployment into two workflows because
+# `workflow_run` is how one waits for the other; ADO expresses the same
+# dependency as `dependsOn: gates` inside one pipeline, so it stays one file.
+# The nightly detective control (.github/workflows/nightly-drift.yml) has no
+# stage here — schedule it as a separate ADO pipeline running
+# `verify_deployment.py` + `team/access-review.sh` with the read-only service
+# connection.
 #
 # Register it in Azure DevOps as: Pipelines → New → existing YAML file →
 # path `/convertion/ci/azure-pipelines.yml`.
@@ -64,6 +71,12 @@ stages:
 
           - script: python3 convertion/scripts/convert_skills.py
             displayName: '[1] Convert skills from the claude.ai export'
+            # The gate builds the FULL set so the fidelity check covers every
+            # agent. Building is not deploying: governance/THIRD_PARTY_IP.md §2
+            # gates the conversion so nobody ships the Anthropic-licensed agents
+            # unaware, and deploy.sh requires the same variable deliberately.
+            env:
+              ACCEPT_ANTHROPIC_LICENSE: '1'
 
           - script: python3 convertion/scripts/verify_conversion.py
             displayName: '[2] Verify conversion fidelity'
@@ -73,6 +86,20 @@ stages:
 
           - script: convertion/ci/syntax_check.sh
             displayName: '[4] Syntax gate (python, json, yaml, js, bicep, shell)'
+
+          - script: python3 convertion/ci/tests/test_residency.py
+            displayName: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'
+
+          - script: python3 convertion/scripts/build_self_knowledge.py --check
+            displayName: '[4c] Self-knowledge pack is in step with the kit'
+
+          - script: |
+              set -euo pipefail
+              python3 -m pip install --quiet pytest jsonschema
+              python3 -m pytest convertion/functions/delivery/tests \
+                convertion/functions/office-tools/tests \
+                convertion/scripts/tests -q
+            displayName: '[4d] Function test suites (offline — azure.* stubbed)'
 
           - script: convertion/infra/validate.sh
             displayName: '[5] Infrastructure policy gate (EU residency, C5/C6/C11/C12/C22)'
@@ -176,6 +203,17 @@ stages:
                     curl -sSLf "https://github.com/Azure/bicep/releases/download/v$(bicepVersion)/bicep-linux-x64" -o "$(Agent.TempDirectory)/bicep"
                     sudo install -m 0755 "$(Agent.TempDirectory)/bicep" /usr/local/bin/bicep
                   displayName: Toolchain (data-plane SDK + bicep)
+
+                - script: python3 convertion/ci/tests/test_residency.py
+                  displayName: 'EU residency assertion (offline, before any credential)'
+
+                - task: AzureCLI@2
+                  displayName: 'EU residency assertion (live — every resource in the RG)'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: python3 convertion/ci/tests/test_residency.py --live
 
                 - task: AzureCLI@2
                   displayName: Deploy (convert → verify → agents → integrations → checks)

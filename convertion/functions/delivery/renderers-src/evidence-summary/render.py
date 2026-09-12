@@ -15,6 +15,7 @@ agents (verified + human-approved before this runs):
   "identification": [{"field": str, "value": str}, ...],
   "inventory":  [{...}] | null,              # d2 per-file table (any keys)
   "findings":   [{"id","title","severity","source","detail","status"?}, ...],
+  "auditArtifacts": [{"name","sha256","path"?,"bytes"?}, ...]   # optional
   "cuecs":      [{...}] | null,              # SOC CUEC mapping (any keys)
   "timeline":   [{...}] | null,              # d2 validity timeline
   "actions":    [{"action","priority","owner","due"?}, ...]
@@ -110,6 +111,15 @@ def main() -> int:
     if data.get("actions"):
         h(doc, "Recommended Actions")
         table(doc, data["actions"])
+
+    if data.get("auditArtifacts"):
+        # The coverage evidence of a chunked full-coverage analysis. The report
+        # names its own audit trail, so a reader can check the artefacts the
+        # pipeline filed under Reports/<Supplier>/<Service>/audit/<date>/
+        # without going back to the run (DATA_PROTECTION_GUARDRAILS.md §4).
+        h(doc, "Appendix — Audit artefacts")
+        table(doc, [{"name": a.get("name", ""), "sha256": a.get("sha256", "")}
+                    for a in data["auditArtifacts"]], ["name", "sha256"])
 
     doc.add_paragraph()
     foot = doc.add_paragraph(

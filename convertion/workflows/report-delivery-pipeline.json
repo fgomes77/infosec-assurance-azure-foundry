@@ -703,6 +703,99 @@
                   ]
                 }
               },
+              "If_audit_artefacts": {
+                "_comment": "Most deliverables carry no auditArtifacts; skip the folder creation entirely rather than making an empty audit/<date> folder on every run.",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "greater": [
+                        "@length(coalesce(body('Render_report_file')?['auditArtifacts'], json('[]')))",
+                        0
+                      ]
+                    }
+                  ]
+                },
+                "actions": {
+                  "Ensure_audit_folder": {
+                    "_comment": "The audit subfolder is created with the SAME ensure_folder endpoint as the supplier/service folders (idempotent, race-safe, never a duplicate). /api/upload takes a folderId, not a path, so the folder is resolved first rather than teaching the upload endpoint a second addressing mode.",
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/ensure_folder",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "driveId": "@{parameters('sharepointDriveId')}",
+                        "rootItemId": "@{parameters('libraryRootItemId')}",
+                        "segments": [
+                          "@{outputs('Resolve_supplier_name')}",
+                          "@{outputs('Resolve_service_name')}",
+                          "audit",
+                          "@{formatDateTime(utcNow(),'yyyyMMdd')}"
+                        ]
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "Upload_audit_artefacts": {
+                    "_comment": "A chunked full-coverage analysis must ship its coverage evidence WITH the report (governance/DATA_PROTECTION_GUARDRAILS.md section 4): chunk inventory, per-chunk extraction, coverage statement, verdict. Each artefact goes to Reports/<Supplier>/<Service>/audit/<yyyyMMdd>/ through the same managed identity, inside the same approval - it is part of the approved deliverable, not a separate submission, so it needs no second gate. Empty for every deliverable that carries no auditArtifacts, which is most of them.",
+                    "type": "Foreach",
+                    "foreach": "@coalesce(body('Render_report_file')?['auditArtifacts'], json('[]'))",
+                    "actions": {
+                      "Upload_one_audit_artefact": {
+                        "type": "Http",
+                        "inputs": {
+                          "method": "POST",
+                          "uri": "@{parameters('deliveryFunctionBaseUrl')}/upload",
+                          "queries": {
+                            "code": "@parameters('deliveryFunctionKey')"
+                          },
+                          "headers": {
+                            "Content-Type": "application/json"
+                          },
+                          "body": {
+                            "driveId": "@{parameters('sharepointDriveId')}",
+                            "folderId": "@{body('Ensure_audit_folder')?['folderId']}",
+                            "fileName": "@{items('Upload_audit_artefacts')?['name']}",
+                            "contentBase64": "@{items('Upload_audit_artefacts')?['contentBase64']}",
+                            "share": false
+                          },
+                          "retryPolicy": {
+                            "type": "exponential",
+                            "count": 4,
+                            "interval": "PT10S"
+                          }
+                        }
+                      }
+                    },
+                    "runtimeConfiguration": {
+                      "concurrency": {
+                        "repetitions": 1
+                      }
+                    },
+                    "runAfter": {
+                      "Ensure_audit_folder": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Upload_and_share": [
+                    "Succeeded"
+                  ]
+                }
+              },
               "If_sensitivity_label_set": {
                 "_comment": "Finding C16 / ENTERPRISE_BLUEPRINT PUR-1: every delivered report of record carries a Purview sensitivity label. The delivery Function (the only SharePoint writer) calls Graph driveItem:assignSensitivityLabel with its managed identity; the call is asynchronous and metered. Skipped when no label id is configured - the library default label then applies (sharepoint/README.md).",
                 "type": "If",
@@ -719,7 +812,7 @@
                   ]
                 },
                 "runAfter": {
-                  "Upload_and_share": [
+                  "If_audit_artefacts": [
                     "Succeeded"
                   ]
                 },

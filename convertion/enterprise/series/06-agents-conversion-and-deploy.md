@@ -77,15 +77,17 @@ if __name__ == "__main__":
 |---|---|---|
 | B1 | `python3 scripts/convert_skills.py` | export → `build/agents/*` + `build/manifest.json` (offline, deterministic) |
 | B2 | `python3 scripts/verify_conversion.py` | templates, thresholds, scripts byte-identical to the claude.ai originals; secret grep; coverage |
-| B3 | `python3 scripts/create_agents.py --dry-run` then live | 35 agents: persona preamble + instructions + APPROVAL GATE block; per-agent vector store `vs-<agent>`; code_interpreter files |
+| B1b | `python3 scripts/build_self_knowledge.py` | regenerates the four marked tables of `agents/knowledge-packs/platform-self-knowledge.md` from the fresh `build/manifest.json`, `integrations/registry.json`, `workflows/pipelines.json`, `templates/registry.json` and `governance/HUMAN_APPROVAL.md`. When it rewrote the pack, re-run B1 so the new pack is converted into the agents' knowledge (`deploy.sh` does this automatically with `--changed-exit 9`); `--check` is the CI gate that fails while the pack is stale |
+| B3 | `python3 scripts/create_agents.py --skip-routers --dry-run` then live | 35 agents: persona preamble + instructions + APPROVAL GATE block; per-agent vector store `vs-<agent>`; code_interpreter files |
 | B4 | `python3 scripts/attach_integrations.py --dry-run` then live | read-only tools + model tiers from `integrations/registry.json` (connections of step 04) |
 | B5 | `python3 scripts/create_delivery_agents.py` then `attach_integrations.py` again | `ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`, `pentest-report-analyzer`, `template-manager` |
+| B5b | `python3 scripts/create_agents.py --rewire` | wires the control-center ROUTE table over the delivery agents. It cannot be done in B3: `--skip-routers` there exists precisely because the delivery agents of B5 do not exist yet, so a router built in B3 would point at nothing |
 | B6 | `python3 scripts/create_orchestrator.py` | advisor + orchestrator (§D) + memory notes store |
 | B7 | `python3 scripts/apply_advisory_profile.py` | advisory addendum + code_interpreter on the g/h/i agents; `reasoning` tier pin |
 | B8 | `python3 scripts/stage_renderers.py` | renderers for step 05's Function |
 | B9 | `python3 scripts/smoke_test.py --agent infosec-assurance-orchestrator --prompt "One-line health check: name three DORA Art. 30(2) baseline contractual provisions."` | end-to-end answer (same prompt as `deploy.sh` step 7 and `operations/RUNBOOK.md` W1) |
 
-`./deploy.sh` runs B1–B9 in order and stops at the first failure
+`./deploy.sh` runs B1–B9 (including B1b and B5b) in order and stops at the first failure
 (`--dry-run` for the offline rehearsal). In `test`/`prod` it runs from the
 deploy pipeline under `{app:infosec-foundry-deployer}`, never from a
 workstation (`operations/CHANGE_MANAGEMENT.md` §2).

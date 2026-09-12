@@ -34,7 +34,7 @@ Act Art. 9 (life-cycle risk management, deployer of a modified system).
 | V6 | Templates (requirement j) | `../templates/registry.json` + the `source` path of each template (export or kit) | `version` + `last_approved` + `promoted_agent_versions` (the `<agent>:<version>` refs the propagation promoted — finding C19) per template; `../templates/audit.log` line per approved change carrying the same list | vector stores, code_interpreter files, `functions/delivery/renderers/` | `update_templates.py` (approval-gated) |
 | V7 | Integration registry, OpenAPI specs, MCP gateway allow-list | `../integrations/registry.json`, `openapi/*.yaml`, `mcp/enx-gateway.json` | git (release tag); spec `info.version` inside each yaml | attached tools on each agent | `attach_integrations.py` |
 | V8 | Infrastructure | `../infra/*.bicep`, `main.parameters*.json`, `../team/rbac.bicep`, `alerts.bicep` | git + ARM deployment name `{release}-{yyyymmdd}` (`az deployment group create -n`) | RG `rg-infosec-foundry` | pipeline with the deploy SP (`infra/validate.sh` first) |
-| V9 | Logic Apps workflow definitions | `../workflows/*.json` + `pipelines.json` | git; `parameters.apiVersion` inside the definitions (`v1`) | Logic Apps Standard `{baseName}-la` (run history keeps old versions) | `scripts/package_workflows.py` → `config-zip` |
+| V9 | Logic Apps workflow definitions | `../workflows/*.json` + `pipelines.json` | git; `parameters.apiVersion` inside the definitions (`v1`) | Logic Apps Standard `{baseName}-la` (run history keeps old versions) | `scripts/build_logicapps.py` → `ci/deploy_logicapps.sh` (config-zip) |
 | V10 | Delivery / office-tools Function images | `../functions/delivery/`, `../functions/office-tools/` | container tag `infosec-delivery:{tag}` = release tag; `deliveryImage` / `officeToolsImage` params | `{baseName}-delivery`, `{baseName}-office` | `az acr build` + Bicep param |
 | V11 | Python dependencies | `../setup/requirements.txt`, `../mcp-server/requirements.txt`, `../functions/delivery/requirements.txt` | exact pins (`==`) for the SDK surface; `>=` only for renderers (§5) | runners, Function image, MCP container | pip at build time |
 | V12 | Model deployments (three tiers) | `main.bicep` `modelName/modelVersion`, `reasoningModel*`, `lightModel*`, `deploymentSku` | model name + explicit `modelVersion` (§5) | Foundry account `{baseName}-aif` | Bicep |
@@ -113,8 +113,28 @@ ISO 42001 A.6.2.5.
 | Consumers update together | the `consumers` and `pipelines` arrays drive which agents are recreated and which renderer is re-staged — a template can never be live in one consumer and stale in another |
 | Previous version is recoverable | the backup file `update_templates.py` keeps + git history of the source; the SharePoint `Templates/Reviews/` page of the approval shows before/after |
 | `last_approved: null` means never approved on this platform | `ciso-global-deck`, `evidence-summary-docx`, `xlsx-generic` ship `null`: their first production use requires one approval run (rollout P1 exit criterion in `ROLLOUT_PLAN.md`) |
+| Every template still accepts its own sample | `python3 ../evaluation/run_regression.py` (offline: sample parses, validates against its declared schema, and passes its `gates.GATES` entry — HTML gates run on the template asset **filled** with the sample). `--render` additionally executes each staged renderer; a runtime the machine lacks is reported as a skip, never as a failure. Run it before opening the approval and attach the output to the review package |
+| Open template defects are recorded, not patched | A template of record changes only through an approval run, so a defect found by the regression run is written into the template's `notes` in `../templates/registry.json` and fixed in the next approval — never edited in place |
 | Deprecation | §6 row "Template" |
 | A propagated template records the agent versions that serve it | `promoted_agent_versions` in `../templates/registry.json` matches the `agent_versions=` field of the corresponding `../templates/audit.log` line (finding C19); rollback means switching the agents back to those versions rather than redeploying, because the Agents v2 runtime keeps every promoted version immutable |
+
+### 4a. Open approval-run item — two recorded template defects
+
+Both are recorded in `../templates/registry.json` `notes` and both make
+`gates.deepsearch_dashboard` fail on an **otherwise correct** report, so they
+are queued for one `template-update-approval` run together:
+
+| Template | Defect | Approved fix |
+|---|---|---|
+| `deepsearch-html-dashboard` (`../templates/assets/deepsearch-dashboard.html`) | `<body>` carries no `data-overall-score` attribute, so every filled report fails the gate check `data-overall-score="NN" missing on <body>` | `<body data-overall-score="{{OVERALL_SCORE}}">`, plus an `OVERALL_SCORE` entry in `../templates/deepsearch_dashboard.schema.json` and in `../templates/samples/deepsearch-html-dashboard.json` |
+| `deepsearch-html-dashboard` and `tpsrca-report` (`../templates/assets/tpsrca-report.html`) | the header comment contains the literal string `{{PLACEHOLDERS}}`, which the same gate reports as "placeholder text present" whenever the agent keeps the comment | reword both header comments without brace tokens |
+
+Until they are fixed the agent can only pass the gate by adding the body
+attribute itself and deleting the comment — which the "fill the placeholders
+only, never edit the template" rule forbids. That is why this is an approval
+item and not a bug for the agent to work around.
+`evaluation/run_regression.py` reports it as one FAIL with the registry note
+attached, so the run stays honest rather than self-excusing.
 
 Control: A.8.32, A.8.9; ISO 42001 A.6.2.4–A.6.2.5; EU AI Act Art. 14 (the
 visual review is the oversight act).
@@ -128,7 +148,7 @@ visual review is the oversight act).
 | Node renderers | `renderers-src/*/package.json` inside the image | see files | as above | rendered PPTX byte-compared (deterministic generators) |
 | Chat / reasoning / light models | `main.bicep` `modelName` + `modelVersion`, `reasoningModel*`, `lightModel*` — all three explicitly pinned with `versionUpgradeOption: 'NoAutoUpgrade'` (finding C6) | `gpt-4o` 2024-11-20 / `o4-mini` 2025-04-16 / `gpt-4o-mini` 2024-07-18, `DataZoneStandard` | the reasoning tier is **never** `o3-mini` (finding C4: no OpenAPI/MCP/AI Search/SharePoint/Web Search tool support — `governance/MODEL_ROUTING.md`); bump = *minor* with the staged rollout, the comparison set and the accuracy-floor test (`MODEL_ROUTING.md` "Accuracy floor"; `TOKEN_ECONOMY_PLAYBOOK.md` §7; `evaluation/EVALUATION.md` §5) | tokens/latency (`kql/latency-and-tokens.kql`) for one week; verifier first-pass rate |
 | Model retirement | Azure announces retirement dates per model version | — | `../enterprise/upgrade/check_model_lifecycle.py` quarterly and at M3; ticket **≥ 120 days** before retirement; six-phase migration (policy R3) with a candidate deployment (`enableCandidateDeployment`) compared via `evaluation/run_evals.py --model-override`, then `attach_integrations.py --only` — never in-place on retirement day | comparison set |
-| Foundry data-plane API version | workflows `apiVersion` default `v1`; `FOUNDRY_API_VERSION` app setting; `infra/logicapp.bicep` `foundryApiVersion` | `v1` (GA conversations/responses; `2025-05-01` is the classic threads/runs fallback and retires 2027-03-31 — finding C1) | change the app setting and the SDK pin in the same PR; re-run `package_workflows.py` | one pipeline end-to-end to the verifier (no approval) |
+| Foundry data-plane API version | workflows `apiVersion` default `v1`; `FOUNDRY_API_VERSION` app setting; `infra/logicapp.bicep` `foundryApiVersion` | `v1` (GA conversations/responses; `2025-05-01` is the classic threads/runs fallback and retires 2027-03-31 — finding C1) | change the app setting and the SDK pin in the same PR; re-run `build_logicapps.py` (then `ci/deploy_logicapps.sh`) | one pipeline end-to-end to the verifier (no approval) |
 | Bicep API versions | `@2025-04-01-preview` (Cognitive Services), others in `main.bicep` | see file | `infra/validate.sh` (build + lint) then `what-if`; preview → GA moves are *patch* if `what-if` shows no change | `what-if` output attached |
 | RAI policy | `main.bicep` `raiPolicy` `infosec-security-analysis` | see file | *high* risk change (`CHANGE_MANAGEMENT.md` §5) | content-filter block count (workbook "Data protection") |
 | Python / Node runtimes | Function image base, MCP image base, CI runner | Python 3.11 (Function), 3.12 (MCP image), Node 20 | image rebuild = *minor* | image scan (ACR / Defender) |

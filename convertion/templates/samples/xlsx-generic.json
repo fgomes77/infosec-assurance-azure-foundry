@@ -1,0 +1,141 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "title": "TPRM Risk Register — sample",
+  "supplier": "Northwind Cloud Services BV",
+  "service": "Managed SFTP Gateway",
+  "reportDate": "2026-09-10",
+  "classification": "Euronext Internal",
+  "sheets": [
+    {
+      "name": "Risk Register",
+      "columns": [
+        "Risk ID",
+        "Domain",
+        "Description",
+        "Inherent",
+        "Residual",
+        "Stage",
+        "Owner"
+      ],
+      "rows": [
+        [
+          "R01",
+          "Cybersecurity",
+          "Unpatched transfer agent advisories",
+          7.5,
+          5.2,
+          "In Treatment",
+          "{upn:assurance-analyst}"
+        ],
+        [
+          "R02",
+          "Third-Parties",
+          "Sub-processor list not published",
+          6.0,
+          3.5,
+          "In Treatment",
+          "{upn:assurance-analyst}"
+        ],
+        [
+          "R03",
+          "Business Continuity",
+          "No DR test evidence for the EU region",
+          6.5,
+          4.1,
+          "In Treatment",
+          "{upn:service-owner}"
+        ],
+        [
+          "R04",
+          "Data Management",
+          "Deletion-at-exit evidence outstanding",
+          5.0,
+          3.2,
+          "Treated",
+          "{upn:dpo}"
+        ],
+        [
+          "R05",
+          "IT",
+          "Log retention shorter than the Euronext standard",
+          4.0,
+          2.8,
+          "Treated",
+          "{upn:soc-lead}"
+        ],
+        [
+          "Max residual",
+          "",
+          "",
+          "=MAX(D2:D6)",
+          "=MAX(E2:E6)",
+          "",
+          ""
+        ]
+      ],
+      "widths": [
+        10,
+        20,
+        52,
+        12,
+        12,
+        16,
+        26
+      ],
+      "freeze": "A2",
+      "number_formats": {
+        "Inherent": "0.0",
+        "Residual": "0.0"
+      },
+      "conditional": {
+        "Residual": "risk_band"
+      }
+    },
+    {
+      "name": "Controls",
+      "columns": [
+        "Control ID",
+        "Control",
+        "Perimeter",
+        "Status"
+      ],
+      "rows": [
+        [
+          "Euronext-TPRM-01",
+          "Critical patching SLA",
+          "Internal",
+          "Pending"
+        ],
+        [
+          "Euronext-TPRM-02",
+          "SOC log integration",
+          "Internal",
+          "Pending"
+        ],
+        [
+          "ISO27001-A.5.19",
+          "Supplier relationship security",
+          "External",
+          "Implemented"
+        ]
+      ]
+    }
+  ],
+  "legend": [
+    {
+      "label": "Stage",
+      "meaning": "OneTrust treatment stage (Open / In Treatment / Treated)"
+    },
+    {
+      "label": "Perimeter",
+      "meaning": "Internal = Euronext-owned control; External = supplier-side control"
+    }
+  ],
+  "assumptions": [
+    "Residual scores are the assessed values at report date; no interim remediation is assumed."
+  ],
+  "sources": [
+    "OneTrust assessment 9001 (sample)",
+    "Supplier evidence pack (sample)"
+  ]
+}

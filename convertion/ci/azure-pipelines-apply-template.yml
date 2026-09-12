@@ -1,0 +1,98 @@
+# The job behind `applyPipelineUrl` in workflows/template-update-approval.json.
+#
+# It runs ONLY after a recorded approval: the Logic App calls it with the
+# approval id, the approver's UPN and the template id, and this job turns that
+# decision into a reviewable pull request. It deliberately does NOT push to
+# `main` — the PR is the submission of record and the platform owner merges it
+# (operations/CHANGE_MANAGEMENT.md, governance/HUMAN_APPROVAL.md Layer 3).
+#
+# Register in Azure DevOps as an *existing YAML file*
+# /convertion/ci/azure-pipelines-apply-template.yml, then put its trigger URL
+# in the Logic App parameter `applyPipelineUrl` (a securestring from Key Vault).
+#
+# Why a separate pipeline and not a step in azure-pipelines.yml: this one holds
+# repository write (branch + PR) and the gate pipeline holds none. Keeping them
+# apart is what lets `azure-pipelines.yml` be read as a thing that can only say
+# yes or no.
+
+trigger: none
+pr: none
+
+parameters:
+  - name: approvalId
+    type: string
+    displayName: Approval id recorded by template-update-approval.json
+  - name: approverUpn
+    type: string
+    displayName: UPN of the approver (placeholder form in evidence)
+  - name: templateId
+    type: string
+    displayName: templates/registry.json id of the template being changed
+  - name: contentUrl
+    type: string
+    displayName: >-
+      URL the approved template content is fetched from — the artefact the
+      approver actually saw (the SharePoint Templates/Reviews/ item the Logic
+      App created). update_templates.py takes the content as a FILE, never as
+      inline text, so what is applied is the reviewed bytes.
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  BRANCH: template/${{ parameters.templateId }}-${{ parameters.approvalId }}
+
+steps:
+  - checkout: self
+    persistCredentials: true
+    displayName: Check out the conversion-source repository
+
+  - script: |
+      set -euo pipefail
+      python3 -m pip install --quiet -r convertion/setup/requirements.txt
+    displayName: Toolchain
+
+  - script: |
+      set -euo pipefail
+      # Fetch the exact artefact the approver reviewed, then apply it. Going
+      # through a file (not an inline string) is what makes "what was approved"
+      # and "what was applied" the same bytes.
+      curl -fsSL "${{ parameters.contentUrl }}" -o "$(Agent.TempDirectory)/approved-template"
+      python3 convertion/scripts/update_templates.py \
+        --template '${{ parameters.templateId }}' \
+        --file "$(Agent.TempDirectory)/approved-template" \
+        --approved-by '${{ parameters.approverUpn }}' \
+        --approval-run '${{ parameters.approvalId }}'
+    displayName: Apply the approved template (update_templates.py)
+
+  - script: |
+      set -euo pipefail
+      # The same offline gates every PR runs — an approved template change is
+      # still a change, and it must not be the one edit that skips them.
+      python3 convertion/scripts/verify_conversion.py
+      python3 convertion/scripts/verify_kit.py
+      python3 convertion/evaluation/run_regression.py
+    displayName: Re-verify (conversion, kit, template regression)
+
+  - script: |
+      set -euo pipefail
+      git config user.email "$(Build.RequestedForEmail)"
+      git config user.name  "Template approval pipeline"
+      git checkout -b "$BRANCH"
+      git add -A
+      git commit -m "template update ${{ parameters.templateId }} approved by ${{ parameters.approverUpn }} (approval ${{ parameters.approvalId }})"
+      git push origin "$BRANCH"
+    displayName: Commit on a branch (never on main)
+
+  - script: |
+      set -euo pipefail
+      az repos pr create \
+        --source-branch "$BRANCH" \
+        --target-branch main \
+        --title "Template update: ${{ parameters.templateId }} (approval ${{ parameters.approvalId }})" \
+        --description "Applied by convertion/scripts/update_templates.py after the recorded approval ${{ parameters.approvalId }} by ${{ parameters.approverUpn }} (workflows/template-update-approval.json). Registry version and templates/audit.log are updated in this commit. Merge is the submission of record and belongs to the platform owner." \
+        --squash true \
+        --delete-source-branch true
+    displayName: Open the pull request (the submission of record)
+    env:
+      AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)

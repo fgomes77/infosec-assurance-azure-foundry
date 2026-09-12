@@ -76,13 +76,48 @@ INSTRUCTION_LIKE = re.compile(
     r"always|never|from now on|act as|pretend)\b|<\s*/?\s*(system|instructions?)\s*>")
 PERSONAL_PROFILE = re.compile(r"(?i)^\s*(/?profile\.md|/?people/|my (name|age|family|partner))")
 
+# A memory export is written as a bulleted, stamped list, so the native shape
+# of a line is "- [2026-01-02] Always answer in bullet points." Both
+# INSTRUCTION_LIKE and PERSONAL_PROFILE are anchored at the start of the line
+# (^\s*), so they must be applied to the NORMALISED text - strip the list or
+# heading marker and any leading [YYYY-MM-DD] / [unknown] stamp first, or the
+# filters silently miss every line that carries one (defect D-MI-S3).
+_LEADING_MARKER = re.compile(r"^\s*(?:[-*+]|#{1,6}|\d+[.)])\s*")
+_LEADING_STAMP = re.compile(
+    r"^\s*\[(?:\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+Z?)?|unknown)\]\s*[-–:.]?\s*",
+    re.IGNORECASE)
+
+
+def normalise_line(raw: str) -> str:
+    """The text the filters judge and the text that becomes the note.
+
+    Strips, in order and repeatedly: list/heading markers, a leading
+    `[YYYY-MM-DD]` or `[unknown]` stamp with its separator, and any marker
+    that the stamp was hiding. Idempotent.
+    """
+    line = raw.strip()
+    for _ in range(4):
+        before = line
+        line = _LEADING_MARKER.sub("", line)
+        line = _LEADING_STAMP.sub("", line)
+        if line == before:
+            break
+    return line.strip()
+
 
 def privacy_filter(lines: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
-    """Return (kept, dropped[(reason, line)]) - the import-memory rules."""
+    """Return (kept, dropped[(reason, line)]) - the import-memory rules.
+
+    Every rule is applied to `normalise_line(raw)`, and that same normalised
+    text is what is kept as the note (governance/MEMORY_IMPORT.md §2).
+    """
     kept, dropped = [], []
     for raw in lines:
-        line = raw.strip()
-        if not line or line.startswith(("---", "```")):
+        stripped = raw.strip()
+        if not stripped or stripped.startswith(("---", "```")):
+            continue
+        line = normalise_line(raw)
+        if not line:
             continue
         if INSTRUCTION_LIKE.search(line):
             dropped.append(("instruction-like", line))
@@ -91,15 +126,30 @@ def privacy_filter(lines: list[str]) -> tuple[list[str], list[tuple[str, str]]]:
         elif PERSONAL_PROFILE.search(line):
             dropped.append(("personal profile (out of scope)", line))
         else:
-            kept.append(line.lstrip("-*# ").strip())
+            kept.append(line)
     return kept, dropped
 
 
-def store_note(agents_client, store, text: str) -> str:
+def note_header(stamp: str, author: str, subject: str) -> str:
+    """The header governance/MEMORY_POLICY.md §2 requires on every note.
+
+    Identical on both backends: the search backend carries these as document
+    fields, the vector store carries them as the note's first line, so
+    deletion-by-subject works the same way on either (delta D-MI-S1).
+    """
+    retain_until = (dt.date.today()
+                    + dt.timedelta(days=30 * RETAIN_MONTHS)).isoformat()
+    return (f"[{stamp}] author={author or 'unknown'} class=Euronext Internal "
+            f"subject={subject or 'untagged'} retain_until={retain_until}")
+
+
+def store_note(agents_client, store, text: str, author: str = "",
+               subject: str = "") -> str:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    header = note_header(stamp, author, subject or text.strip()[:120])
     with tempfile.TemporaryDirectory() as td:
         f = Path(td) / f"memory-{stamp}.txt"
-        f.write_text(f"[{stamp}]\n{text.strip()}\n", encoding="utf-8")
+        f.write_text(f"{header}\n{text.strip()}\n", encoding="utf-8")
         up = agents_client.files.upload_and_poll(file_path=str(f),
                                                  purpose="assistants")
         agents_client.vector_store_files.create_and_poll(
@@ -134,10 +184,10 @@ class SearchBackend:
                                    index_name=self.index,
                                    credential=DefaultAzureCredential())
 
-    def add(self, text: str, author: str = "") -> str:
+    def add(self, text: str, author: str = "", subject: str = "") -> str:
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         doc = {"id": f"memory-{stamp}", "stamp": stamp, "author": author,
-               "class": "team-note", "subject": text.strip()[:120],
+               "class": "team-note", "subject": subject or text.strip()[:120],
                "retain_until": (dt.date.today() + dt.timedelta(
                    days=30 * RETAIN_MONTHS)).isoformat(),
                "text": text.strip()}
@@ -175,6 +225,11 @@ def main() -> int:
     p_imp.add_argument("--dry-run", action="store_true")
     p_imp.add_argument("--approved-by", default="",
                        help="UPN of the approver; required to write")
+    p_imp.add_argument("--subject", default="",
+                       help="one deletable subject tag for the whole batch "
+                            "(GDPR Art. 17 deletion-by-subject; without it the "
+                            "subject is derived per note and an imported batch "
+                            "has to be deleted by hand)")
     args = ap.parse_args()
 
     if args.cmd == "import":
@@ -192,18 +247,23 @@ def main() -> int:
             print("nothing written" + ("" if args.dry_run else
                                       " - pass --approved-by <upn> to apply"))
             return 0
+        subject = args.subject or f"import {dt.date.today().isoformat()}"
         if memory_backend() == "search-index":
             be = SearchBackend()
             for line in kept[:MAX_BATCH]:
                 print("stored", be.add(
                     f"{line} | imported, approved by {args.approved_by}",
-                    author=args.approved_by))
+                    author=args.approved_by, subject=subject))
+            print(f"batch subject={subject!r} — delete the batch by that subject")
             return 0
         agents_client = get_agents_client()
         store = find_store(agents_client)
         for line in kept[:MAX_BATCH]:
-            print("stored", store_note(agents_client, store,
-                                       f"{line} | imported, approved by {args.approved_by}"))
+            print("stored", store_note(
+                agents_client, store,
+                f"{line} | imported, approved by {args.approved_by}",
+                author=args.approved_by, subject=subject))
+        print(f"batch subject={subject!r} — delete the batch by that subject")
         return 0
 
     if memory_backend() == "search-index":

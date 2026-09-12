@@ -28,7 +28,7 @@ derivative works, no distribution.
 | Accountable owner | `{upn:owner}` (Francisco Gustavo Gomes) |
 | Consulted | `{group:legal}`, `{group:dpo}` |
 | Target date | `{date}` — before production go-live (IMPLEMENTATION_SERIES gate) |
-| Interim control | The seven redeployed skills are conversion-gated: `convert_skills.py` must require `--accept-anthropic-license` for the `LICENSE_RESTRICTED` set and exclude `LICENSE.txt` from vector stores (shared delta). Until the flag is implemented, the owner records acceptance here: `accepted-by: {upn} on {date}` |
+| Interim control | **Implemented.** The seven skills are conversion-gated: `scripts/convert_skills.py` carries `LICENSE_RESTRICTED = {docx, pdf, pptx, xlsx, internal-comms, learn, mcp-builder}` and skips them unless `--accept-anthropic-license` is passed (or `ACCEPT_ANTHROPIC_LICENSE=1` is set). `LICENSE.txt` already travels inside the code package and is excluded from the vector stores (`bucket_for`), so provenance is kept without the licence text becoming retrievable knowledge. **CI sets the variable** because its build is a fidelity check over every agent, not a deployment; **`deploy.sh` does not** — an operator must set it deliberately, which is the act this control exists to force. The owner records acceptance here: `accepted-by: {upn} on {date}` |
 | Result-fidelity note | Option B changes byte-level outputs of the four office agents; the comparison set (`operations/CHANGE_MANAGEMENT.md` §4) must be re-baselined if B is chosen. |
 
 ## 3. Other third-party content

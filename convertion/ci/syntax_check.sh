@@ -10,8 +10,9 @@
 # dir, bicep builds to stdout). Scope is convertion/ plus the pipeline YAML —
 # claude-account-export/ is verified byte-for-byte by verify_conversion.py and
 # is never linted here, and build/ is generated output. The pipeline YAML
-# (.github/) and the dev container (.devcontainer/) are parsed too, so a typo
-# in a gate definition fails the gate that defines it.
+# (.github/), the root .pre-commit-config.yaml, both gitleaks configs and the
+# dev container (.devcontainer/) are parsed too, so a typo in a gate definition
+# fails the gate that defines it.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CONV="$ROOT/convertion"
@@ -50,11 +51,23 @@ if python3 -c "import yaml" 2>/dev/null; then
     n=$((n + 1))
     python3 -c "import sys,yaml;list(yaml.safe_load_all(open(sys.argv[1],encoding='utf-8')))" "$f" \
       || { note "!! $f"; fail=1; }
-  done < <(files yaml; files yml; ls "$ROOT"/.github/*.yml "$ROOT"/.github/workflows/*.yml 2>/dev/null)
+  done < <(files yaml; files yml; ls "$ROOT"/.github/*.yml "$ROOT"/.github/workflows/*.yml \
+                                    "$ROOT"/.pre-commit-config.yaml 2>/dev/null)
   note "$n file(s)"
 else
   note "PyYAML not installed — YAML parse SKIPPED (pip install PyYAML)"
 fi
+
+step "toml (tomllib)"
+# The gitleaks configs: an unparsable one makes the secret scan fail open on
+# some versions and hard-fail on others — neither is noticed quickly.
+n=0
+while IFS= read -r f; do
+  n=$((n + 1))
+  python3 -c "import sys,tomllib;tomllib.load(open(sys.argv[1],'rb'))" "$f" \
+    || { note "!! $f"; fail=1; }
+done < <(files toml; ls "$ROOT"/.gitleaks.toml "$ROOT"/.github/gitleaks.toml 2>/dev/null)
+note "$n file(s)"
 
 step "javascript (node --check)"
 if command -v node >/dev/null 2>&1; then

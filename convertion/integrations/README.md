@@ -117,6 +117,21 @@ converted with `--include-examples` have explicit entries (`example: true`).
   GitHub, Firecrawl, Slack, Google Calendar, Adobe/Canva/Gamma…) and their
   ENX replacement or exclusion: `CONNECTOR_DECISIONS.md`.
 
+## Analysis services (provisioned, but deliberately NOT agent tools)
+
+**Azure AI Document Intelligence** (OCR and layout for scanned evidence) and
+**Azure AI Speech** (batch transcription + diarization) are provisioned by
+`../infra/main.bicep` in the same EU region as the rest of the platform, with
+`disableLocalAuth: true`. They are reached **only** by the delivery Function,
+with its managed identity (`Cognitive Services User`), through
+`POST /api/extract_pdf` and the `speech-transcription` workflow.
+
+They are not registered in `registry.json` and never attached as OpenAPI
+tools. Both are POST-only APIs, so attaching them would have required an
+exception to the non-GET stripping rule in `../scripts/attach_integrations.py`
+— keeping them behind the Function means that rule holds without exception,
+and no agent ever holds a credential for a service that can read a file.
+
 ## Order of operations
 
 ```bash

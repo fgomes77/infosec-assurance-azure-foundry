@@ -1,0 +1,9 @@
+{
+  "runtime": "node",
+  "entry": "generate_slide.js",
+  "argv": ["{data}", "{out}"],
+  "formats": ["pptx"],
+  "outputs": "single",
+  "schema": "ciso_global_deck.schema.json",
+  "source": "ENX-authored renderer — no byte-verified original. Requirement d (Global CISO Report, 9 slides). Built with pptxgenjs in the house style: teal RGB(0,141,127), Verdana, TPRM 10-scale bands High>=7.0 red / Medium>=4.0 amber / Low green (governance/RISK_THRESHOLDS.md). It carried no manifest, so the Function fell back to its generic default and — because the contract file is named after the document (ciso_global_deck.schema.json) rather than after the template folder (ciso-global) — the schema gate silently passed everything."
+}

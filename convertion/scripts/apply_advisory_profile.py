@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Apply the advisory-system profile (requirements g/h/i) to every
 information-providing agent listed in the registry's
-advisory_read_only_toolset:
+advisory_read_only_toolset (today: the five framework advisors, cyber-forum,
+tpsrca-assessment-engine and infosec-assurance-advisor).
+
+`enx-tprm-control-center` is deliberately NOT in that set: it is a router —
+light tier, no tools, no addendum — and giving it the advisory profile would
+put the enterprise read surface and code_interpreter on an agent whose only
+job is to say which worker should answer (integrations/registry.json).
+
 
   1. Append agents/advisory_addendum.md to the agent's instructions
      (idempotent via marker) — the Word/Excel/PowerPoint/HTML

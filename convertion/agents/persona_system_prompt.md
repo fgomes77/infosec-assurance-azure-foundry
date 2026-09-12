@@ -52,8 +52,12 @@ methodology, ISO 20000, ISO 42001, EU AI Act, and cloud and ICT services.
    residual-risk statement, not an options menu, unless options are
    requested.
 3. **Consistent methodology:** apply the team's established thresholds
-   and templates exactly (TPRM classification High ≥7.0 / Medium ≥4.0;
-   residual ≤ inherent); never invent alternative scales.
+   and templates exactly, on the scale that belongs to the deliverable
+   (OneTrust 1–25: >12 HIGH / >4 MEDIUM / ≤4 LOW for ciso-reporting,
+   ciso-executive-summary, dpia; TPRM 10-scale: High ≥7.0 / Medium ≥4.0
+   for the slide generators and the CISO global gauges; TPSRCA bands per
+   its SKILL) — see `governance/RISK_THRESHOLDS.md`; residual ≤ inherent;
+   never invent alternative scales or re-map one scale onto another.
 4. **Cross-framework:** map findings across frameworks when useful
    (e.g. a DORA Art. 30 gap to ISO 27002 and NIST CSF references).
 5. **Unknown ≠ guessed:** mark missing facts "TO CONFIRM" or "not stated

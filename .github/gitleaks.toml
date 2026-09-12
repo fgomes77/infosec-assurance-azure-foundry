@@ -14,8 +14,15 @@
 # finding: remove the value, rotate it, and file the incident
 # (operations/RUNBOOK.md).
 #
+# This file is the single source of rules. The repository root carries a
+# `.gitleaks.toml` that does nothing but `[extend] path` to here, so an
+# invocation without `--config` (pre-commit, `gitleaks protect --staged`, a
+# plain `gitleaks detect`) gets these rules rather than the bare defaults.
+# Add rules and allow-list entries HERE, never in the root file.
+#
 # Local run (same as CI):
 #   gitleaks detect --no-git --source . --config .github/gitleaks.toml --redact
+#   gitleaks detect --no-git --source .                # via the root shim
 
 title = "infosec-assurance-azure-foundry"
 
@@ -31,8 +38,12 @@ paths = [
   '''^convertion/functions/delivery/renderers/''',
   '''(^|/)__pycache__/''',
   '''(^|/)\.ruff_cache/''',
-  # This file: its own examples would otherwise match.
+  # This file and the root shim that extends it: their own examples would
+  # otherwise match.
   '''^\.github/gitleaks\.toml$''',
+  '''^\.gitleaks\.toml$''',
+  # The pre-commit manifest names the same placeholder syntax in its comments.
+  '''^\.pre-commit-config\.yaml$''',
 ]
 regexes = [
   # 1. Placeholder syntax used throughout the kit: {upn:...}, {tenant},

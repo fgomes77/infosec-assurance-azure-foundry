@@ -47,7 +47,44 @@ SOURCES = {
                      "build/agents/xlsx/code-tree"],
     "docx-generic": ["functions/delivery/renderers-src/docx-generic"],
     "pptx-generic": ["functions/delivery/renderers-src/pptx-generic"],
+    # Renderers the Function reaches by template name or through a dedicated
+    # endpoint. They have no `renderer` field in templates/registry.json (or
+    # none yet), so `wanted` would never name them and they answered 404/501
+    # at runtime. ALWAYS_STAGE below adds them.
+    "charts": ["functions/delivery/renderers-src/charts"],
+    "diagrams": ["functions/delivery/renderers-src/diagrams"],
+    "transcript": ["functions/delivery/renderers-src/transcript"],
+    "form-b-fill": ["functions/delivery/renderers-src/form-b-fill",
+                    "build/agents/onetrust-form-b/code"],
+    # whisperx and pdf-coverage are endpoint-only: function_app.py calls
+    # _renderer_dir("whisperx") and _renderer_dir("pdf-coverage") directly.
+    # Their manifest entries point into scripts/ on purpose — the
+    # byte-verified layout — so they need the *-scripts.zip from
+    # build/agents/<skill>/code/ beside them for _materialise to unpack.
+    "whisperx": ["functions/delivery/renderers-src/whisperx",
+                 "build/agents/whisperx-transcribe-diarize/code"],
+    "pdf-coverage": ["functions/delivery/renderers-src/pdf-coverage",
+                     "build/agents/pdf-full-coverage-analyzer/code"],
+    "ciso-exec-summary": ["functions/delivery/renderers-src/ciso-exec-summary",
+                          "build/agents/ciso-executive-summary/code-tree"],
+    "tprm-board-slide": ["functions/delivery/renderers-src/tprm-board-slide",
+                         "build/agents/pptx-executive-summary-ciso/code-tree"],
 }
+
+# Staged whether or not templates/registry.json names them in a `renderer`
+# field. Everything else in SOURCES is reached through a registered template.
+ALWAYS_STAGE = {"charts", "diagrams", "transcript", "form-b-fill",
+                "whisperx", "pdf-coverage", "ciso-exec-summary",
+                "tprm-board-slide"}
+
+# The entry every renderer exposes at its root, unless its manifest says
+# otherwise. whisperx and pdf-coverage deliberately keep their entries under
+# scripts/ (byte-verified layout) and are invoked by their endpoints, not by
+# the generic render path, so they are not given a root entry here.
+DEFAULT_ENTRY = {"charts": "render.py", "diagrams": "generate_slide.js",
+                 "transcript": "render.py", "form-b-fill": "render.py",
+                 "ciso-exec-summary": "render.py",
+                 "tprm-board-slide": "render.py"}
 SHIMS = {
     ".js": "#!/usr/bin/env node\n// staged shim: entry lives in scripts/ (verified layout)\n"
            "require(require('path').join(__dirname, 'scripts', '{entry}'));\n",
@@ -75,22 +112,29 @@ def main() -> int:
     strict = "--strict" in sys.argv or os.environ.get("CI", "").lower() == "true"
     wanted = {Path(t["renderer"]).parent.name: Path(t["renderer"]).name
               for t in reg["templates"] if t.get("renderer")}
+    for name in ALWAYS_STAGE:
+        wanted.setdefault(name, DEFAULT_ENTRY.get(name, ""))
     staged, missing, no_entry = [], [], []
     for name, entry in sorted(wanted.items()):
-        for cand in SOURCES.get(name, []):
-            src = CONV / cand
-            if src.is_dir() and any(src.iterdir()):
-                dest = DEST / name
-                if dest.exists():
-                    shutil.rmtree(dest)
-                shutil.copytree(src, dest, ignore=shutil.ignore_patterns("__pycache__"))
-                state = ensure_entry(dest, entry)
-                staged.append(f"{name} <- {cand} [{entry}: {state}]")
-                if state == "missing":
-                    no_entry.append(f"{name}/{entry}")
-                break
-        else:
+        cands = [c for c in SOURCES.get(name, [])
+                 if (CONV / c).is_dir() and any((CONV / c).iterdir())]
+        if not cands:
             missing.append(name)
+            continue
+        dest = DEST / name
+        if dest.exists():
+            shutil.rmtree(dest)
+        # The first source wins per file; later sources only ADD what the
+        # first did not provide (the byte-verified *-scripts.zip and the
+        # assets a runnable port needs beside it). A runnable port is never
+        # overwritten by the code-tree it was ported from.
+        for cand in cands:
+            shutil.copytree(CONV / cand, dest, dirs_exist_ok=True,
+                            ignore=shutil.ignore_patterns("__pycache__"))
+        state = ensure_entry(dest, entry) if entry else "endpoint-only"
+        staged.append(f"{name} <- {' + '.join(cands)} [{entry or '-'}: {state}]")
+        if state == "missing":
+            no_entry.append(f"{name}/{entry}")
     for line in staged:
         print("staged ", line)
     if missing:

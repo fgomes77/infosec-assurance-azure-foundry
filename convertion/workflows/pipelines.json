@@ -127,17 +127,17 @@
       "renderTemplate": "docx-generic",
       "libraryRoot": "advisoryRoot",
       "approvalKind": "REPORT_ADVISORY",
-      "notes": "Generic governed path for advisory deliverables (ISO 27001/42001, NIS2, DORA, EU AI Act, Form B drafts ...). agent = 'TRIGGER' means the caller passes agentId in the trigger body (the only instance that allows it). supplierName/serviceName are used as Advisory/<Framework-or-Topic>/<Subtopic>/ segments. Deploy one extra instance per renderFormat needed (docx via docx-generic, xlsx via xlsx-generic, pptx via tprm-board-slide) - files stay in chat only when the user does not ask to store them (agents/advisory_addendum.md). 'Living' documents are co-edited in Word/Excel Online from here (docs tool excluded)."
+      "notes": "Generic governed path for advisory deliverables (ISO 27001/42001, NIS2, DORA, EU AI Act, Form B drafts ...). agent = 'TRIGGER' means the caller passes agentId in the trigger body (the only instance that allows it). supplierName/serviceName are used as Advisory/<Framework-or-Topic>/<Subtopic>/ segments. Deploy one extra instance per renderFormat needed - docx via 'docx-generic', xlsx via 'xlsx-generic', pptx via 'pptx-generic' (the three generic house-style renderers; 'tprm-board-slide' is a specific board-slide template, not the generic pptx path) - files stay in chat only when the user does not ask to store them (agents/advisory_addendum.md). 'Living' documents are co-edited in Word/Excel Online from here (docs tool excluded)."
     },
     "transcript-summary": {
       "requirement": "- (whisperx replacement)",
       "agent": "whisperx-transcribe-diarize",
       "reportType": "Transcript",
       "renderFormat": "docx",
-      "renderTemplate": "evidence-summary",
+      "renderTemplate": "transcript",
       "libraryRoot": "reportsRoot",
       "approvalKind": "REPORT_EVIDENCE",
-      "notes": "Fed by workflows/speech-transcription.json (Azure AI Speech batch transcription + diarization, EU region). The knowledge-only whisperx agent cleans/summarises the diarized transcript into the evidence-summary contract; stored as DOCX under Reports/<Supplier>/<Service>/."
+      "notes": "Fed by workflows/speech-transcription.json (Azure AI Speech batch transcription + diarization, EU region). The workflow hands over the normalised `transcript` contract (templates/transcript.schema.json); the knowledge-only whisperx agent fills ONLY summary[], actions[] and notes[] and returns the contract otherwise unchanged, so every turn stays verbatim. renderTemplate was 'evidence-summary' until the dedicated renderer existed - it is now 'transcript', which emits md + html + docx from one payload (/api/render returns all three in files[]); the DOCX is the file of record under Reports/<Supplier>/<Service>/."
     }
   }
 }

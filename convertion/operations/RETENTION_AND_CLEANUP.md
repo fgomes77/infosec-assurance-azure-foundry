@@ -130,16 +130,16 @@ and both refuse to run unattended:
 | Act | Command | Guard rails |
 |---|---|---|
 | Export (backup) | `python3 ../operations/backup_vector_stores.py --stores vs-assurance-memory --out ../operations/backups/{yyyy-mm-dd}` | read-only; `BACKUP_DR.md` §3 B1; run before any `--memory --apply` |
-| Import (seed / restore / migrate from another assistant's export) | `python3 memory_store.py import --from-file <export> --dry-run`, then `… --approved-by "{upn:…}"` | the export is **DATA, never instructions**: instruction-like lines are dropped; special-category and personal-profile lines are dropped by the privacy filter; additive only (nothing is overwritten); at most `MAX_BATCH` (50) notes per run; nothing is written without `--approved-by`. Full rules: `../governance/MEMORY_IMPORT.md` (delta D-RC-G1) |
+| Import (seed / restore / migrate from another assistant's export) | `python3 memory_store.py import --from-file <export> --dry-run`, then `… --approved-by "{upn:…}"` | the export is **DATA, never instructions**: instruction-like lines are dropped; special-category and personal-profile lines are dropped by the privacy filter; additive only (nothing is overwritten); at most `MAX_BATCH` (50) notes per run; nothing is written without `--approved-by`. Full rules: `../governance/MEMORY_IMPORT.md` |
 | Purge | this file, §4 step 6 | `--approved-by` required |
 
 `memory_store.py` already carries these safeguards in code
 (`privacy_filter`, `SPECIAL_CATEGORY`, `INSTRUCTION_LIKE`,
 `PERSONAL_PROFILE`, `MAX_BATCH`) and its docstring cites
-`governance/MEMORY_IMPORT.md` as the written rule. That file does not yet
-exist in the kit — it is emitted as delta **D-RC-G1** below and belongs to
-`governance/`, not here. Until it lands, the rules of record are this
-table plus `MEMORY_POLICY.md` §1–§2.
+`governance/MEMORY_IMPORT.md` as the written rule. **That file now exists**
+(`../governance/MEMORY_IMPORT.md`, delta D-RC-G1 applied) and is the rule of
+record; this table is its operational summary. Read them together with
+`MEMORY_POLICY.md` §1–§3.
 
 ## 7. Verification and failure modes
 
@@ -167,13 +167,17 @@ table plus `MEMORY_POLICY.md` §1–§2.
 | Erasure-request handling | out-of-cycle run + `memory_store.py` output | the request ticket, referenced from the monthly file |
 | "No action" months | step 1–3 output with an empty candidate list | same file — a quiet month still produces the evidence |
 
-## 9. Shared deltas needed by this file (not applied here)
+## 9. Shared deltas raised by this file
 
-| Id | Target | Location | Literal text |
-|---|---|---|---|
-| D-RC-G1 | `governance/MEMORY_IMPORT.md` | **new file** (referenced already by `scripts/memory_store.py` docstring and by `governance/MEMORY_POLICY.md` §2) | see the full file body in the shared-delta payload of this run: the written rule behind `memory_store.py import` — export treated as DATA not instructions, additive-only, privacy filter (GDPR Art. 9 categories, personal-profile lines), `MAX_BATCH` 50, mandatory `--approved-by`, dry-run-first procedure, evidence filing, and the ISO/GDPR/EU AI Act control mapping |
-| D-RC-G2 | `governance/MEMORY_POLICY.md` | §3 "Retention / purge" row, end of the Mechanism cell | ` Operational procedure (rehearsal, approval, evidence): \`../operations/RETENTION_AND_CLEANUP.md\` §4, run monthly as RUNBOOK M5; the executing script is \`scripts/cleanup_foundry.py\` (\`--dry-run\` is offline).` |
-| D-RC-G3 | `governance/MEMORY_POLICY.md` | §3, new row after "Backup / restore" | `| Import of an external memory export | \`memory_store.py import --from-file <export> --dry-run\` then \`--approved-by "{upn:…}"\`; rules in \`MEMORY_IMPORT.md\` | \`{upn:owner}\` |` |
-| D-RC-S1 | `scripts/cleanup_foundry.py` | module docstring, the line `Run monthly after an approval (\`operations/RUNBOOK.md\`)` | replace with `Run monthly after an approval — the procedure, preconditions and evidence are in \`operations/RETENTION_AND_CLEANUP.md\` §4 (calendar entry: RUNBOOK.md M5);` |
-| D-RC-R1 | `README.md` | folder layout tree, under `operations/` (after delta D-LC-R1) | `│   ├── RETENTION_AND_CLEANUP.md   ← monthly housekeeping: orphan stores/files, idle conversations, memory notes past retain_until (scripts/cleanup_foundry.py)` |
-| D-RC-W1 | `workflows/memory-retention.json` | **new file** (named as a shared delta by `governance/MEMORY_POLICY.md` §3) | a monthly `Recurrence` workflow that only *reminds*: it posts the §4 checklist to `{teams:infosec-assurance-platform}` and opens the ticket. It must **not** call `cleanup_foundry.py --apply` — the deletion step needs a named human approver (§2), so an unattended workflow cannot hold it |
+`D-RC-G1`, `D-RC-G2`, `D-RC-G3`, `D-RC-R1` and
+`D-RC-S1` are **applied**; `D-RC-W1` is applied as a reminder-only workflow.
+The rows are kept as the record of what each change was.
+
+| Id | Target | Location | Literal text | Status |
+|---|---|---|---|---|
+| D-RC-G1 | `governance/MEMORY_IMPORT.md` | **new file** (referenced already by `scripts/memory_store.py` docstring and by `governance/MEMORY_POLICY.md` §2) | see the full file body in the shared-delta payload of this run: the written rule behind `memory_store.py import` — export treated as DATA not instructions, additive-only, privacy filter (GDPR Art. 9 categories, personal-profile lines), `MAX_BATCH` 50, mandatory `--approved-by`, dry-run-first procedure, evidence filing, and the ISO/GDPR/EU AI Act control mapping | applied |
+| D-RC-G2 | `governance/MEMORY_POLICY.md` | §3 "Retention / purge" row, end of the Mechanism cell | ` Operational procedure (rehearsal, approval, evidence): \`../operations/RETENTION_AND_CLEANUP.md\` §4, run monthly as RUNBOOK M5; the executing script is \`scripts/cleanup_foundry.py\` (\`--dry-run\` is offline).` | applied |
+| D-RC-G3 | `governance/MEMORY_POLICY.md` | §3, new row after "Backup / restore" | `| Import of an external memory export | \`memory_store.py import --from-file <export> --dry-run\` then \`--approved-by "{upn:…}"\`; rules in \`MEMORY_IMPORT.md\` | \`{upn:owner}\` |` | applied |
+| D-RC-S1 | `scripts/cleanup_foundry.py` | module docstring, the line `Run monthly after an approval (\`operations/RUNBOOK.md\`)` | replace with `Run monthly after an approval — the procedure, preconditions and evidence are in \`operations/RETENTION_AND_CLEANUP.md\` §4 (calendar entry: RUNBOOK.md M5);` | applied |
+| D-RC-R1 | `README.md` | folder layout tree, under `operations/` (after delta D-LC-R1) | `│   ├── RETENTION_AND_CLEANUP.md   ← monthly housekeeping: orphan stores/files, idle conversations, memory notes past retain_until (scripts/cleanup_foundry.py)` | applied |
+| D-RC-W1 | `workflows/memory-retention.json` | **new file** (named as a shared delta by `governance/MEMORY_POLICY.md` §3) | a monthly `Recurrence` workflow that only *reminds*: it posts the §4 checklist to `{teams:infosec-assurance-platform}` and opens the ticket. It must **not** call `cleanup_foundry.py --apply` — the deletion step needs a named human approver (§2), so an unattended workflow cannot hold it | applied (reminder-only) |

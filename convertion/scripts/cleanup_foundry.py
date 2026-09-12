@@ -31,7 +31,9 @@ Modes:
     python3 cleanup_foundry.py --memory --approved-by "{upn:francisco.gomes}"
     python3 cleanup_foundry.py --all --apply        actually delete
 
-Run monthly after an approval (`operations/RUNBOOK.md`); the read-only run
+Run monthly after an approval - the procedure, preconditions and evidence
+are in `operations/RETENTION_AND_CLEANUP.md` section 4 (calendar entry:
+RUNBOOK.md M5); the read-only run
 prints exactly what it would remove, so the list is filed as the evidence
 of the retention control (ISO 27001:2022 A.5.34, A.8.10; GDPR Art. 5(1)(e)).
 """

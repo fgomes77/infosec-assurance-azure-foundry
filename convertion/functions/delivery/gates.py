@@ -86,8 +86,16 @@ def tprm_board_slide(data: dict) -> list[str]:
             fails.append("top risks are not ordered by highest residual")
         if len(risks) > 3:
             fails.append("more than 3 top risks")
-    if not (data.get("footer_date") or data.get("date") or data.get("assessment_date")):
-        fails.append("footer date missing")
+    # `report_date` is the field of record — it is the one the byte-verified
+    # skill's references/data_schema.md defines and the one
+    # templates/tprm_board_slide.schema.json makes REQUIRED. It was missing
+    # from this list, so a contract-correct payload was rejected with 422.
+    # The other three stay as accepted aliases for payloads written against
+    # the older wording.
+    if not (data.get("report_date") or data.get("footer_date")
+            or data.get("date") or data.get("assessment_date")):
+        fails.append("report date missing (report_date, or the accepted "
+                     "aliases footer_date / date / assessment_date)")
     return fails
 
 

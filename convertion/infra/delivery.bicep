@@ -21,6 +21,12 @@ param projectEndpoint string
 @description('Key Vault name (app settings reference secrets by name only)')
 param keyVaultName string
 
+@description('Document Intelligence data-plane API version used by /api/extract_pdf (v4.0 GA).')
+param docIntelApiVersion string = '2024-11-30'
+
+@description('Per-call timeout, in seconds, for Document Intelligence reads from the delivery Function.')
+param docIntelTimeoutSeconds int = 120
+
 @description('Document Intelligence endpoint (empty = OCR disabled)')
 param documentIntelligenceEndpoint string = ''
 
@@ -113,7 +119,7 @@ resource functionApps 'Microsoft.Web/sites@2023-12-01' = [for a in apps: {
       ipSecurityRestrictions: empty(callerSubnetId) ? [] : [
         { name: 'logic-apps-subnet', action: 'Allow', priority: 100, vnetSubnetResourceId: callerSubnetId }
       ]
-      appSettings: [
+      appSettings: concat([
         { name: 'FUNCTIONS_EXTENSION_VERSION', value: '~4' }
         { name: 'FUNCTIONS_WORKER_RUNTIME', value: 'python' }
         { name: 'AzureWebJobsStorage__accountName', value: runtimeStorage.name }
@@ -126,9 +132,23 @@ resource functionApps 'Microsoft.Web/sites@2023-12-01' = [for a in apps: {
         { name: 'SHAREPOINT_SITE_ID', value: sharepointSiteId }
         { name: 'SHAREPOINT_REPORTS_DRIVE_ID', value: sharepointReportsDriveId }
         { name: 'DOCINTEL_ENDPOINT', value: documentIntelligenceEndpoint }
-        { name: 'OFFICE_TOOLS_BASE_URL', value: empty(officeToolsImage) ? '' : 'https://${baseName}-office.azurewebsites.net/api' }
+        { name: 'DOCINTEL_API_VERSION', value: docIntelApiVersion }
+        { name: 'DOCINTEL_TIMEOUT_SECONDS', value: string(docIntelTimeoutSeconds) }
         { name: 'ENX_DATA_BOUNDARY', value: 'EU' } // asserted by main.bicep @allowed location
-      ]
+      ],
+      // OFFICE_TOOLS_BASE_URL + OFFICE_TOOLS_KEY are the ONLY link between the
+      // two apps, and they sit on the CALLER (delivery) alone. The office-tools
+      // app is the callee: it holds no credential of any kind, makes no
+      // outbound call, and is granted nothing in workload-rbac.bicep beyond
+      // AcrPull — no Graph, no Foundry, no Document Intelligence. Giving it its
+      // own function key here would be giving the callee a key to itself.
+      a.kind == 'delivery' ? [
+        { name: 'OFFICE_TOOLS_BASE_URL', value: empty(officeToolsImage) ? '' : 'https://${baseName}-office.azurewebsites.net/api' }
+        // /api/render's xlsx recalc gate sends this as the x-functions-key
+        // header to the office-tools app.
+        { name: 'OFFICE_TOOLS_KEY', value: '@Microsoft.KeyVault(VaultName=${keyVaultName};SecretName=office-tools-function-key)' }
+      ] : []
+      )
     }
   }
 }]

@@ -23,7 +23,7 @@ retire 2027-03-31 — `enterprise/ENTERPRISE_BLUEPRINT.md` PRJ-2).
 | Persona / user preferences (`PERSONA.md`) | Shared system-prompt preamble prepended to every agent's instructions |
 | Router skill (`enx-tprm-control-center`) | **A2A hand-offs**: a router agent that hands off to the published worker agents. Connected Agents do not exist on the current Agent Service; the production path is Microsoft Agent Framework orchestration with the verifier and the approval gate as explicit steps (`enterprise/ENTERPRISE_BLUEPRINT.md` ORC-1) |
 | Claude chat session / thread | Foundry **conversation** (+ `responses`); classic threads/runs retire 2027-03-31 |
-| Claude model | An Azure model deployment (default `gpt-4o` from the Foundry model catalog). Claude models **are** offered on Microsoft Foundry; they are excluded here by the **EU residency rule**, not by availability — see Limitations |
+| Claude model | An Azure model deployment (default `gpt-4o` from the Foundry model catalog). Claude models **are** offered on Microsoft Foundry; they are excluded here by the **EU residency rule**, not by availability — correction of record, `*ModelFormat` parameters and the tier-switch procedure in `governance/CLAUDE_ON_FOUNDRY.md` (summarised in Limitation 1) |
 | claude.ai skill sync | `scripts/convert_skills.py` + `scripts/create_agents.py` (re-run to re-sync) |
 
 ## Folder layout
@@ -46,7 +46,7 @@ convertion/
 ├── agents/                    ← persona_system_prompt.md, addenda, overlays/,
 │                                knowledge-packs/, advisor-knowledge/,
 │                                12 charters (`*_instructions.md`)
-├── scripts/                   ← 19 Python tools (convert, create, attach, verify,
+├── scripts/                   ← 21 Python tools (convert, create, attach, verify,
 │                                update_templates, memory_store, …) + adapters/
 ├── build/                     ← generated: agents/ (22), manifest.json,
 │                                instruction-hashes.json, learning/
@@ -58,14 +58,26 @@ convertion/
 │                                azure-pipelines.yml, deploy_logicapps.sh, and
 │                                README.md explaining the PR gates, the OIDC
 │                                deploy and the secret scan
-├── functions/delivery/        ← renderer + SharePoint storage Function
+├── functions/
+│   ├── delivery/              ← renderer + SharePoint storage Function (holds the
+│   │                            managed identity: Graph, Foundry, Document Intelligence)
+│   └── office-tools/          ← the binary document toolchain as a SECOND container
+│                                (LibreOffice/soffice, pandoc, poppler, qpdf, tesseract,
+│                                ImageMagick): /api/convert, /api/recalc (the xlsx formula
+│                                gate), /api/accept_changes, /api/thumbnail, /api/validate.
+│                                No Azure credential, no outbound call, key-protected, and
+│                                never an agent tool — the pipeline calls it
 ├── mcp-server/                ← MCP exposure of the platform (+ evals/)
-├── templates/                 ← registry.json, deck schema, themes/, assets/, samples/
-├── governance/                ← 9 governance docs + index README
+├── templates/                 ← registry.json, 11 deliverable schemas, skill-decisions.json
+│                                (the machine form of MAPPING.md + governance/
+│                                PLATFORM_SKILLS_DECISION.md), themes/, assets/, samples/
+├── governance/                ← 11 governance docs + index README
 ├── operations/                ← day-2 operation of the delivered systems
 │   ├── RUNBOOK.md, SUPPORT_MODEL.md, CHANGE_MANAGEMENT.md, MONITORING.md
 │   ├── FINOPS.md, TOKEN_ECONOMY_PLAYBOOK.md, cost-budget.bicep
 │   ├── LIFECYCLE.md, BACKUP_DR.md, backup_vector_stores.py, backup-job.bicep
+│   ├── RETENTION_AND_CLEANUP.md   ← monthly housekeeping: orphan stores/files, idle
+│   │                            conversations, memory notes past retain_until
 │   ├── ROLLOUT_PLAN.md, KPIS.md, CONTINUOUS_IMPROVEMENT.md
 │   ├── evaluation/            ← golden set, EVALUATION.md, run_evals.py (gates)
 │   ├── access-governance/     ← lifecycle, quarterly review, break-glass
@@ -81,9 +93,18 @@ convertion/
 └── sharepoint/                ← `Reports/<Supplier>/<Service>/` storage rules
 
 (repo root, outside this folder)
-├── .github/                   ← GitHub Actions workflow ci.yml (gates on every
-│                                PR, approved OIDC deploy on `main`),
+├── .github/                   ← workflows/ci.yml (offline gates on every PR),
+│                                workflows/deploy.yml (the ONLY path that talks
+│                                to Azure: workflow_run after a green CI on
+│                                `main`, `environment: production` approval,
+│                                OIDC), workflows/nightly-drift.yml (nightly
+│                                drift + access snapshot, read-only identity);
+│                                CODEOWNERS, PULL_REQUEST_TEMPLATE.md,
 │                                gitleaks.toml, dependabot.yml
+├── .gitleaks.toml             ← root shim: `[extend] path` → .github/gitleaks.toml
+│                                so a scan run without --config uses the same
+│                                allow-list (pre-commit, `gitleaks protect`)
+├── .pre-commit-config.yaml    ← local, non-authoritative mirror of the CI gates
 └── .devcontainer/             ← dev container mirroring the CI toolchain
 ```
 
@@ -116,6 +137,11 @@ python3 create_agents.py        # uses PROJECT_ENDPOINT from .env / environment
 # 5. Attach integrations + model tiers (Jira, OneTrust, Defender, SharePoint,
 #    SecurityScorecard, IAF API, ENX gateway MCP, web search, and the
 #    tool-capable reasoning tier — governance/MODEL_ROUTING.md holds the
+The full governance index is `governance/README.md` — including `RISK_THRESHOLDS.md`
+(which scale belongs to which deliverable), `PLATFORM_SKILLS_DECISION.md`,
+`CLAUDE_ON_FOUNDRY.md`, `MEMORY_POLICY.md`, `MEMORY_IMPORT.md`,
+`M365_DOCUMENT_EDITING.md` and `THIRD_PARTY_IP.md` (the Anthropic-licensed skills —
+the IP decision is still open and the conversion of those seven agents is gated on it).
 #    tool-compatibility matrix) — after creating the conn-* Foundry
 #    connections; see integrations/README.md
 python3 attach_integrations.py
@@ -139,7 +165,11 @@ components. In one paragraph: twelve **report-delivery pipelines**
 take a supplier name + service name, run the producing agent, pass the
 draft through the output-verifier and the human approval gate, render the
 file (HTML/DOCX/PPTX/XLSX) in the **delivery Function**
-(`functions/delivery/`), and store it in SharePoint under
+(`functions/delivery/`) — which calls the second container,
+`functions/office-tools/`, for anything needing the binary toolchain
+(LibreOffice/pandoc/poppler conversion, the mandatory xlsx `/api/recalc`
+formula gate, tracked-change flattening, slide thumbnails, OOXML
+validation) — and store it in SharePoint under
 `Reports/<Supplier>/<Service>/` with the idempotent folder rule (reuse
 the supplier folder when it exists, create the service folder only when
 missing — `sharepoint/README.md`). Five **new agents** extend the
@@ -170,6 +200,22 @@ scheduled evaluation/red-team, approval and delivery pipelines), and
 `integrations/copilot/` documents the **native publish to Microsoft Teams
 and Microsoft 365 Copilot** (`enterprise/ENTERPRISE_BLUEPRINT.md` CP-1).
 
+**Web egress, stated plainly.** Grounding with Bing Search and the
+allow-listed `osint-proxy` page fetch are the *only* routes out to the web;
+no generic HTTP or browser tool exists on any agent. Bing grounding is a
+**global** service: the sanitised query leaves the Azure compliance
+boundary and **the Azure Data Protection Addendum does not apply to it**, so
+EU residency is not guaranteed for the query text. Queries may therefore
+carry public facts only — supplier and product names, CVE ids, regulation
+references — never internal identifiers, scores, findings or quoted
+internal text. This is an **accepted residual risk** owned by the
+accountable owner, recorded on the `web-search` connection in
+`integrations/registry.json`, in the RoPA and in the DORA Art. 28 register,
+and re-reviewed each quarter; the compensating controls are the persona
+egress rule, the `egress-internal-markers` KQL alert, and page reads going
+through `osint-proxy` instead. Full text:
+`governance/DATA_PROTECTION_GUARDRAILS.md` §1.
+
 ## Orchestrator, advisor with memory, MCP access
 
 `orchestrator/README.md` describes the flagship layer: the
@@ -184,8 +230,17 @@ server in `mcp-server/` that exposes the whole environment to any MCP
 client (Claude included) via `ask_orchestrator` / `ask_agent` /
 `save_memory` / `search_memory`.
 
+Step **[1b]** regenerates the platform self-knowledge pack
+(`scripts/build_self_knowledge.py`) from the manifest that step [1] just
+wrote; when the pack changed, step [1] is re-run so the new tables reach the
+agents' knowledge stores. Step **[4b]** is the router rewire
+(`create_agents.py --rewire`): step [3] runs with `--skip-routers` because
+the delivery agents a ROUTE table points at are only created in step [4].
+
 Re-running steps 3–4 is idempotent by agent name: existing agents are updated
 in place (instructions and knowledge refreshed), new skills become new agents.
+[1b] and [4b] are idempotent too — [1b] rewrites only the marked blocks and
+reports "up to date" when nothing moved, and [4b] rewrites only ROUTE tables.
 
 ## What gets created in Azure
 
@@ -208,15 +263,35 @@ in place (instructions and knowledge refreshed), new skills become new agents.
   charters `enterprise-explorer` and the three research agents
 - 1 router agent (`enx-tprm-control-center`) handing off to its five worker
   agents through the A2A tool
+- 2 container-based Function apps — `{baseName}-delivery` (renderers,
+  SharePoint storage, Document Intelligence; holds the managed identity) and
+  `{baseName}-office` (`functions/office-tools/`: LibreOffice, pandoc,
+  poppler, qpdf, tesseract, ImageMagick; **no credential and no outbound
+  call**, key-protected, called only by the delivery Function and the
+  pipelines, never attached to an agent). Images are tagged with the release
+  tag (`operations/LIFECYCLE.md` V10)
 
 ## Limitations and honest deltas
 
 1. **Model:** Anthropic Claude models **are** offered on Microsoft Foundry;
    they are excluded from this deployment by the **EU residency rule** (no EU
-   Data Zone for them at the time of writing), not by availability. Re-check
-   the model region-availability page at the quarterly platform-currency
-   review; the `*ModelFormat` parameters in `infra/main.bicep` already accept
-   `Anthropic` for the day the residency position changes. Agents therefore
+   Data Zone for them at the time of writing), not by availability. An earlier
+   statement in this kit that they are "not available on Azure" is
+   **withdrawn** — the correction of record, its sources and the per-tier
+   switch procedure are `governance/CLAUDE_ON_FOUNDRY.md`. Re-check the model
+   region-availability page at the quarterly platform-currency review; the
+   three publisher-format parameters in `infra/main.bicep` —
+   `lightModelFormat`, `chatModelFormat`, `reasoningModelFormat`, each
+   `@allowed(['OpenAI', 'Anthropic'])` and feeding the `format` field of the
+   three model deployments — already accept `Anthropic` (Haiku → light,
+   Sonnet → chat, Opus → reasoning) for the day the residency position
+   changes. Switching is never a one-parameter edit: a deployment is named
+   after its model, so the tier's `*ModelName` / `*ModelVersion` parameters,
+   the matching `*_DEPLOYMENT_NAME` in `setup/.env` and
+   `_deployment_of_record` in `integrations/registry.json` move with it,
+   `deploymentSku` stays `DataZoneStandard`, and the candidate must pass the
+   tool-compatibility matrix (`governance/MODEL_ROUTING.md`, finding C4)
+   before it can carry a reasoning agent's tools. Agents therefore
    default to `gpt-4o`: instruction-following and output style differ from
    claude.ai, so validate the report-generating agents (ciso-reporting,
    deepsearch, slide generators) against known-good outputs before relying on

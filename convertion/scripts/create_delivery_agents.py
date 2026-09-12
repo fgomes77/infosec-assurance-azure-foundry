@@ -92,6 +92,8 @@ AGENTS: dict[str, dict] = {
             "build/agents/pptx-executive-summary-ciso/knowledge/*",
             "build/agents/tpsrca-assessment-engine/knowledge/*",
             "templates/registry.json",
+            # the output contract this agent must emit, in its own store
+            "templates/ciso_global_deck.schema.json",
             _ADV + "iso27005-risk-management.md",
             _ADV + "tpsrca-supplier-types.md",
         ] + _PACKS,

@@ -30,7 +30,7 @@
       "value": "infosecfoundry-la"
     },
     "logicAppRuntimeStorageAccountName": {
-      "value": ""
+      "value": "infosecfoundrylasa"
     },
     "bingAccountName": {
       "value": "infosecfoundry-bing"

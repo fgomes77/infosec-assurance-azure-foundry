@@ -11,6 +11,17 @@ Azure catalogue evolves — the TIER structure is the contract):
 | `chat` | `gpt-4o` | mid | Standard report generation where the template + verified extraction rules carry the quality: `dpia`, `ciso-reporting`, `ciso-executive-summary`, `tprm-slide-generator`, `pptx-executive-summary-ciso`, `onetrust-form-b`, `template-manager`, `whisperx-transcribe-diarize`, `doc-coauthoring`, `internal-comms`, `learn` |
 | `reasoning` | `o4-mini` (tool-capable reasoning model — finding C4; **never `o3-mini`**, which supports none of the OpenAPI, MCP, Azure AI Search, SharePoint or Web Search tools that every reasoning agent carries) | high per token, but fewer iterations on analytic work | Judgement-heavy analysis: `deepsearch-protocol`, `ai-deepsearch-osint-gathering-report`, `cyber-forum`, `ciso-global-report`, `tpa-evidence-analyzer`, `soc-report-analyzer`, `pentest-report-analyzer`, `pdf-full-coverage-analyzer`, `tpsrca-assessment-engine`, `mcp-builder`, framework advisors (`iso27001`, `iso42001`, `dora`, `nis2`, `eu-ai-act`), `infosec-assurance-advisor`, orchestrator, `output-verifier` |
 
+**Deployments of record.** The three deployment names come from
+`../infra/main.bicep` (`lightModelName` / `modelName` / `reasoningModelName`),
+all on the **EU Data Zone** SKU with the per-tier capacity set there, and are
+written back into `setup/.env` by `provision.sh`. Anthropic **Claude** models
+are offered in the Foundry catalogue and can back the same three tiers where
+the EU Data Zone carries them (Haiku → `light`, Sonnet → `chat`, Opus →
+`reasoning`); the availability check, the reproducibility comparison and the
+tier-switch procedure are in `CLAUDE_ON_FOUNDRY.md` and `../infra/README.md`
+§Claude tiers. A tier switch is a Tier-B change and re-runs the golden set
+before it is accepted.
+
 **Tool compatibility is part of the routing rule (finding C4).** An agent may
 only be pinned to a tier whose model supports *every* tool type it carries. The
 matrix of record — per model, per tool type, with the Microsoft tool-support
@@ -130,7 +141,11 @@ RAG retrieval and structured output contracts, not from a cheaper model.
    Procedure: `../operations/TOKEN_ECONOMY_PLAYBOOK.md`; accuracy-floor
    evidence: `../operations/evaluation/run_evals.py` against
    `../operations/evaluation/golden-set.*.json` (gate G1); cost figures:
-   `../operations/FINOPS.md` §2. Tier proposals from the monthly review are
+   `../operations/FINOPS.md` §2. Source query for the per-agent token split:
+   `../infra/kql/tokens-per-agent.kql`; budget and cost alerts:
+   `../infra/cost.bicep`. Thread/file housekeeping that keeps the token bill
+   down: `../scripts/cleanup_foundry.py` (`../operations/RETENTION_AND_CLEANUP.md`
+   §4, RUNBOOK M5). Tier proposals from the monthly review are
    backlog items delivered in the quarterly improvement cycle
    (`../operations/CONTINUOUS_IMPROVEMENT.md` §4.1 "FinOps").
 

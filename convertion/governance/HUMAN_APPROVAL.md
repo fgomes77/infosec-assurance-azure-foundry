@@ -15,7 +15,26 @@ Enforced as defense in depth at three layers:
 `scripts/attach_integrations.py` strips every non-GET operation from the
 OpenAPI specs before attaching them, so agents **cannot** call write
 endpoints directly, whatever their instructions or a prompt-injection
-attempt says. Write operations exist only inside the approval-gated
+attempt says.
+
+**Exception of record — five query POSTs.** Some search APIs express a
+*query* as a POST because it does not fit in a URL. Those operations are
+kept: `searchIssuesJql` (Jira JQL), `aqlSearchObjects` (Jira Assets AQL),
+`runHuntingQuery` (Defender advanced hunting), `searchContent` (SharePoint /
+Graph search) and `codeSearch` (Azure DevOps). Two conditions must both hold
+— the operation carries `x-enx-read-only: true` in the spec **and** its
+`operationId` is in `attach_integrations.READ_ONLY_POST_OPS`. The second
+condition is the control: without it, anyone who can edit a spec file could
+widen the read-only rule by adding a flag, which would make a structural
+control editable by its own subject. A flag on any other operation is a hard
+failure at attach time and in `verify_conversion.py`'s read-only audit, which
+re-derives the kept list from the specs and prints it
+(`attach_integrations.py --dry-run` prints the same list). These five read;
+none of them mutates.
+
+Mail send (`MAIL_SEND`) and repository changes (`TEMPLATE_UPDATE`, where CI
+opens a pull request rather than pushing) exist only as Layer-3 gated
+actions — never as an agent tool. Write operations exist only inside the approval-gated
 workflows (Layer 3). A specific write may be granted to a specific agent
 only by listing the connection in that agent's `"write_connections"` in
 `integrations/registry.json` — the default for every agent is none, and any
@@ -61,6 +80,14 @@ on an `HttpWebhook` approval gate: the draft is sent to the approver
 submitting. Notifications-only steps (Teams summaries) are not gated.
 Approver ≠ requester and tiered approver groups are enforced by the
 approval flow per `../team/approval-policy.json`. See `../workflows/README.md`.
+
+Reference implementation of the approval side:
+`../integrations/copilot/function/function_app.py` —
+`POST /api/approval/subscribe` (the `approvalWebhookUrl` target) stores the
+draft and posts the review link to Teams, `GET /api/approval/{id}` renders it,
+and `POST /api/approval/{id}/decide` verifies the approver against
+`../team/approval-policy.json` (Graph `checkMemberGroups`, no self-approval)
+before calling back `{decision, approver}`.
 
 | Gated workflow | Submission of record | Expiry |
 |---|---|---|

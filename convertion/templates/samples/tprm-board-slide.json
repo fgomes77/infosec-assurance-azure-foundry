@@ -1,0 +1,147 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "vendor": "Northwind Cloud Services BV",
+  "report_date": "September 2026",
+  "date": "2026-09-10",
+  "service_desc": "Managed SFTP Gateway - SaaS, EU region, SSO via the corporate IdP",
+  "dora_scope": true,
+  "criticality": "Not-Critical",
+  "overall_risk": "Medium",
+  "certifications": [
+    "ISO 27001"
+  ],
+  "domain_scores": {
+    "Cybersecurity": 5.2,
+    "Data Management": 3.2,
+    "IT": 2.8,
+    "Business Continuity": 4.1,
+    "Third-Parties": 3.5
+  },
+  "top_risks": [
+    {
+      "id": "R06",
+      "score": 5.2,
+      "residual": 5.2,
+      "domain": "Cybersecurity",
+      "title": "Inadequate Vulnerability Management",
+      "detail": "Two advisories older than 90 days without patch evidence."
+    },
+    {
+      "id": "R04",
+      "score": 4.1,
+      "residual": 4.1,
+      "domain": "Business Continuity",
+      "title": "Lack of Business Continuity and DR Capabilities",
+      "detail": "No tested failover evidence for the EU region."
+    },
+    {
+      "id": "R02",
+      "score": 3.5,
+      "residual": 3.5,
+      "domain": "Third-Parties",
+      "title": "Third-Parties Relationship Not Properly Managed",
+      "detail": "Sub-processor list not published."
+    }
+  ],
+  "full_register": [
+    {
+      "id": "R06",
+      "label": "Sec risks",
+      "score": 5.2
+    },
+    {
+      "id": "R04",
+      "label": "BC/DR",
+      "score": 4.1
+    },
+    {
+      "id": "R02",
+      "label": "Supply",
+      "score": 3.5
+    },
+    {
+      "id": "R01",
+      "label": "Net",
+      "score": 3.2
+    },
+    {
+      "id": "R03",
+      "label": "IAM",
+      "score": 2.8
+    }
+  ],
+  "mitigations": [
+    {
+      "label": "Euronext SOC Integration",
+      "detail": "Log export into the Euronext SOC pipeline.",
+      "status": "Pending"
+    },
+    {
+      "label": "Patch evidence clause",
+      "detail": "Contractual SLA on critical patching.",
+      "status": "Pending"
+    },
+    {
+      "label": "Phishing-resistant MFA",
+      "detail": "Conditional access enforced at the IdP.",
+      "status": "Implemented"
+    }
+  ],
+  "perimeter": {
+    "Cybersecurity": {
+      "internal": {
+        "text": "&#x26A0; SOC integration",
+        "alert": true
+      },
+      "external": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      }
+    },
+    "Data Management": {
+      "internal": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      },
+      "external": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      }
+    },
+    "IT": {
+      "internal": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      },
+      "external": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      }
+    },
+    "Business Continuity": {
+      "internal": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      },
+      "external": {
+        "text": "&#x26A0; DR test evidence",
+        "alert": true
+      }
+    },
+    "Third-Parties": {
+      "internal": {
+        "text": "&#x2714; Mitigated",
+        "alert": false
+      },
+      "external": {
+        "text": "&#x26A0; Sub-processor list",
+        "alert": true
+      }
+    }
+  },
+  "findings": [
+    "Residual risk is **Medium**; two treatment plans remain **Pending**.",
+    "External posture is certified but the certificate scope excludes the EU region.",
+    "DORA in scope: contractual addendum required before go-live."
+  ]
+}

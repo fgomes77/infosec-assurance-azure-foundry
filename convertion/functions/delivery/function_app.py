@@ -4,7 +4,8 @@ code_interpreter cannot provide (no network, no Node, no Chromium).
 
 Called by the Logic App pipelines in ../../workflows/ and (compute routes
 only) by agents through the OpenAPI connections in
-../../integrations/openapi/ (osint-proxy, passive-recon, pdf-coverage).
+../../integrations/openapi/ (osint-proxy, passive-recon). The PDF-coverage
+surface below is POST-only and therefore NOT agent-attachable — see its route.
 Function-key + VNet restricted; optional Easy Auth principal pinning
 (ALLOWED_CALLER_PRINCIPAL_IDS). The managed identity holds Graph
 Sites.Selected write on the InfoSec Assurance site — agents themselves are
@@ -32,7 +33,8 @@ read-only, see ../../sharepoint/README.md.
   GET  /api/fetch_public_page?url=&supplierDomain=&mode=&maxBytes=   (osint-proxy.yaml)
   GET  /api/allowlist
   GET  /api/passive_recon?domain=                                     (passive-recon.yaml)
-  POST /api/pdf/{stage}      stage: triage|inventory|chunk|verify|cross_check (pdf-coverage.yaml)
+  POST /api/pdf/{stage}      stage: triage|inventory|chunk|verify|cross_check
+                             (pipeline-invoked only — POST, so not an agent tool)
   POST /api/speaker_clips    {transcript, audioBase64|driveId+itemId, format} -> zip
   GET  /api/health
 
@@ -685,33 +687,86 @@ def _extract_payload(text, fmt: str):
                {"preview": s[:200]})
 
 
-def _validate_schema(template: str, data) -> None:
+_REGISTRY_SCHEMAS: dict[str, str] | None = None
+
+
+def _registry_schema_name(template: str) -> str | None:
+    """The `schema` key templates/registry.json records for this template."""
+    global _REGISTRY_SCHEMAS
+    if _REGISTRY_SCHEMAS is None:
+        _REGISTRY_SCHEMAS = {}
+        reg = HERE.parent.parent / "templates" / "registry.json"
+        try:
+            for t in json.loads(reg.read_text(encoding="utf-8")).get("templates", []):
+                if t.get("id") and t.get("schema"):
+                    _REGISTRY_SCHEMAS[t["id"]] = t["schema"]
+        except (OSError, json.JSONDecodeError, AttributeError):
+            pass  # the registry is not shipped in every image; manifests still resolve
+    return _REGISTRY_SCHEMAS.get(template)
+
+
+def _schema_path(template: str, mf: dict | None = None) -> tuple[Path | None, str | None]:
+    """Resolve the contract file for a template.
+
+    Order: the renderer manifest's `schema` key, then templates/registry.json,
+    then the `<template>.schema.json` name convention (and its underscored
+    variant). The name convention alone is NOT enough — four contracts are
+    deliberately named after the document rather than the template id
+    (`dpia` -> dpia_report, `ciso-reporting` -> ciso_reporting_assessment,
+    `ciso-global` -> ciso_global_deck, `ciso-exec-summary` ->
+    ciso_exec_summary_render), and resolving by convention alone silently
+    skipped validation for all four. The files are NOT renamed: the manifests
+    and the agent charters cite these names (templates/README.md "Schema
+    resolution").
+
+    Returns (path, declared_name). `declared_name` is set when a manifest or
+    the registry declares a schema, so a declared-but-missing file can be a
+    500 instead of a silent pass.
+    """
+    declared = (mf or {}).get("schema") or _registry_schema_name(template)
+    names = [declared] if declared else []
+    names += [f"{template}.schema.json", f"{template.replace('-', '_')}.schema.json"]
+    for name in names:
+        for sd in SCHEMA_DIRS:
+            cand = sd / name
+            if cand.exists():
+                return cand, declared
+    return None, declared
+
+
+def _validate_schema(template: str, data, mf: dict | None = None) -> None:
     """jsonschema gate: a payload that does not match the registered contract
     is a 400 naming the failing field, before any renderer is started. Fails
-    CLOSED — an unreadable schema or a missing jsonschema package is a 500,
-    never a silent pass (a renderer fed an off-contract payload produces a
-    plausible-looking wrong report)."""
-    for sd in SCHEMA_DIRS:
-        for cand in (sd / f"{template}.schema.json", sd / f"{template.replace('-', '_')}.schema.json"):
-            if not cand.exists():
-                continue
-            try:
-                import jsonschema
-            except ImportError:
-                raise Http(500, "jsonschema is not installed in this image")
-            try:
-                schema = json.loads(cand.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as e:
-                raise Http(500, f"schema {cand.name} is unreadable: {e}")
-            try:
-                jsonschema.validate(data, schema)
-            except jsonschema.ValidationError as e:
-                raise Http(400, f"data does not match {cand.name}: {e.message}",
-                           {"path": list(map(str, e.absolute_path)) or ["<root>"],
-                            "schemaPath": list(map(str, e.absolute_schema_path))})
-            except jsonschema.SchemaError as e:
-                raise Http(500, f"schema {cand.name} is invalid: {e.message}")
-            return
+    CLOSED — an unreadable schema, a missing jsonschema package, or a contract
+    that is declared but not shipped is a 500, never a silent pass (a renderer
+    fed an off-contract payload produces a plausible-looking wrong report).
+
+    A template that declares no schema anywhere is the only pass-through case,
+    and it is deliberate: `enx-theme` and the endpoint-only renderers have no
+    payload contract to check.
+    """
+    cand, declared = _schema_path(template, mf)
+    if cand is None:
+        if declared:
+            raise Http(500, f"template '{template}' declares schema '{declared}' "
+                            f"but it is not in this image")
+        return
+    try:
+        import jsonschema
+    except ImportError:
+        raise Http(500, "jsonschema is not installed in this image")
+    try:
+        schema = json.loads(cand.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        raise Http(500, f"schema {cand.name} is unreadable: {e}")
+    try:
+        jsonschema.validate(data, schema)
+    except jsonschema.ValidationError as e:
+        raise Http(400, f"data does not match {cand.name}: {e.message}",
+                   {"path": list(map(str, e.absolute_path)) or ["<root>"],
+                    "schemaPath": list(map(str, e.absolute_schema_path))})
+    except jsonschema.SchemaError as e:
+        raise Http(500, f"schema {cand.name} is invalid: {e.message}")
 
 
 def _run(cmd: list[str], cwd: Path, timeout=600) -> str:
@@ -836,7 +891,10 @@ def render(req: func.HttpRequest) -> func.HttpResponse:
             if not template:
                 raise Http(400, f"template is required for format {fmt}")
             payload = _extract_payload(body.get("data"), fmt)
-            _validate_schema(template, payload)
+            # The renderer's own manifest is the first place the contract name
+            # is looked up, so a template whose schema file is named after the
+            # document rather than the template id still validates.
+            _validate_schema(template, payload, _manifest(_renderer_dir(template)))
             if template in gates.GATES and gates.GATES[template][0] == "data":
                 fails = gates.GATES[template][1](payload)
                 if fails:
@@ -1048,8 +1106,13 @@ PDF_STAGES = {"triage": "triage.py", "inventory": "inventory.py", "chunk": "chun
 def pdf_coverage(req: func.HttpRequest) -> func.HttpResponse:
     """Runs the byte-verified pdf-full-coverage-analyzer scripts (poppler,
     tesseract, PyMuPDF, pdfplumber are in this container) on a SharePoint
-    item / Foundry file / inline bytes. Non-mutating compute: registered as a
-    'compute_connections' OpenAPI tool (integrations/openapi/pdf-coverage.yaml)."""
+    item / Foundry file / inline bytes. Non-mutating compute — but POST-only,
+    and scripts/attach_integrations.py strips every non-GET operation from
+    every attached spec (governance/HUMAN_APPROVAL.md Layer 1). So there is
+    deliberately NO integrations/openapi/pdf-coverage.yaml: this surface is
+    invoked by the delivery pipeline, never by an agent. Attaching it would
+    have meant carving the first exception into the read-only rule, for an
+    endpoint the pipeline can call on the agent's behalf anyway."""
     stage = req.route_params.get("stage", "")
     if stage not in PDF_STAGES:
         raise Http(404, f"unknown stage {stage}; one of {sorted(PDF_STAGES)}")

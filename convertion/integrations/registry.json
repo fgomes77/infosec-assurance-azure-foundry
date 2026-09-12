@@ -74,6 +74,13 @@
       "identity": "project_connection_custom_keys (conn-osint-proxy; delivery Function key, fetch_public_page only)",
       "_comment": "Sanitised public-page fetch (delivery Function endpoint GET /api/fetch_public_page): public-host allow-list, outbound DLP on the URL, size cap, HTML->text. Replaces claude.ai web_fetch/Firecrawl page reads for OSINT (DeepSearch streams 2A-2G, tpsrca evidence validator URL accessibility). Not a generic HTTP tool - governance/DATA_PROTECTION_GUARDRAILS.md section 1."
     },
+    "passive-recon": {
+      "type": "openapi",
+      "spec": "integrations/openapi/passive-recon.yaml",
+      "foundry_connection": "conn-osint-proxy",
+      "identity": "project_connection_custom_keys (conn-osint-proxy; the same delivery Function key as osint-proxy, passive_recon only)",
+      "_comment": "Strictly passive DNS/TLS/security-header fingerprint of a PUBLIC supplier domain (delivery Function endpoint GET /api/passive_recon). Replaces the DeepSearch bash recon block (curl -sIL, openssl s_client, dig) for stream 2D. One TLS handshake, one root GET, DNS lookups - no scan, no crawl, no probe: ActiveScanningAllowed is always No on this platform and the assessment must say so. Same urlpolicy.check_host gate, audit and rate limit as osint-proxy. GET-only, so attach_integrations.py attaches it whole and the read-only rule needs no exception."
+    },
     "exchange-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/exchange-graph.yaml",
@@ -197,6 +204,7 @@
         "iaf-api",
         "enx-gateway-mcp",
         "osint-proxy",
+        "passive-recon",
         "jira-assets-cmdb",
         "defender-graph"
       ],
@@ -208,7 +216,8 @@
       "tools": [
         "web-search",
         "securityscorecard",
-        "osint-proxy"
+        "osint-proxy",
+        "passive-recon"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing"
@@ -375,6 +384,36 @@
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
       "_comment": "Agent 3 Evidence Validator: URL accessibility/content checks via osint-proxy (HEAD/GET on public URLs). When the tool is unavailable or the host is not allow-listed, Accessibility = 'not verified' (score 0.5) and the URL is listed under validated_sources with status 'unverified' - never silently defaulted."
+    },
+    "tpsrca-calc": {
+      "tools": [],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis",
+      "_comment": "Optional TPSRCA role split (scripts/create_tpsrca_subagents.py): roles 4-8, owns calculation_engine.py in code_interpreter. No tools at all - every number comes from the score object it is handed and from the engine; nothing is looked up, so no web/OSINT surface and the security-analysis guardrail applies. Deployed only when the split is wanted; tpsrca-assessment-engine keeps role 1 and ROUTEs to it."
+    },
+    "tpsrca-analysis": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Optional TPSRCA role split: roles 2, 3 and 9-11. Keeps osint-proxy because role 3 (Evidence Validator) performs URL accessibility checks - the parent's _comment rule carries over verbatim: when the tool is unavailable or the host is not allow-listed, Accessibility = 'not verified' (score 0.5) and the URL is listed under validated_sources with status 'unverified', never silently defaulted. Because it reaches public URLs it carries the web-facing guardrail policy, not the security-analysis one."
+    },
+    "tpsrca-report": {
+      "tools": [],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-security-analysis",
+      "_comment": "Optional TPSRCA role split: role 12. Assembles the TPSRCA report from the score object produced by tpsrca-calc and the analysis from tpsrca-analysis, both passed in by tpsrca-assessment-engine. It writes prose against a fixed contract and never recomputes a score or looks anything up, so chat tier with no tools."
     },
     "tprm-slide-generator": {
       "tools": [

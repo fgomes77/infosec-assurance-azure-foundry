@@ -79,11 +79,23 @@ A.8.15 "logs protected"; A.5.34 privacy; GDPR Art. 5(1)(c)).
 compares the serving version against `build/agent-versions.json` — the ledger
 `scripts/_foundry_runtime.py` writes on every deploy — **not** against
 `build/manifest.json`, which holds no versions. `deploy.sh` publishes the
-ledger to App Insights as the custom event `deploy_manifest`. Nightly drift
-Routine: **restore the release pipeline's `build/agent-versions.json` before
-running `python3 scripts/verify_deployment.py`** — `build/` is git-ignored, so
-without the restored ledger the version comparison is silently skipped and the
-drift check degrades to a name-only check.
+ledger to App Insights as the custom event `deploy_manifest`.
+
+**The nightly drift run is implemented** — `.github/workflows/nightly-drift.yml`,
+03:17 UTC, on a **read-only** OIDC federated identity that deliberately cannot
+change anything (`team/least-privilege/IDENTITY_RBAC.md`). It runs
+`python3 scripts/verify_deployment.py --json` and `team/access-review.sh`, and
+publishes a 90-day artefact with every principal name redacted. It must
+**restore the release pipeline's `build/agent-versions.json` before running
+`verify_deployment.py`** — `build/` is git-ignored, so without the restored
+ledger the version comparison is silently skipped and the drift check degrades
+to a name-only check.
+
+A red nightly run is an **operational finding**, not a broken build: nothing
+was pushed, the deployed platform simply no longer matches the verified build
+or the access snapshot moved. It is triaged through `RUNBOOK.md` (FM-08 for
+agent/knowledge drift, the access-governance review for a membership change),
+not by re-running CI.
 
 Each file ends with a `where` that keeps only breaching rows (so the alert
 fires on *rows > 0*); remove that line for the dashboard view. Thresholds

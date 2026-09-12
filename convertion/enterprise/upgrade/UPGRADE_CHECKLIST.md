@@ -143,7 +143,7 @@ Control refs:       ISO 27001:2022 A.8.32, A.8.9, A.8.29, A.8.31; ISO 42001 A.6.
 | C5 registry | `attach_integrations.py --dry-run` `[read-only]` | tier changes | tier changes on report agents | required; `write_connections` = line manager | tier changes | tool-support row |
 | C6 templates | `update_templates.py --dry-run` | affected consumers | required | — | — | approval run id |
 | C7 knowledge | `create_*.py --dry-run` | required | advisors g/h/i | intake form rows 2, 3, 6 | — | provenance in file header |
-| C8 workflows | JSON parse; `package_workflows.py` | — | one run to the verifier in test | required if approval step changes | — | `HUMAN_APPROVAL.md` table |
+| C8 workflows | JSON parse; `build_logicapps.py` | — | one run to the verifier in test | required if approval step changes | — | `HUMAN_APPROVAL.md` table |
 | C9 Function / images | `py_compile`; `func` local | — | `/render` smoke via comparison set | required | — | image scan |
 | C10 infrastructure | `infra/validate.sh` + `what-if` | — | — | required | required | rollback tested in dev |
 | C11 RBAC / identities | `provision_identity.sh --plan`; `what-if` | — | — | required; line manager for privileged | — | snapshot before/after |

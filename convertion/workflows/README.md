@@ -195,7 +195,11 @@ otherwise the run terminates `MISSING_SUPPLIER_OR_SERVICE`) → uploaded
 file ids mapped to `{file_id, tools:[file_search, code_interpreter]}` → run
 the producing agent → output-verifier → human approval gate (`kind` =
 `approvalKind`) → extract the ```` ```json ```` contract (or the
-`<!DOCTYPE …</html>` document for html) → `/render` → `/ensure_folder`
+`<!DOCTYPE …</html>` document for html) → `/render` (which, for the formats
+that need the binary toolchain, calls the second container
+`functions/office-tools/` — notably the mandatory xlsx `/api/recalc`
+formula gate, which must report `total_errors=0` before release) →
+`/ensure_folder`
 (`Reports/<Supplier>/<Service>/`, reuse-if-exists) → `/upload` + org share
 link → `/assign_label` (Purview sensitivity label on the delivered file via
 Graph `driveItem:assignSensitivityLabel`, from the delivery Function — the

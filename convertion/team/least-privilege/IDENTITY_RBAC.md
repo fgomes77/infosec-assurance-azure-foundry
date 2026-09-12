@@ -58,6 +58,33 @@ permanent. Role GUIDs are in `infra/rbac.bicep`.
 | Bing Grounding account `{baseName}-bing` | via the project connection only | `Reader` (usage), keys read only by Bicep at deploy | Bicep-managed | — | — |
 | Container Apps (hosted MCP, optional) | Easy Auth allowed group `sg-infosec-foundry-users` | `Contributor` on the Container App P 4 h | `Contributor` | Container App MI: `Azure AI User` on project | — |
 
+### 2a. The second, read-only federated credential (nightly detective control)
+
+`.github/workflows/nightly-drift.yml` runs `verify_deployment.py` and
+`team/access-review.sh` every night. It is a **detective** control and must
+never be able to change anything, so it does **not** reuse
+`sp-infosec-foundry-deploy` — an identity that holds `Contributor` and
+`Azure AI Developer`. A second app registration exists for it:
+
+| Property | Value |
+|---|---|
+| App registration | `{app:infosec-foundry-readonly}` / service principal `sp-infosec-foundry-readonly` |
+| Resource group `rg-infosec-foundry` | `Reader` |
+| Foundry account/project | `Azure AI User` (the data-plane **read** role — enough to list agents, vector stores and versions; not `Azure AI Developer`) |
+| Microsoft Graph | `Directory.Read.All` (application) — the group-membership half of `access-review.sh` |
+| Everything else | nothing. No Key Vault, no storage, no Logic App, no Function, no role-assignment right |
+| Federated subject | `repo:{github:org/repo}:ref:refs/heads/main` — a **branch** subject, with no `environment:` segment, because the nightly workflow deliberately carries no environment and therefore no approval gate |
+| Secret | none — OIDC only, like the deploy credential |
+
+The workflow reads its client id from `vars.AZURE_READONLY_CLIENT_ID` and
+falls back to `vars.AZURE_CLIENT_ID` when that variable is unset. **Until this
+registration is provisioned and the variable set, the nightly job runs as the
+deploy identity** — which is exactly the over-privilege this row exists to
+close. Provisioning it is therefore the closing action of the nightly-drift
+change, not an optional follow-up. Mirrored in `../ACCESS_REGISTER.md` and
+`../TEAM_MODEL.md` §RBAC, and listed as a prerequisite in
+`../../enterprise/series/00-prerequisites.md` P5 beside the deploy credential.
+
 Why no `Owner`/`User Access Administrator` for any human: role
 assignments are code (`infra/rbac.bicep`) applied by the deploy identity
 under a constrained RBAC-Administrator condition; changing who can do

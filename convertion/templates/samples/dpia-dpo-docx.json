@@ -1,0 +1,115 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "supplier": "Northwind Cloud Services BV",
+  "assessment": "Infosec Form (v14) — sample assessment 9001",
+  "client": "EURONEXT NV",
+  "dateRange": "01/07/2026 - 28/08/2026",
+  "doraScope": "In scope - ICT service supporting an important function",
+  "certifications": "ISO 27001 - valid; scope excludes the EU region data centre",
+  "executiveSummary": "The supplier provides a managed SFTP gateway processing operational file payloads and transfer metadata on EU infrastructure. Six risks were assessed; four are treated and two remain in treatment, both dependent on Euronext-side controls. No special-category personal data is processed. Residual risk is assessed MEDIUM and acceptable subject to the contractual addendum and patch-evidence actions listed in Annex 3.",
+  "risks": [
+    {
+      "title": "Inadequate vulnerability management",
+      "inherentRisk": "12-Medium",
+      "residualRisk": "6-Medium",
+      "controls": [
+        {
+          "name": "Critical patching SLA in the contract",
+          "status": "Pending",
+          "responsible": "Euronext TPRM"
+        },
+        {
+          "name": "Supplier vulnerability disclosure process",
+          "status": "Implemented",
+          "responsible": "Supplier"
+        }
+      ]
+    },
+    {
+      "title": "Insufficient data protection lifecycle evidence",
+      "inherentRisk": "9-Medium",
+      "residualRisk": "4-Low",
+      "controls": [
+        {
+          "name": "Encryption at rest with customer-managed keys",
+          "status": "Implemented",
+          "responsible": "Supplier"
+        },
+        {
+          "name": "Deletion evidence at contract exit",
+          "status": "Pending",
+          "responsible": "Euronext DPO"
+        }
+      ]
+    },
+    {
+      "title": "Third-party relationship not fully transparent",
+      "inherentRisk": "9-Medium",
+      "residualRisk": "4-Low",
+      "controls": [
+        {
+          "name": "Sub-processor list and change notice",
+          "status": "Not Doing",
+          "responsible": "Supplier"
+        }
+      ]
+    }
+  ],
+  "implementedDomains": [
+    "Access management",
+    "Encryption",
+    "Logging and monitoring"
+  ],
+  "riskRating": {
+    "label": "MEDIUM",
+    "text": "Residual risk MEDIUM: acceptable subject to the Annex 3 actions being closed before go-live."
+  },
+  "approval": "A. Analyst (Analyst) - Approved | M. Manager (Manager) - Approved",
+  "dueDate": "10/11/2026",
+  "annex1": [
+    {
+      "ref": "A1.1",
+      "issue": "Patch evidence not provided for two advisories",
+      "rag": {
+        "score": "6",
+        "label": "MEDIUM"
+      },
+      "individuals": "No direct impact on data subjects",
+      "compliance": "DORA Art. 28-30",
+      "corporate": "Operational disruption risk"
+    }
+  ],
+  "annex2": [
+    {
+      "ref": "A2.1",
+      "risk": "Unpatched transfer agent",
+      "rag": {
+        "score": "6",
+        "label": "MEDIUM"
+      },
+      "solution": "Contractual patching SLA plus quarterly evidence",
+      "result": "Evidence cadence agreed",
+      "outcome": "Risk reduced to acceptable",
+      "residual": {
+        "score": "4",
+        "label": "LOW"
+      }
+    }
+  ],
+  "annex3": [
+    {
+      "ref": "A3.1",
+      "action": "Sign the Art. 30 contractual addendum",
+      "owner": "Euronext TPRM",
+      "status": "Open",
+      "due": "15/10/2026"
+    },
+    {
+      "ref": "A3.2",
+      "action": "Obtain deletion-at-exit evidence",
+      "owner": "Euronext DPO",
+      "status": "Open",
+      "due": "30/11/2026"
+    }
+  ]
+}

@@ -53,7 +53,13 @@ ISO 42001, ITIL/COBIT/COSO/TOGAF/PMBOK, cloud and ICT service assurance.
 - **Knowledge:** ONE combined vector store built from every skill's
   knowledge files (all references, catalogues, mappings across the 22
   agents) — the advisor cites which source document grounds each answer.
-- **Web search:** Bing grounding for current threats/regulatory news.
+- **Web search:** Bing grounding for current threats/regulatory news —
+  a **global** service outside the Azure compliance boundary (the Azure
+  DPA does not apply to it), so sanitised public queries only, never
+  internal identifiers, scores or quoted internal text. Accepted
+  residual risk with the persona egress rule and the KQL
+  internal-marker alert as controls
+  (`../governance/DATA_PROTECTION_GUARDRAILS.md` §1).
 - **Memory:**
   - *Session memory* — one Foundry **conversation** per (person, supplier,
     service, engagement) (`../team/TEAM_MODEL.md` §13); the current Agent
@@ -93,12 +99,27 @@ also drive the Foundry deployment through one MCP connection.
 ## Deploy order
 
 ```bash
-python3 ../scripts/convert_skills.py
-python3 ../scripts/create_agents.py
-python3 ../scripts/attach_integrations.py
-python3 ../scripts/create_orchestrator.py     # advisor + orchestrator + memory store
-python3 ../scripts/memory_store.py list       # verify the memory store
+python3 ../scripts/convert_skills.py            # [1]  export -> build/
+python3 ../scripts/build_self_knowledge.py      # [1b] regenerate the self-knowledge pack
+                                                #      (re-run [1] when it changed)
+python3 ../scripts/verify_conversion.py         # [2]  fidelity, decisions, read-only audit
+python3 ../scripts/verify_kit.py                #      kit consistency + secret scan
+python3 ../scripts/create_agents.py --skip-routers   # [3] agents, ROUTE tables left empty
+python3 ../scripts/create_delivery_agents.py    # [4]  the five delivery agents
+python3 ../scripts/create_agents.py --rewire    # [4b] ROUTE tables, now that the targets exist
+python3 ../scripts/create_orchestrator.py       # [5]  advisor + orchestrator + memory store
+python3 ../scripts/apply_advisory_profile.py    #      advisory addendum + combined knowledge
+python3 ../scripts/attach_integrations.py       # [6]  ONCE, after every agent exists
+python3 ../scripts/stage_renderers.py --strict  #      renderers for the delivery Function
+python3 ../scripts/memory_store.py list         #      verify the memory store
 ```
+
+Order matters in two places, and both are the same mistake in different
+clothes: **`attach_integrations.py` runs once, after every agent exists** (it
+refuses live agents with no registry entry, so running it early reports agents
+that simply have not been created yet), and **the ROUTE tables are wired in
+[4b], not [3]** — a router built before `create_delivery_agents.py` would point
+at agents that do not exist. `../deploy.sh` runs exactly this sequence.
 
 ## Governance
 

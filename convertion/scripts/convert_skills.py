@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -59,14 +60,52 @@ OVERLAYS = AGENTS_DIR / "overlays"
 PACKS = AGENTS_DIR / "knowledge-packs"
 ADAPTERS = HERE / "adapters"
 
-# Anthropic example skills: converted only with --include-examples, and
-# several only make sense on the Claude platform (marked platform_specific).
-EXAMPLE_SKILLS = {
-    "algorithmic-art", "brand-guidelines", "canvas-design", "doc-coauthoring",
-    "import-memory", "internal-comms", "learn", "mcp-builder", "morning",
-    "skill-creator", "slack-gif-creator", "theme-factory",
-    "web-artifacts-builder",
-}
+# ---------------------------------------------------------------------------
+# The per-skill decisions have ONE source of truth: templates/skill-decisions.json
+# (the machine form of MAPPING.md and governance/PLATFORM_SKILLS_DECISION.md).
+# The sets below are DERIVED from it, so the prose record, this converter and
+# scripts/verify_conversion.py cannot drift: change a decision in the table and
+# the converter follows. verify_conversion.py checks C1-C10 against the same
+# file and additionally asserts that these derived sets still agree with it.
+# ---------------------------------------------------------------------------
+DECISION_TABLE = HERE.parent / "templates" / "skill-decisions.json"
+
+
+def _decisions() -> list[dict]:
+    try:
+        return json.loads(DECISION_TABLE.read_text(encoding="utf-8"))["decisions"]
+    except (OSError, KeyError, json.JSONDecodeError) as exc:
+        raise SystemExit(
+            f"cannot read the per-skill decision table {DECISION_TABLE}: {exc}\n"
+            "It is the source of truth for which skills convert, which are "
+            "excluded and which are aliases (governance/PLATFORM_SKILLS_DECISION.md). "
+            "Restore it rather than hard-coding the sets here.") from exc
+
+
+_ROWS = _decisions()
+
+# Anthropic example skills: converted only with --include-examples. Derived =
+# the export rows whose requires_flag is '--include-examples'.
+EXAMPLE_SKILLS = {r["skill"] for r in _ROWS
+                  if r.get("origin") == "export"
+                  and r.get("requires_flag") == "--include-examples"}
+# Anthropic-licensed skills redeployed as ENX agents. The IP position is
+# recorded and still PENDING in governance/THIRD_PARTY_IP.md §2, and the
+# interim control named there is this gate: converting any of them requires
+# --accept-anthropic-license, so nobody builds them without having read the
+# register. LICENSE.txt already travels in the code package and is kept out of
+# the vector stores (bucket_for), so provenance is preserved without the
+# licence text becoming retrievable knowledge.
+LICENSE_RESTRICTED = {"docx", "pdf", "pptx", "xlsx",
+                      "internal-comms", "learn", "mcp-builder"}
+
+# PLATFORM_SPECIFIC is a BUILD FLAG, not a decision: it marks skills that only
+# have meaning on the Claude platform, so the manifest can say so. It is
+# deliberately NOT derived from the decision table, because "excluded" and
+# "platform-specific" are different statements — algorithmic-art and
+# brand-guidelines are EXCLUDED for having no assurance use, not for needing a
+# browser. verify_conversion.py enforces the invariant that matters: every name
+# here has a decision row, and none of those rows is AGENT.
 PLATFORM_SPECIFIC = {
     "canvas-design", "import-memory", "morning", "skill-creator",
     "slack-gif-creator", "web-artifacts-builder", "theme-factory",
@@ -82,7 +121,10 @@ PLATFORM_SPECIFIC = {
 # Byte-identical twins (only the frontmatter name differs): the alias is
 # still built and byte-verified, but create_agents.py deploys ONE agent and
 # create_orchestrator.py registers the alias as a second trigger description.
-ALIASES = {"pptx-executive-summary-ciso": "tprm-slide-generator"}
+# Derived = the export rows whose decision is ALIAS.
+ALIASES = {r["skill"]: r["alias_of"] for r in _ROWS
+           if r.get("decision") == "ALIAS" and r.get("origin") == "export"
+           and r.get("alias_of")}
 # Cross-skill single source of truth: copied into each worker's knowledge
 # as shared__<skill>__<path> (each Foundry agent only sees its own store).
 SHARED_KNOWLEDGE = {
@@ -342,6 +384,8 @@ def convert_one(src: Path, persona: str, source_tree: str = "skills") -> dict:
     top_dirs = sorted({m.split("/")[0] for m in tree if "/" in m})
     extras = (_append(OVERLAYS / "_foundry-environment.md")
               + _append(OVERLAYS / f"{name}.md")
+              + (_append(OVERLAYS / "web-tools.md")
+                 if name in GROUNDING_RECOMMENDED else "")
               + (_append(OVERLAYS / "research-pattern.md")
                  if name in RESEARCH_OVERLAY else "")
               + (_append(AGENTS_DIR / "document_agents_addendum.md")
@@ -382,7 +426,16 @@ def main() -> int:
     ap.add_argument("--platform-skills", default="",
                     help="comma-separated platform-skills/ names to convert "
                          "on demand (skipped when skills/ has the same name)")
+    ap.add_argument("--accept-anthropic-license", action="store_true",
+                    help="required to convert the LICENSE_RESTRICTED skills "
+                         "(governance/THIRD_PARTY_IP.md §2). ACCEPT_ANTHROPIC_LICENSE=1 "
+                         "in the environment is equivalent, so CI and deploy.sh can "
+                         "carry the acceptance the owner recorded once, rather than "
+                         "each caller re-typing it.")
     args = ap.parse_args()
+    args.accept_anthropic_license = (
+        args.accept_anthropic_license
+        or os.environ.get("ACCEPT_ANTHROPIC_LICENSE", "") == "1")
 
     if not EXPORT.is_dir():
         sys.exit(f"Export not found at {EXPORT}")
@@ -394,12 +447,16 @@ def main() -> int:
 
     only = set(args.only.split(",")) if args.only else None
     manifest = []
+    skipped_license: list[str] = []
     for src in sorted(EXPORT.iterdir()):
         if not src.is_dir() or not (src / "SKILL.md").is_file():
             continue
         if only is not None and src.name not in only:
             continue
         if only is None and src.name in EXAMPLE_SKILLS and not args.include_examples:
+            continue
+        if src.name in LICENSE_RESTRICTED and not args.accept_anthropic_license:
+            skipped_license.append(src.name)
             continue
         manifest.append(convert_one(src, persona))
         print(f"converted {src.name}: "
@@ -426,8 +483,14 @@ def main() -> int:
     (BUILD / "manifest.json").write_text(json.dumps({
         "options": {"include_examples": args.include_examples,
                     "only": sorted(only) if only else None,
-                    "platform_skills": sorted(wanted)},
+                    "platform_skills": sorted(wanted),
+                    "accept_anthropic_license": args.accept_anthropic_license},
         "agents": manifest}, indent=2), encoding="utf-8")
+    if skipped_license:
+        print(f"\nSKIPPED (Anthropic-licensed): {', '.join(sorted(skipped_license))}\n"
+              f"  The IP position for these is PENDING — governance/THIRD_PARTY_IP.md §2.\n"
+              f"  Re-run with --accept-anthropic-license once the owner has recorded\n"
+              f"  acceptance there. They are not built, so nothing downstream deploys them.")
     print(f"\n{len(manifest)} agent definitions -> {BUILD}")
     return 0
 

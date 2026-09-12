@@ -1,12 +1,14 @@
 # Platform Skills — Inclusion / Exclusion Decision (41 skills + harness skills)
 
+**Machine-readable form: `../templates/skill-decisions.json`** (the entries
+with origin `platform-skills/public` and `platform-skills/examples`);
+`../scripts/verify_conversion.py` enforces it as checks C1–C10. Change both
+together — this file is the prose record, the JSON is what CI checks.
+
 `MAPPING.md` said the non-synced platform skills are "not deployed by
 default; convert on demand the same way". That is not literally possible
 (they are not account-synced and most describe consumer Claude
-features), so this file records a per-skill decision. Encode it in
-`scripts/convert_skills.py` as `PLATFORM_INCLUDE` (name → mode) and
-`PLATFORM_EXCLUDED` (name → rationale) and let `verify_conversion.py`
-assert every platform skill appears in exactly one set (shared delta).
+features), so this file records a per-skill decision.
 
 Modes: **AGENT** (converted to a Foundry agent), **KNOWLEDGE-PACK**
 (rules folded into an ENX-authored pack under `agents/knowledge-packs/`),
@@ -79,5 +81,24 @@ No code change is implied by §3.
 
 ```bash
 ls ../../claude-account-export/platform-skills/public ../../claude-account-export/platform-skills/examples | grep -v '\.skill$' | wc -l   # 41 folders
-python3 ../scripts/verify_conversion.py   # after the shared delta: asserts every platform skill is in exactly one decision set
+python3 ../scripts/verify_conversion.py   # prints "skill decisions : 76 enforced"
 ```
+
+`verify_conversion.py` asserts that **every** folder under
+`platform-skills/public` and `platform-skills/examples` has exactly one row in
+`../templates/skill-decisions.json`, and that no row lacks a folder (check C1)
+— so a platform skill can be neither silently dropped nor silently deployed.
+
+Earlier drafts of this file promised `PLATFORM_INCLUDE` and
+`PLATFORM_EXCLUDED` constants in `scripts/convert_skills.py`. **Those
+constants do not exist and are not wanted**: a second hand-maintained list
+beside the decision table is exactly the drift this table was written to
+prevent. The converter instead *derives* what it needs from the table
+(`EXAMPLE_SKILLS`, `ALIASES`), and `verify_conversion.py` asserts the derived
+sets still agree with it. The one literal set that remains,
+`PLATFORM_SPECIFIC`, is a build flag rather than a decision — it marks skills
+that only have meaning on the Claude platform, which is not the same statement
+as "excluded" (`algorithmic-art` and `brand-guidelines` are excluded for having
+no assurance use, not for needing a browser). The verifier enforces the
+invariant that matters for it: every name in it has a decision row, and none of
+those rows is `AGENT`.

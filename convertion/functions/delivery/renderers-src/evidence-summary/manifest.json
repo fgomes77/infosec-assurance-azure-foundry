@@ -1,0 +1,9 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}"],
+  "formats": ["docx"],
+  "outputs": "single",
+  "schema": "evidence_summary.schema.json",
+  "source": "ENX-authored renderer — there is NO byte-verified original for it. The three analyzer agents (tpa-evidence-analyzer, soc-report-analyzer, pentest-report-analyzer) are Foundry-only agents converted from no skill, so their shared deliverable contract (templates/evidence_summary.schema.json) and this renderer were written here. Layout follows the house style of templates/enx-theme.json per agents/document_agents_addendum.md. It was carrying no manifest and therefore falling back to the Function's generic default ({runtime: python, entry: render.py, argv: [{data},{out}], outputs: single}) — which happened to be correct, but left the schema unresolvable by manifest and the contract undeclared."
+}

@@ -95,19 +95,43 @@ no need it serves exists once dashboards are self-contained HTML.
 (a Flex Consumption Python app has no Node runtime, so pptxgenjs/docx
 renderers and LibreOffice conversions would be dead code). Build and push:
 
+**Both images have a staging step that must run first**, because what they
+ship is build output and is not in the repository: `renderers/` for delivery
+and `toolchain/` for office-tools. Building without staging produces an image
+that starts and then answers 404 or 501 for every route that needs them.
+
 ```bash
+# stage build output into each context (both are offline and idempotent)
+python3 ../scripts/stage_renderers.py --strict          # -> functions/delivery/renderers/
+python3 ../functions/office-tools/stage_toolchain.py --strict   # -> functions/office-tools/toolchain/
+
 az acr build -r {registryLoginServer%%.*} -t infosec-delivery:{tag} ../functions/delivery
 az acr build -r {registryLoginServer%%.*} -t infosec-office-tools:{tag} ../functions/office-tools
 az deployment group create -g {rg} -f main.bicep -p main.parameters.prod.json \
   -p deliveryImage={registry}.azurecr.io/infosec-delivery:{tag} officeToolsImage={registry}.azurecr.io/infosec-office-tools:{tag}
 ```
 
+`stage_toolchain.py` copies the byte-verified docx/pptx/xlsx/pdf skill scripts
+out of the verified build; `--strict` (and `CI=true`) makes a missing source an
+error rather than a note, so a half-staged image is never built.
+
 App settings injected (both apps): `PROJECT_ENDPOINT`, `KEY_VAULT_NAME`,
 `SHAREPOINT_SITE_ID`, `SHAREPOINT_REPORTS_DRIVE_ID`, `DOCINTEL_ENDPOINT`,
-`OFFICE_TOOLS_BASE_URL`, `ENX_DATA_BOUNDARY=EU`. Document Intelligence is
-reached only from the delivery Function (`/api/extract_pdf`) with its managed
-identity — never attached to agents, so the "strip every non-GET" rule of
-`attach_integrations.py` needs no exception.
+`DOCINTEL_API_VERSION`, `DOCINTEL_TIMEOUT_SECONDS`, `ENX_DATA_BOUNDARY=EU`.
+
+**Delivery app only:** `OFFICE_TOOLS_BASE_URL` and `OFFICE_TOOLS_KEY` (a Key
+Vault reference to `office-tools-function-key`, sent as `x-functions-key`).
+Those two settings are the **entire** link between the apps. The office-tools
+app has, by design, **no Graph, no Foundry and no Document Intelligence
+access** — `workload-rbac.bicep` grants its identity only `AcrPull` and the
+identity-based `AzureWebJobsStorage` roles every Function app needs. It holds
+no credential and makes no outbound call: it converts bytes it is handed and
+returns bytes.
+
+Document Intelligence is reached only from the delivery Function
+(`/api/extract_pdf`) with its managed identity — never attached to agents, so
+the "strip every non-GET" rule of `attach_integrations.py` needs no
+exception.
 
 ## Workflows packaging (Logic Apps Standard)
 
@@ -117,7 +141,7 @@ Expected zip layout for `az logicapp deployment source config-zip -g {rg}
 report-delivery pipelines expanded from `workflows/pipelines.json` as
 `report-delivery-<pipeline>/workflow.json` and a root `parameters.json`
 whose values read `@appsetting('FOUNDRY_ENDPOINT')`, `@appsetting('DELIVERY_FUNCTION_BASE_URL')`
-and the secret settings below. (`scripts/package_workflows.py` builds it.)
+and the secret settings below. (`scripts/build_logicapps.py` builds it; `ci/deploy_logicapps.sh` packages and deploys it.)
 
 ## Secrets (Key Vault `{baseName}-kv`) — names only
 

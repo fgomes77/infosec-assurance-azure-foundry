@@ -103,6 +103,11 @@ fi
 
 echo "==> [1/8] Converting skills from the claude.ai export ${CONVERT_FLAGS}"
 # shellcheck disable=SC2086
+# governance/THIRD_PARTY_IP.md §2: the four document agents and the three
+# Anthropic example agents are conversion-gated until the IP position is
+# settled. Export ACCEPT_ANTHROPIC_LICENSE=1 (after the owner has recorded
+# acceptance in that file) to include them; without it they are skipped and
+# the build is the 18 ENX-authored agents.
 python3 convert_skills.py $CONVERT_FLAGS
 
 # [1b] The platform self-knowledge pack (what agents retrieve when asked what

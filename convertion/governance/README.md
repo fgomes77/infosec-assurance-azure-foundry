@@ -10,6 +10,8 @@
 | `PLATFORM_SKILLS_DECISION.md` | Include/exclude decision for the 41 platform skills and the harness skills |
 | `THIRD_PARTY_IP.md` | Anthropic-licensed skills: terms, decision of record, interim control |
 | `MEMORY_POLICY.md` | Durable team memory: content rules, header, retention, RoPA |
+| `MEMORY_IMPORT.md` | What may enter the memory store: the `import` / `save_memory` filter contract, the approval and batch guards, GDPR rules |
+| `CLAUDE_ON_FOUNDRY.md` | Correction of record — Claude models are offered on Foundry and excluded by EU residency; the `*ModelFormat` parameters and the tier-switch procedure |
 | `AI-ACT-DEPLOYER-ASSESSMENT-TEMPLATE.md` | EU AI Act Art. 26 deployer duties + ISO 42001 Annex A checklist, pre-filled |
 
 Owned elsewhere (do not duplicate here): identities, groups, RBAC and

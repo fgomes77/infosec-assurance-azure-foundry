@@ -1,0 +1,124 @@
+# Local mirror of the CI gates — the same checks, one commit earlier.
+#
+#   pip install pre-commit && pre-commit install          # once per clone
+#   pre-commit install --hook-type pre-push               # also run the slow gates
+#   pre-commit run --all-files                            # everything, now
+#   SKIP=kit-dry-run git commit ...                       # skip one, deliberately
+#
+# Nothing here is a substitute for CI: a hook can be skipped, a workflow
+# cannot. The point is that the three checks that most often turn a PR red —
+# a stray secret, an unparsable JSON/YAML, a non-EU region — fail on the
+# developer's machine in a second instead of on a runner in four minutes.
+#
+# The dev container (.devcontainer/) already installs pre-commit, gitleaks and
+# the pinned toolchain, so `pre-commit install` is the only step there.
+#
+# Pins match the CI versions exactly (.github/workflows/ci.yml `env:` and
+# .devcontainer/post-create.sh). Dependabot does not manage this file — bump
+# it in the same PR as the workflow pin it mirrors.
+minimum_pre_commit_version: '3.5.0'
+default_install_hook_types: [pre-commit]
+fail_fast: false
+
+# The claude.ai export is byte-verified by verify_conversion.py: a formatting
+# hook that "fixes" a trailing newline there would break the fidelity gate.
+# Generated output and vendored caches are equally off-limits.
+exclude: |
+  (?x)^(
+      claude-account-export/.*
+    | convertion/build/.*
+    | convertion/functions/delivery/renderers/.*
+    | .*/node_modules/.*
+    | .*/__pycache__/.*
+    | .*/\.ruff_cache/.*
+    | project-dossier/.*\.(docx|png)
+  )$
+
+repos:
+  # ---- hygiene ---------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        # Azure Pipelines and GitHub Actions templates are plain YAML; no
+        # custom tags are used anywhere in the kit.
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: detect-private-key
+      - id: check-executables-have-shebangs
+      # NOT check-shebang-scripts-are-executable: ~20 kit scripts carry a
+      # shebang and are invoked as `python3 <file>` rather than `./<file>`.
+      # Flipping the mode bit on them is a separate, reviewable change.
+
+  # ---- secrets ---------------------------------------------------------
+  # Same version and same rules as the `secret-scan` job. The hook passes no
+  # --config, so it reads the root .gitleaks.toml, which extends
+  # .github/gitleaks.toml — one allow-list, three entry points.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  # ---- python ----------------------------------------------------------
+  # Green on arrival. The root `ruff.toml` selects ruff's default rule set
+  # (E4/E7/E9 + F) and ignores E402 per-tree, because every Foundry script
+  # opens with the `try: import azure... except ImportError` shim and its real
+  # imports genuinely cannot move above it. The two findings that were actual
+  # defects (an unused `base64` import, an unused `reused` counter that was
+  # meant to be printed) were fixed rather than ignored. Widening the rule set
+  # is a separate change made together with the work to keep the tree clean —
+  # see the comment at the top of `ruff.toml`.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff
+        args: [--config, ruff.toml]
+
+  # ---- the kit's own gates --------------------------------------------
+  # `language: system` because these call the very scripts CI calls — there is
+  # no second implementation to drift.
+  - repo: local
+    hooks:
+      - id: kit-syntax
+        name: syntax gate (py/json/yaml/js/bicep/sh)
+        # Most machines have no bicep CLI; CI does and checks it there.
+        # (pre-commit has no `env:` key for a hook — the variable goes in the
+        # command.)
+        entry: bash -c 'SKIP_BICEP=1 convertion/ci/syntax_check.sh'
+        language: system
+        pass_filenames: false
+        files: \.(py|json|ya?ml|js|bicep|sh|toml)$
+
+      - id: kit-residency
+        name: EU residency gate (region allow-lists, parameters, SKUs)
+        entry: python3 convertion/ci/tests/test_residency.py
+        language: system
+        pass_filenames: false
+        files: ^convertion/(infra|enterprise|ci)/.*\.(bicep|json|py)$
+
+      - id: kit-consistency
+        name: kit consistency (secrets, syntax, cross-references)
+        entry: python3 convertion/scripts/verify_kit.py
+        language: system
+        pass_filenames: false
+        files: ^convertion/
+
+      # Slow (it converts the whole export). Installed for pre-push only, so
+      # `git commit` stays fast and `git push` still rehearses the release:
+      #   pre-commit install --hook-type pre-push
+      - id: kit-dry-run
+        name: offline dry-run chain (deploy.sh --dry-run)
+        entry: bash -c 'cd convertion && CI=true ./deploy.sh --dry-run'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

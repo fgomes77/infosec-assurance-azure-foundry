@@ -102,7 +102,7 @@ const children = [
   B("Conversion of the 22 assurance-relevant skills (18 custom GRC/TPRM + 4 document skills); the 13 Anthropic example skills convert on demand via a flag."),
   B("Orchestration layer (orchestrator, advisor with durable memory, output verifier), integrations, workflows, MCP access, Copilot surfacing, infrastructure as code, and the governance controls."),
   H2("4.2 Out of scope"),
-  B("Claude model hosting on Azure (not offered in the Azure catalogue — see §11.4); local-hardware transcription (replaced by AI Foundry Speech); the skill excluded from the export for data-protection reasons."),
+  B("Anthropic Claude model tiers on Foundry — the models ARE offered in the Foundry catalogue; they are excluded from this deployment by the EU data-residency rule, not by availability, and the exclusion is re-checked every quarter (see §11.4). Also out of scope: local-hardware transcription (replaced by AI Foundry Speech); the skill excluded from the export for data-protection reasons."),
 
   // ---- 5 Requirements ----
   H1("5. Requirements"),
@@ -110,7 +110,7 @@ const children = [
   table(["ID", "Requirement", "Where satisfied"], [
     ["FR-01", "Convert each exported skill into an agent: SKILL.md → instructions; references → RAG vector store; scripts/assets → code interpreter", "convertion/scripts/convert_skills.py"],
     ["FR-02", "Single entry point that routes or decomposes any assurance request across specialists", "infosec-assurance-orchestrator (A2A hand-offs to published agents)"],
-    ["FR-03", "Reasoning generalist covering all persona domains, grounded in the combined knowledge base, with durable team memory", "infosec-assurance-advisor + vs-assurance-memory"],
+    ["FR-03", "Reasoning generalist covering all persona domains, grounded in the combined knowledge base, with durable team memory", "infosec-assurance-advisor + the kb-assurance-memory Azure AI Search index (vs-assurance-memory is the transition backend; one vector store per agent) - written and deleted only through scripts/memory_store.py under governance/MEMORY_IMPORT.md"],
     ["FR-04", "Integrations: Jira Cloud, Jira Assets CMDB, OneTrust, SecurityScorecard, Defender (Graph), SharePoint (Graph), IAF API, ENX gateway MCP, Bing web search", "integrations/ registry + attach_integrations.py"],
     ["FR-05", "Scheduled/event workflows replacing claude.ai Routines (OneTrust intake, Defender briefs, weekly DeepSearch, Jira–IAF sync)", "workflows/ (Logic Apps definitions)"],
     ["FR-06", "MCP access for team members and internal tooling (ask, route, memory)", "mcp-server/ (FastMCP)"],
@@ -133,7 +133,7 @@ const children = [
     ["SEC-03", "Every agent carries an injection-resistant draft-then-approve instruction gate", "APPROVAL GATE block (Layer 2)"],
     ["SEC-04", "Workflows suspend on human-approval webhooks (3-day expiry) before every submission of record", "Logic Apps gates (Layer 3)"],
     ["SEC-05", "Independent output verification (PASS/FAIL against deterministic rules) before human approval", "output-verifier agent"],
-    ["SEC-06", "Data minimisation in durable memory; notes timestamped, listable, individually deletable", "memory_store.py"],
+    ["SEC-06", "Data minimisation in durable memory; notes timestamped, listable, individually deletable; imports filtered, capped and approved before any write", "memory_store.py + governance/MEMORY_POLICY.md and MEMORY_IMPORT.md"],
     ["SEC-07", "EU AI Act Art. 14 human oversight and ISO/IEC 42001 Annex A control mapping documented with audit evidence pointers", "governance/HUMAN_APPROVAL.md"],
   ], [900, 5060, 3400]),
 
@@ -156,7 +156,7 @@ const children = [
   H2("7.1 Components"),
   table(["Component", "Role"], [
     ["infosec-assurance-orchestrator", "Planner-executor entry point (reasoning tier + web search); answers, routes, or decomposes across the published agents via A2A hand-offs; routes deliverable drafts through the verifier"],
-    ["infosec-assurance-advisor", "Reasoning generalist across all persona domains; combined knowledge base (55 sources: every skill's knowledge + the advisor knowledge pack) + durable team memory + web search; cites sources"],
+    ["infosec-assurance-advisor", "Reasoning generalist across all persona domains; combined knowledge base (65 deduplicated sources: every skill's knowledge + the 16-file advisor pack + the 5 environment packs) + durable team memory (kb-assurance-memory) + web search; cites sources"],
     ["output-verifier", "Independent verification layer; strict PASS/FAIL against deterministic rules; generates nothing"],
     ["18 GRC/TPRM specialists", "DeepSearch OSINT, DPIA, CISO reporting/summary, Form B, cyber forum, DORA, NIS2, EU AI Act, ISO 27001, ISO 42001, TPSRCA engine, PDF analyzer, slide generators, ENX router"],
     ["4 document agents", "docx, pdf, pptx, xlsx production toolkits (code interpreter)"],
@@ -174,7 +174,7 @@ const children = [
 
   spacer(),
   H2("7.3 Persona coverage and the advisor knowledge pack"),
-  P("The team persona (Principal Security Assurance Consultant & TPRM Lead - professional, precise, evidence-led, English-only) is prepended to every agent's instructions, so identity, tone and language policy are uniform across the platform. Beyond the statement itself, every knowledge domain the persona claims is grounded in the combined vector store, so the advisor retrieves and cites sources rather than answering from model memory alone. Six domains arrive with the converted skills; the remaining four, plus the management-framework expertise, are grounded by a dedicated advisor knowledge pack (agents/advisor-knowledge/, ~860 lines across five authored references, each carrying a provenance header distinguishing it from exported claude.ai content). The full traceability matrix, with verification commands, is governance/PERSONA-COVERAGE.md."),
+  P("The team persona (Principal Security Assurance Consultant & TPRM Lead - professional, precise, evidence-led, English-only) is prepended to every agent's instructions, so identity, tone and language policy are uniform across the platform. Beyond the statement itself, every knowledge domain the persona claims is grounded in the combined vector store, so the advisor retrieves and cites sources rather than answering from model memory alone. Ten domains arrive with the converted regulatory and ISMS skills; the remainder - risk methodology, control catalogues, assurance-report reliance, supplier evidence review and the management-framework expertise - are grounded by a dedicated advisor knowledge pack (agents/advisor-knowledge/, 16 authored references, ~1,875 lines). A second, smaller set of five environment knowledge packs (agents/knowledge-packs/, ~356 lines) grounds how the persona works on this platform rather than what it knows: file intake, PDF reading, the ENX house writing style, the constrained HTML design guide, and platform self-knowledge - each replacing a claude.ai platform skill that had no Foundry meaning as written. Every authored file carries a provenance header distinguishing it from exported claude.ai content. The full traceability matrix - including the Foundry-only agents (enterprise-explorer and the research-coordinator/worker/writer trio) and the pack-to-agent attachment map - with its verification commands, is governance/PERSONA-COVERAGE.md."),
   table(["Persona domain", "Knowledge grounding in the combined store"], [
     ["ISO/IEC 27001:2022 / 27002:2022", "Converted iso27001 skill: Annex A 2022 (93 controls), Annex A 2013, 2013\u21922022 transition mapping"],
     ["DORA · NIS2 · EU AI Act · ISO/IEC 42001", "Converted regulatory skills: article references, RTS/ITS guide, Art. 21 measures, risk-tier classification, AIMS clauses and controls"],
@@ -183,6 +183,8 @@ const children = [
     ["CIS Controls v8.1", "Pack: 18 controls, IG1\u20133 supplier proportionality, v8.1 governance updates, Annex A mapping"],
     ["GDPR Art. 28 / SCCs 2021/914", "Pack: Art. 28(3)(a)\u2013(h) contract clauses, four SCC modules, Schrems II TIA, processor-agreement checklist"],
     ["PMBOK 7 · ITIL 4 · COBIT 2019 · COSO · TOGAF 10 · agile/Lean IT · ISO 20000-1 · cloud/ICT assurance", "Pack: management-frameworks compendium with a framework \u2192 assurance-use cross-walk"],
+    ["SOC 1/2/3 · ISAE 3402/3000 reliance · PCI DSS v4 · CSA CCM/CAIQ/STAR · ISO 22301 · OWASP/PTES/CVSS", "Pack: assurance-report reliance rules, the TPA evidence-review playbook, supplier-scope PCI, the cloud control matrix, continuity and penetration-test standards - the grounding behind the evidence-review agents"],
+    ["Working on this platform (not a knowledge domain)", "Environment packs: file intake, PDF reading, ENX writing style, constrained HTML design guide, platform self-knowledge - attached per agent by the converter and the delivery-agent creator"],
   ], [3600, 5760]),
 
   // ---- 8 Pipeline ----
@@ -219,7 +221,7 @@ const children = [
     ["SharePoint (Graph)", "document and reporting agents", "Evidence repository reads; publishing generated deliverables"],
     ["IAF API (template)", "dpia, dora, deepsearch, tpsrca", "Internal assurance framework; align template to the internal spec before use"],
     ["ENX Gateway MCP (template)", "control-center, deepsearch, cyber-forum", "Internal gateway tools; fill server URL and allowlist from the gateway listing"],
-    ["Bing web search", "research and regulatory agents", "Grounded, cited web research"],
+    ["Bing web search (grounding)", "research and regulatory agents", "Grounded, cited web research. The only web egress besides the allow-listed osint-proxy page fetch; a GLOBAL service outside the Azure compliance boundary (the Azure DPA does not apply), so sanitised public queries only - never internal identifiers, scores or findings. Accepted residual risk, owned, in the RoPA and the DORA Art. 28 register, re-reviewed quarterly"],
     ["Microsoft 365 Copilot", "Q&A agents", "Team-member access from Teams/Copilot chat"],
   ], [2300, 2800, 4260]),
 
@@ -236,13 +238,14 @@ const children = [
   B("Secrets exclusively in Key Vault-backed connections; the repository contains placeholders only (verified by secret scan)."),
   B("Azure AI content filtering applies to both model deployments; App Insights traces every run for audit; Log Analytics retention aligned to the ISMS (90 days, adjustable)."),
   B("Public network access is enabled for the pilot and should move to private endpoints for production (parameterised in the Bicep)."),
+  B("Web egress is two named routes only - Bing grounding and the allow-listed osint-proxy page fetch; no agent holds a generic HTTP or browser tool. The persona egress rule restricts queries to public facts, a scheduled KQL alert on internal-marker patterns is the detective control, and the compliance-boundary position is recorded as an accepted residual risk (governance/DATA_PROTECTION_GUARDRAILS.md)."),
   H2("11.4 Compliance position"),
   table(["Obligation", "How it is met"], [
     ["EU AI Act Art. 14 (human oversight)", "The three-layer approval control: outputs take effect only after natural-person review; workflow run history is the evidence"],
     ["EU AI Act deployer duties", "Deploying these agents makes the organisation the deployer; run the (included) eu-ai-act agent's assessment before production and record it in the AIMS"],
     ["ISO/IEC 42001 (AIMS)", "This platform enters the AIMS scope; the approval policy, verifier rules and observability are the documented Annex A controls (A.6, A.9)"],
     ["GDPR minimisation", "Durable memory holds timestamped, individually deletable notes; verifier rule 5 blocks excess personal data in deliverables; memory store in RoPA/retention schedule"],
-    ["Model substitution risk", "Claude models are offered on Microsoft Foundry but are excluded here by the EU residency rule (re-checked quarterly), so agents run on the OpenAI-family tiers. UAT against claude.ai baselines is the acceptance control (Phase 4); report agents carry self-check + verifier as compensating controls"],
+    ["Model substitution risk", "Claude models are offered on Microsoft Foundry but are excluded here by the EU residency rule (re-checked quarterly), so agents run on the OpenAI-family tiers. The correction of the earlier \u0022not available on Azure\u0022 statement, the three publisher-format parameters the infrastructure already accepts (lightModelFormat / chatModelFormat / reasoningModelFormat, each allowing OpenAI or Anthropic) and the per-tier switch procedure are governance/CLAUDE_ON_FOUNDRY.md. UAT against claude.ai baselines is the acceptance control (Phase 4); report agents carry self-check + verifier as compensating controls"],
   ], [3400, 5960]),
 
   // ---- 12 Implementation plan ----
@@ -291,7 +294,11 @@ const children = [
   B("convertion/MAPPING.md — per-skill conversion table (all 35 skills)"),
   B("convertion/governance/HUMAN_APPROVAL.md — the approval policy and compliance mapping"),
   B("convertion/governance/PERSONA-COVERAGE.md — persona-to-implementation traceability matrix"),
-  B("convertion/agents/advisor-knowledge/ — the five authored references grounding the remaining persona domains"),
+  B("convertion/agents/advisor-knowledge/ — the 16 authored references grounding the remaining persona domains"),
+  B("convertion/agents/knowledge-packs/ — the five environment packs (file intake, PDF reading, writing style, HTML design guide, platform self-knowledge)"),
+  B("convertion/governance/MEMORY_IMPORT.md — what may enter durable memory: the import / save_memory filter contract and the GDPR rules"),
+  B("convertion/governance/CLAUDE_ON_FOUNDRY.md — Claude models on Foundry: correction of record, the publisher-format parameters and the tier-switch procedure"),
+  B("convertion/governance/DATA_PROTECTION_GUARDRAILS.md — web-egress control and the accepted Bing residual risk"),
   B("convertion/integrations/README.md and registry.json — integration layer"),
   B("convertion/workflows/README.md — workflow deployment and approval wiring"),
   B("convertion/mcp-server/README.md — MCP access for team members"),

@@ -57,6 +57,8 @@ project — both as behaviour (instructions) and as grounded knowledge
 | Methodology / template control (req. j) | template-manager + `workflows/template-update-approval.json` |
 | Quality gate | output-verifier (`agents/verifier_instructions.md`) — no approval gate (`HUMAN_APPROVAL.md` Layer 2 exception) |
 | Entry point / routing | orchestrator (`create_orchestrator.py`), enx-tprm-control-center router, infosec-assurance-advisor |
+| Enterprise reconnaissance (find the facts before the analysis) | enterprise-explorer (`agents/enterprise-explorer_instructions.md`, light tier, `advisory_read_only_toolset`, no web search) — the read-only fact-finder across Confluence, Jira, Jira Assets CMDB, SharePoint, OneTrust, Defender, Entra ID, SecurityScorecard, IAF and the ENX gateway MCP |
+| Deep research with citations (threat/regulatory/supplier questions no single agent holds) | research-coordinator → research-worker (×N) → research-writer (`agents/research-*_instructions.md` + `agents/overlays/research-pattern.md`); adapted from the claude.ai `deep-research` skill — sub-agents become A2A hand-offs, WebFetch becomes Bing grounding + `osint-proxy`, filesystem notes become replies |
 | ISMS | iso27001, iso42001, advisor (27005 risk methodology, SoA/treatment support) |
 | GRC / ICT GRC | dora, nis2, eu-ai-act, cyber-forum, advisor cross-framework mapping; CMDB integration for DORA RoI |
 
@@ -64,6 +66,29 @@ Delivery agents, orchestrator, advisor and verifier receive the persona
 from `create_delivery_agents.py` / `create_orchestrator.py`, not from the
 converter — the `build/agents` grep below therefore counts converted
 skills only; check live agent instructions for the rest.
+
+## 4a. Environment knowledge packs (ENX-authored) → persona elements
+
+The advisor pack of §2–§3 grounds what the persona *knows*. A second,
+smaller set grounds how the persona *works in this environment* — the
+claude.ai platform skills that had no Foundry meaning as written and were
+re-authored as packs (`PLATFORM_SKILLS_DECISION.md` §1, decision
+KNOWLEDGE-PACK). They are attached as `pack__<file>` to the agents listed,
+by `convert_skills.py` (`KNOWLEDGE_PACKS`) and
+`create_delivery_agents.py` (`_PACKS`), and all five also enter the
+advisor's combined store through `create_orchestrator.py`.
+
+| Pack (`agents/knowledge-packs/`) | Persona element it grounds | Replaces (claude.ai) | Attached to |
+|---|---|---|---|
+| `file-intake-foundry.md` | "evidence-led" — start from the evidence file, never from an assumption about it | `file-reading` | dpia, onetrust-form-b, ciso-reporting, ciso-executive-summary, pdf-full-coverage-analyzer, the two slide generators, tpsrca, whisperx + docx/pdf/pptx/xlsx + the four delivery analyzers |
+| `pdf-reading-foundry.md` | Same, for the format most supplier evidence arrives in (inventory before reading; no rasterise-and-look CLI in the sandbox) | `pdf-reading` (+ its REFERENCE.md) | the file agents above minus whisperx, plus `pdf` and the delivery analyzers |
+| `enx-writing-style.md` | Tone: professional, precise, evidence-led, decisive; English only | `setup-writing-style` **mechanism EXCLUDED** (mailbox/Drive harvesting is personal-data processing without a basis — `agents/README.md`); only the house style transfers | the file agents, deepsearch ×2, cyber-forum, internal-comms, doc-coauthoring, and every delivery agent |
+| `enx-html-design-guide.md` | "Consistent thresholds / template governance" (principle 3, requirement j) — quality floor for free HTML, and Rule 0: a registered template is never restyled | `frontend-design` (palette/typography replaced by Euronext tokens) | deepsearch ×2, cyber-forum, ciso-executive-summary, tpsrca, template-manager |
+| `platform-self-knowledge.md` | "Never answer capability questions from memory" — what this platform is (Microsoft Foundry, conversations/responses, A2A) and what it is not | `product-self-knowledge` (Anthropic product content EXCLUDED) | every agent, via `scripts/build_self_knowledge.py`; carries the Claude-on-Foundry correction (`CLAUDE_ON_FOUNDRY.md`) |
+
+Each pack carries an "Authored {date}" provenance header, so a pack is
+never mistaken for exported claude.ai content — the same rule as the
+advisor pack.
 
 ## 5. Platform data-protection rules → implementation
 
@@ -95,5 +120,14 @@ grep -rL "APPROVAL GATE" build/agents/*/instructions.md   # empty (converted age
 
 # advisor pack present and included in the combined store (dry run prints the file count)
 ls agents/advisor-knowledge/*.md
-python3 scripts/create_orchestrator.py --dry-run   # combined knowledge files = skills' + pack
+python3 scripts/create_orchestrator.py --dry-run   # combined knowledge files = skills' + advisor pack + knowledge packs
+
+# every knowledge pack reaches at least one agent, and every row of §4a exists
+ls agents/knowledge-packs/*.md
+grep -n "KNOWLEDGE_PACKS" -A 20 scripts/convert_skills.py   # pack -> agent map
+ls build/agents/*/pack__*.md | sed 's|.*/pack__||' | sort -u
+
+# every Foundry-only charter is covered by a §4 row
+for f in agents/*_instructions.md; do n=$(basename "$f" _instructions.md); \
+  grep -q "$n" governance/PERSONA-COVERAGE.md || echo "UNCOVERED $n"; done
 ```

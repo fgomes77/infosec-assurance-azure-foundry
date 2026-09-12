@@ -68,6 +68,16 @@ resource fnAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for p
   properties: { principalId: p, principalType: 'ServicePrincipal', roleDefinitionId: roleId(roles.acrPull) }
 }]
 
+// The office-tools app's grants END HERE, deliberately: AcrPull (to pull its
+// own image) and the identity-based AzureWebJobsStorage roles every Function
+// app needs on the shared runtime storage account. It gets NO Graph, NO
+// Foundry, NO Document Intelligence and no access to the deliverables
+// container — it holds no credential and makes no outbound call. It converts
+// bytes it is handed and returns bytes. The only link to it is
+// OFFICE_TOOLS_BASE_URL + OFFICE_TOOLS_KEY on the DELIVERY app
+// (infra/delivery.bicep). Do not add a role for it here without first
+// changing that design statement in MAPPING.md and infra/README.md.
+
 // ---- delivery Function: deliverables container (archive/evidence) + OCR
 resource functionBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasFn) {
   name: guid(deliverables.id, deliveryFunctionPrincipalId, roles.storageBlobDataContributor)

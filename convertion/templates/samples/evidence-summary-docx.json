@@ -1,0 +1,136 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "title": "SOC 2 Type II Reliance Summary",
+  "supplier": "Northwind Cloud Services BV",
+  "service": "Managed SFTP Gateway",
+  "reportDate": "2026-09-10",
+  "classification": "Euronext Internal",
+  "executiveSummary": [
+    "SOC 2 Type II, period 01/06/2025 - 31/05/2026, issued by an independent audit firm.",
+    "Two exceptions reported, both in the change-management criterion; neither is systemic.",
+    "Nine complementary user-entity controls apply to Euronext; seven are already in place.",
+    "Report is 3 months old at assessment date - within the 12-month currency rule."
+  ],
+  "verdict": "RELIANCE WITH CONDITIONS",
+  "identification": [
+    {
+      "field": "Report type",
+      "value": "SOC 2 Type II"
+    },
+    {
+      "field": "Period covered",
+      "value": "01/06/2025 - 31/05/2026"
+    },
+    {
+      "field": "Trust services criteria",
+      "value": "Security, Availability, Confidentiality"
+    },
+    {
+      "field": "Scope",
+      "value": "Managed SFTP Gateway, EU region"
+    },
+    {
+      "field": "Opinion",
+      "value": "Unqualified"
+    }
+  ],
+  "inventory": [
+    {
+      "file": "soc2-type2-2026.pdf",
+      "pages": 78,
+      "text_layer": "yes",
+      "covers": "Full report"
+    },
+    {
+      "file": "bridge-letter-2026-08.pdf",
+      "pages": 2,
+      "text_layer": "yes",
+      "covers": "Gap period"
+    }
+  ],
+  "timeline": [
+    {
+      "event": "Period end",
+      "date": "2026-05-31"
+    },
+    {
+      "event": "Report issued",
+      "date": "2026-06-18"
+    },
+    {
+      "event": "Bridge letter",
+      "date": "2026-08-31"
+    },
+    {
+      "event": "Next evidence due",
+      "date": "2027-06-30"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "title": "Two emergency changes deployed without documented approval",
+      "severity": "MEDIUM",
+      "source": "soc2-type2-2026.pdf p.54 (CC8.1 exception)",
+      "detail": "Retrospective approval recorded within 5 business days in both cases.",
+      "status": "Remediated"
+    },
+    {
+      "id": "F2",
+      "title": "Access review evidence missing for one quarter",
+      "severity": "LOW",
+      "source": "soc2-type2-2026.pdf p.61 (CC6.2 exception)",
+      "detail": "Compensating detective control operated over the same period.",
+      "status": "Open"
+    }
+  ],
+  "cuecs": [
+    {
+      "cuec": "Customer configures MFA on all accounts",
+      "euronext_owner": "IAM team",
+      "status": "In place"
+    },
+    {
+      "cuec": "Customer restricts source IP ranges",
+      "euronext_owner": "Network team",
+      "status": "In place"
+    },
+    {
+      "cuec": "Customer reviews transfer logs monthly",
+      "euronext_owner": "SOC",
+      "status": "Gap - SOC integration pending"
+    }
+  ],
+  "actions": [
+    {
+      "action": "Complete SOC log integration to cover the third CUEC.",
+      "priority": "High",
+      "owner": "{upn:soc-lead}",
+      "due": "2026-11-30"
+    },
+    {
+      "action": "Request the FY2027 report or a bridge letter before 2027-06-30.",
+      "priority": "Medium",
+      "owner": "{upn:assurance-analyst}",
+      "due": "2027-05-31"
+    }
+  ],
+  "sources": [
+    "soc2-type2-2026.pdf (supplier-provided, SharePoint evidence library)",
+    "bridge-letter-2026-08.pdf (supplier-provided)"
+  ],
+  "auditArtifacts": [
+    {
+      "name": "chunk-inventory.json",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "path": "audit/2026-09-12/chunk-inventory.json",
+      "bytes": 18422
+    },
+    {
+      "name": "coverage-statement.md",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "path": "audit/2026-09-12/coverage-statement.md",
+      "bytes": 2140
+    }
+  ]
+}

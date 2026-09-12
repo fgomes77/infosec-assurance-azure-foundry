@@ -60,9 +60,6 @@ if [ ! -f "$SRC/host.json" ]; then
 JSON
 fi
 
-rm -f "$ZIP"
-(cd "$SRC" && zip -q -r "$OLDPWD/$ZIP" . -x '*.DS_Store')
-echo ">> packaged $count workflow(s) from $SRC -> $ZIP"
 python3 - "$SRC" <<'PY'
 import json, sys
 from pathlib import Path
@@ -82,6 +79,13 @@ for f in sorted(Path(sys.argv[1]).rglob("workflow.json")):
 print("definitions OK" if not bad else "definitions FAILED")
 sys.exit(bad)
 PY
+
+# Only now, with every definition parsed and placeholder-free, is it worth
+# building the package — a failed validation must not leave a stale
+# build/logicapps.zip behind for someone to deploy by hand.
+rm -f "$ZIP"
+(cd "$SRC" && zip -q -r "$OLDPWD/$ZIP" . -x '*.DS_Store')
+echo ">> packaged $count workflow(s) from $SRC -> $ZIP"
 
 if [ -n "$DRY" ]; then
   echo ">> dry run — would deploy:"

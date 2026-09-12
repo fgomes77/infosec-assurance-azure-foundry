@@ -35,6 +35,9 @@ The office toolchain is a second image built the same way from
 
 ## Graph permission (least privilege)
 
+**Bootstrap the Graph side first.** Run
+`python3 ../../scripts/sharepoint_bootstrap.py --site-url https://{tenant}.sharepoint.com/sites/{site} --function-app-id {function-mi-appId}` — it resolves the site, performs the `Sites.Selected` grant for the Function's managed identity, and prints `SHAREPOINT_SITE_ID`, `SHAREPOINT_REPORTS_DRIVE_ID`, `SHAREPOINT_REPORTS_ROOT_ITEM_ID`, `SHAREPOINT_DPO_ROOT_ITEM_ID`, `SHAREPOINT_ADVISORY_ROOT_ITEM_ID` and `SHAREPOINT_TEMPLATES_REVIEWS_ITEM_ID` for `setup/.env`. Doing it by hand is where the ids get mistyped.
+
 Grant the app's managed identity `Sites.Selected`, then grant **write** on
 the single InfoSec Assurance site:
 

@@ -138,7 +138,8 @@ def upload_files(agents_client, paths: list[Path], cache: UploadCache,
     if label:
         reused = sum(1 for p in paths if cache.get(cache.digest(p)))
         print(f"  {label}: {len(ids)} files ready "
-              f"({len(ids)} total, cache hits included)")
+              f"({reused} reused from the upload cache, "
+              f"{len(ids) - reused} uploaded)")
     return ids
 
 

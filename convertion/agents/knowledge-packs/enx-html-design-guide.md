@@ -53,3 +53,22 @@ inline, no scripts that fetch anything.
 Plan against the brief → build → check every item of the floor →
 fix → return. Do not loop more than twice; state what could not be
 verified (e.g. no renderer for a visual check).
+
+## Data-visualisation rules (from the dataviz harness skill, template-governed)
+
+- **Palette:** a colour-blind-safe series palette derived from the ENX teal
+  `RGB(0,141,127)` theme (`templates/enx-theme.json`), every series ≥3:1
+  contrast against the background and against its neighbours. Never encode a
+  distinction by hue alone — pair it with shape, dash or direct labelling.
+- **Every chart carries** a title, labelled axes **with units**, and a legend
+  only when there is more than one series (one series → label it directly).
+- **Spider graphs:** axes fixed to the five domains of the deliverable and
+  scaled 0–max of that deliverable's own thresholds
+  (`governance/RISK_THRESHOLDS.md`) — never auto-scaled to the data.
+- **Gauges:** band colours come from the scale the score belongs to, not from
+  a generic red/amber/green ramp.
+- **Banned:** 3-D anything, dual y-axes, truncated value axes on bar charts,
+  pie charts with more than five slices, and any chart whose numbers are not
+  also available as text in the page.
+- **Readable in both themes:** tooltip and value text legible on light and
+  dark backgrounds; no colour that disappears when printed greyscale.
