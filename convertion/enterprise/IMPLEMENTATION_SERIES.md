@@ -173,7 +173,7 @@ Every step lists its own; the integration pass applies them. Identifiers
 | S-09 | `README.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md` | "Implementation" pointer to this series; runtime wording threads → conversations; connected agents → routing note |
 | S-10 | `deploy.sh` | step `[0/7] runtime pre-flight` (SDK major check) before conversion |
 | S-11 | new `functions/delivery/Dockerfile` | container image the existing `infra/delivery.bicep` expects (step 05 G-05) |
-| S-12 | new `scripts/build_logicapps.py` (+ `ci/deploy_logicapps.sh`) | instance generator referenced by `workflows/README.md` but absent (step 07 G-07) |
+| S-12 | `scripts/build_logicapps.py` (+ `ci/deploy_logicapps.sh`) | **Applied** — both exist; `build_logicapps.py` emits `build/logicapps/<name>/workflow.json` for the 12 pipeline instances plus every standalone workflow and pins `agentName`/`agentVersion` from `build/agent-versions.json` (finding C19); `ci/deploy_logicapps.sh` is documented in `../ci/README.md` and exercised offline (`ci/deploy_logicapps.sh --dry-run`). |
 | S-13 | `workflows/README.md` | rule for the Logic Apps Agent action (preview): read-side orchestration only, no write connector as an agent tool (step 07 §3) |
 | S-14 | new `operations/evaluation/run_evals.py`, `EVALUATION.md` | evaluation harness referenced by `operations/TOKEN_ECONOMY_PLAYBOOK.md` but absent (step 08 G-08) |
 | S-15 | `scripts/attach_integrations.py` | implement the `--list-mcp-tools` flag and the `readOnlyHint` check that `integrations/mcp/enx-gateway.json` already documents (step 04 G-04) |

@@ -16,6 +16,8 @@ folder `Governance/AccessLifecycle/{yyyy}/` as the ticket export plus the
 
 ## 1. Joiner — new assurance user (target: same day)
 
+Joiner-facing checklist and attestation template: `../../team/ONBOARDING.md`.
+
 | # | Step | Who | Tool / evidence | Least-privilege check |
 |---|---|---|---|---|
 | 1 | Line manager requests access package `AP-InfoSec-Foundry-User` (or a ticket `{jira:INFOSEC-PLAT}` if entitlement management is unavailable) | `{upn:line-manager}` | Entra entitlement management request id | Request states the business need: member of the InfoSec Assurance team using systems a–j |
@@ -35,6 +37,9 @@ folder `Governance/AccessLifecycle/{yyyy}/` as the ticket export plus the
 | Owner succession | Line manager appoints the successor (normally the deputy); Entra IAM team transfers group ownership and PIM eligibilities; successor becomes CODEOWNERS, SharePoint site owner, Copilot environment maker, connection owner; RoPA entry updated; successor runs `deploy.sh --dry-run` and `provision_identity.sh --verify` as hand-over check; successor also runs `access-review.sh` and files the output as the new Q0 baseline; previous owner is removed from `sg-infosec-foundry-owner`, `-admin-pim` and `-senior-approvers` the same day (`team/TEAM_MODEL.md` §14 hand-over checklist) | line manager, Entra IAM team, successor |
 
 ## 3. Leaver (target: same day as HR trigger, never later than the next business day)
+
+Revocation commands, GDPR handling of conversations and memory, and the
+evidence-of-revocation checklist: `../../team/OFFBOARDING.md`.
 
 | # | Step | Who | Evidence |
 |---|---|---|---|

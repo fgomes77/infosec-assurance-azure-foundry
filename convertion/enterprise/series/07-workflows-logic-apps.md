@@ -19,10 +19,22 @@ end into the test SharePoint site.
 | Logic Apps Standard **Agent action** (preview): call/create Foundry agents from a workflow, run autonomously from triggers, expose connector actions or entire Request-triggered workflows as agent tools (built-in actions run in-process with VNet integration) | [preview] https://learn.microsoft.com/en-us/azure/logic-apps/automate-foundry-agents-with-workflows (2026-08-13) |
 | Classic "Logic Apps as agent tool" (Consumption only, same RG) retires with classic agents 2027-03-31; the new service has no native Logic Apps tool | [GA] https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/migrate#agent-tool-availability (2026-08-05) |
 | Foundry portal *workflows* (visual designer) retire 2026-12-01 — not used | [preview] retirement page ms.date 2026-07-31 (index D12) |
+| Evaluations / red-team REST used by `workflows/scheduled-evaluation-redteam.json` (`evaluationApiVersion` `2025-11-15-preview`) | **preview — confirm the request/response shape on the execution day**; it is deliberately a separate parameter from `FOUNDRY_API_VERSION` so a preview change cannot move the GA data plane |
 
 ## 2. Rewrite of the agent-invocation actions (shared delta S-07)
 
-Every workflow that calls an agent today does *create thread → post
+> **Status (2026-09-12): S-07 is APPLIED in `workflows/`.** Every definition
+> now opens a conversation, creates a response with `agent_reference` pinned to
+> `<name>:<version>` (finding C19), polls the response id and reads
+> `output_text`; `apiVersion` defaults to `v1` and `infra/logicapp.bicep`
+> `foundryApiVersion` matches. **S-13** (the read-only rule for the Logic Apps
+> Agent action) is mirrored in `workflows/README.md`; the **C16** sensitivity-label
+> step (`/assign_label`) and the **C18** scheduled evaluation / red-team workflow
+> (`workflows/scheduled-evaluation-redteam.json`) exist. Verification **V1 now
+> passes as written** (`grep -rn "threads" workflows/` → 0 hits). The text below
+> is kept as the rationale and the literal reference shape.
+
+Every workflow that called an agent did *create thread → post
 message → create run → poll → read messages* with `apiVersion 2025-05-01`.
 The new sequence is two HTTP actions plus (for long runs) a poll on the
 response id. Literal replacement for `Run_producing_agent` and its
@@ -98,8 +110,8 @@ verified shape in the sign-off.
 | Item | Kit source | Action |
 |---|---|---|
 | Logic Apps Standard app `{baseName}-la` | `infra/logicapp.bicep` (WS plan, runtime storage, VNet integration `snet-apps`, Key Vault app settings) | deployed by `main.bicep` (`enableLogicApps=true`) |
-| 12 pipeline instances | `workflows/pipelines.json` × `workflows/report-delivery-pipeline.json` | **Gap G-07**: `scripts/build_logicapps.py` and `ci/deploy_logicapps.sh` are referenced by `workflows/README.md` but do not exist. Until they do, generate `build/logicapps/<name>/workflow.json` by substituting each `pipelines.json` entry into the template parameters (`agent`→`agentName`, `render`→`renderFormat`, `approvalKind`, `libraryRoot`→`libraryRootItemId`, fallbacks, flags) and deploy with `az logicapp deployment source config-zip -g {rg} -n {baseName}-la --src build/logicapps.zip` (shared delta S-12: add the script; the integration pass owns it) |
-| Standalone workflows | `onetrust-assessment-intake`, `scheduled-deepsearch`, `defender-incident-brief`, `jira-finding-sync`, `morning-brief` (×5 users), `mailbox-intake`, `watch-until`, `scheduled-followup`, `agent-fanout`, `generic-event-intake`, `teams-post-approved`, `speech-transcription`, `report-status`, `template-update-approval` | same zip |
+| 12 pipeline instances | `workflows/pipelines.json` × `workflows/report-delivery-pipeline.json` | **G-07 closed**: `scripts/build_logicapps.py` generates `build/logicapps/<name>/workflow.json` (pinning `agentName` + `agentVersion` from `build/agent-versions.json`, resolving `${ENV}` from `setup/.env` and taking a per-report-type `sensitivityLabelId` from `templates/registry.json`), and `ci/deploy_logicapps.sh` packages that folder (generating `host.json`, refusing any definition that still carries an unresolved `${ENV}` placeholder) and deploys it with `az logicapp deployment source config-zip -g {rg} -n {baseName}-la --src build/logicapps.zip`; `deploy.sh --workflows` calls both. |
+| Standalone workflows | `onetrust-assessment-intake`, `scheduled-deepsearch`, `defender-incident-brief`, `jira-finding-sync`, `morning-brief` (×5 users), `mailbox-intake`, `watch-until`, `scheduled-followup`, `agent-fanout`, `generic-event-intake`, `teams-post-approved`, `speech-transcription`, `report-status`, `template-update-approval`, `scheduled-evaluation-redteam` (C18) | same zip |
 | Secrets as app settings | `infra/logicapp.bicep` `secretNames`: `kv-delivery-function-key`, `kv-approval-webhook-url`, `kv-teams-webhook-url`, `kv-jira-api-token`, `kv-onetrust-api-token`, `kv-iaf-client-secret` | create the six secrets in `{baseName}-kv` (owner under PIM); app settings are `@Microsoft.KeyVault(VaultName=…;SecretName=…)` references; Logic Apps MI holds `Key Vault Secrets User` (`infra/workload-rbac.bicep`) |
 | Identity | Logic Apps MI → **Foundry User** on the project; no Graph roles (SharePoint I/O only through the Function) | `infra/workload-rbac.bicep` `logicAppAiUser`; `team/least-privilege/SHARED_DELTAS.md` row for `workflows/README.md` |
 | Approval side | `approvalWebhookUrl` → Power Automate flow or Function that renders the draft as a Teams Approval, resolves approvers from `team/least-privilege/approvals/routing.json` (or `team/approval-policy.json`) minus the requester, verifies the approver's token UPN, and POSTs `{decision, approver, comment, correlationId}` to the `callbackUrl`; expiry `P3D` (`P7D` for template updates) | built by the owner in the Power Platform environment `{pp-env:infosec-assurance}`; DLP policy must allow HTTP to the Logic Apps callback host only |
@@ -149,7 +161,7 @@ curl -s "https://{baseName}-la.azurewebsites.net/api/report-status/triggers/manu
 
 | # | Check | Pass when |
 |---|---|---|
-| V1 | `python3 -c "import json,glob; [json.load(open(f)) for f in glob.glob('workflows/*.json')]"` and the built instances | all parse; no `threads/` string remains (`grep -rn "threads" workflows/ build/logicapps/` → 0 hits) |
+| V1 | `python3 -c "import json,glob; [json.load(open(f)) for f in glob.glob('workflows/*.json')]"` and the built instances | all parse; no thread/run ENDPOINT remains — `grep -rn "/threads" workflows/ build/logicapps/` → 0 hits. (A plain `grep -rn "threads"` returns exactly one hit: the `_comment` of `workflows/pipelines.json`, which documents `2025-05-01` as the retiring fallback. Documentation, not an endpoint.) |
 | V2 | `dev`: `deepsearch-report` instance run with a public supplier | reaches `Run_output_verifier`, verdict read; run stops at the gate (no approval side in dev) and expires after `P3D` without any write |
 | V3 | `test`: same run, approved by a **different** user in Teams | file appears at `Reports/Acme Test/Managed SOC/DeepSearch_AcmeTest_ManagedSOC_{date}.html` on the test site; `webUrl` + org share link returned; Teams notice posted |
 | V4 | `test`: approver = requester | approval flow rejects; run records `DECIDED_NOT_STORED` |

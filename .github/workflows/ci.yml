@@ -173,6 +173,7 @@ jobs:
       MEMORY_BACKEND: ${{ vars.MEMORY_BACKEND }}
       KNOWLEDGE_SOURCE: ${{ vars.KNOWLEDGE_SOURCE }}
       STRICT_RUNTIME: '1'       # refuse the retiring classic runtime (C1)
+      LIFECYCLE_STRICT: '1'     # an open model-lifecycle finding fails the release (C4/C6/C25)
       CI: 'true'
     steps:
       - uses: actions/checkout@v4
@@ -201,6 +202,9 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Strict pre-flight (classic runtime and lifecycle findings are blocking)
+        run: cd convertion && ./deploy.sh --dry-run
 
       - name: Deploy (convert → verify → agents → integrations → checks)
         run: cd convertion && ./deploy.sh
