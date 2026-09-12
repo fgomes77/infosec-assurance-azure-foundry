@@ -22,8 +22,11 @@ import math
 import sys
 from pathlib import Path
 
+import logging
+
 import matplotlib
 matplotlib.use("Agg")
+logging.getLogger("matplotlib.font_manager").setLevel(logging.ERROR)  # Verdana -> DejaVu Sans fallback in the container
 import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.patches import FancyBboxPatch, Wedge  # noqa: E402
 

@@ -118,7 +118,11 @@ const HDR = { bold: true, color: "FFFFFF", fill: { color: TEAL } };
   s.addText(d.meta.service, { x: 5.6, y: 3.1, w: 2.1, h: 1.2, ...F, fontSize: 11, bold: true, color: "FFFFFF", align: "center" });
   const draw = (nodes, xBox, xLineFrom, xLineTo) => nodes.slice(0, 6).forEach((n, i) => {
     const y = 1.4 + i * 0.95;
-    s.addShape("line", { x: xLineFrom, y: y + 0.35, w: xLineTo - xLineFrom, h: 3.7 - y + 0.35 <= 0 ? 0 : 0, line: { color: "AAAAAA", width: 1 } });
+    // connector from the node's mid-height (y + 0.35) to the service box centre (y = 3.7);
+    // pptxgenjs lines need a non-negative h, so flip vertically when the node sits below the box
+    const yFrom = y + 0.35, yTo = 3.7;
+    s.addShape("line", { x: xLineFrom, y: Math.min(yFrom, yTo), w: xLineTo - xLineFrom, h: Math.abs(yTo - yFrom),
+      flipV: yFrom > yTo, line: { color: "AAAAAA", width: 1 } });
     s.addShape("roundRect", { x: xBox, y, w: 4.4, h: 0.7, fill: { color: "FFFFFF" }, line: { color: BAND[n.risk] || GREY, width: 2.5 } });
     s.addText(`${n.node}${n.note ? " — " + n.note : ""}`,
       { x: xBox + 0.1, y, w: 4.2, h: 0.7, ...F, fontSize: 9.5, color: DARK, align: "left", valign: "middle" });
