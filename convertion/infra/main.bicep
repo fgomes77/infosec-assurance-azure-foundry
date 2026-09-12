@@ -327,6 +327,34 @@ var annotateOnly = [for c in ['Hate', 'Sexual', 'Violence', 'Selfharm']: [
   { name: c, severityThreshold: 'High', blocking: false, enabled: true, source: 'Prompt' }
   { name: c, severityThreshold: 'High', blocking: false, enabled: true, source: 'Completion' }
 ]]
+// D-EB7 / finding C14 — second RAI policy for agents that consume UNTRUSTED
+// retrieved content (web search, SharePoint, OpenAPI reads, the MCP gateway).
+// It is the base policy PLUS indirect-attack (XPIA / cross-prompt injection)
+// detection on the prompt, which is what catches instructions hidden inside a
+// supplier document or a fetched page. Assigned at AGENT level (not to the
+// deployment) so report agents that never touch the web keep the base policy —
+// the assignment is recorded per agent as `guardrail_policy` in
+// integrations/registry.json and checked by scripts/verify_kit.py.
+// Rollout: `blocking: false` (annotate) for the first 30 days, then flip to
+// true in a Tier C change once the false-positive rate is known.
+@description('Block (true) instead of only annotating (false) on indirect-attack detection for the web-facing RAI policy. Pilot with false for 30 days, then flip in a reviewed change (finding C14)')
+param webFacingXpiaBlocking bool = false
+
+resource raiPolicyWebFacing 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' = {
+  parent: foundry
+  name: 'infosec-web-facing'
+  properties: {
+    mode: 'Default'
+    basePolicyName: 'Microsoft.DefaultV2'
+    contentFilters: concat(flatten(annotateOnly), [
+      { name: 'Jailbreak', blocking: true, enabled: true, source: 'Prompt' }
+      { name: 'Indirect Attack', blocking: webFacingXpiaBlocking, enabled: true, source: 'Prompt' }
+      { name: 'Protected Material Text', blocking: true, enabled: true, source: 'Completion' }
+      { name: 'Protected Material Code', blocking: false, enabled: true, source: 'Completion' }
+    ])
+  }
+}
+
 resource raiPolicy 'Microsoft.CognitiveServices/accounts/raiPolicies@2025-06-01' = {
   parent: foundry
   name: 'infosec-security-analysis'
@@ -915,6 +943,7 @@ output projectEndpoint string = projectEndpoint
 output foundryAccountName string = foundry.name
 output projectName string = project.name
 output modelDeploymentName string = modelDeployment.name
+output webFacingRaiPolicyName string = raiPolicyWebFacing.name
 output reasoningModelDeploymentName string = reasoningDeployment.name
 output lightModelDeploymentName string = lightDeployment.name
 output bingConnectionName string = enableWebSearch ? 'bing-grounding' : ''

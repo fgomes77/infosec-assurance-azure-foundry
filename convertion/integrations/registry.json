@@ -1,5 +1,5 @@
 {
-  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows. READ-ONLY RULE OF RECORD: attach_integrations.py keeps GET operations plus any operation carrying the OpenAPI vendor extension 'x-enx-read-only: true' (idempotent query POSTs: Jira JQL search, Jira Assets AQL, Defender advanced hunting, SharePoint /search/query); every other non-GET verb is stripped. MCP tools are allow-listed by name and must carry readOnlyHint=true in the gateway's tools/list (see mcp/enx-gateway.json). Connection provisioning (IaC/script) and least-privilege scopes: connections/ and README.md. Consumer connectors of the previous environment (Gmail, Google Drive, GitHub, Firecrawl, Slack, ...) and their ENX replacements/exclusions: CONNECTOR_DECISIONS.md. IDENTITY (finding C7): every connection declares, in its 'identity' field, which principal actually calls the target system; the agent-level identity model (Entra Agent ID, agent blueprint, Conditional Access, re-applied role assignments) is in '_identity_model' below and inventoried in team/ACCESS_REGISTER.md. MODEL/TOOL COMPATIBILITY (finding C4): 'model_tiers._tool_compatibility' is the matrix of record - an agent may only be pinned to a tier whose model supports every tool type it carries; the reasoning deployment is a tool-capable model, never o3-mini. CONNECTION FLAGS: a connection carrying \"enabled\": false is provisioned/inventoried but NOT attached to any agent (today: sharepoint-grounding, finding C9); connections/create_connections.sh skips it.",
+  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows. READ-ONLY RULE OF RECORD: attach_integrations.py keeps GET operations plus any operation carrying the OpenAPI vendor extension 'x-enx-read-only: true' (idempotent query POSTs: Jira JQL search, Jira Assets AQL, Defender advanced hunting, SharePoint /search/query); every other non-GET verb is stripped. MCP tools are allow-listed by name and must carry readOnlyHint=true in the gateway's tools/list (see mcp/enx-gateway.json). Connection provisioning (IaC/script) and least-privilege scopes: connections/ and README.md. Consumer connectors of the previous environment (Gmail, Google Drive, GitHub, Firecrawl, Slack, ...) and their ENX replacements/exclusions: CONNECTOR_DECISIONS.md. IDENTITY (finding C7): every connection declares, in its 'identity' field, which principal actually calls the target system; the agent-level identity model (Entra Agent ID, agent blueprint, Conditional Access, re-applied role assignments) is in '_identity_model' below and inventoried in team/ACCESS_REGISTER.md. MODEL/TOOL COMPATIBILITY (finding C4): 'model_tiers._tool_compatibility' is the matrix of record - an agent may only be pinned to a tier whose model supports every tool type it carries; the reasoning deployment is a tool-capable model, never o3-mini. CONNECTION FLAGS: a connection carrying \"enabled\": false is provisioned/inventoried but NOT attached to any agent (today: sharepoint-grounding, finding C9); connections/create_connections.sh skips it. 'guardrail_policy' per agent (D-EB7 / finding C14) names the RAI policy assigned at AGENT level: 'infosec-security-analysis' (default) or 'infosec-web-facing', which adds indirect-attack (XPIA / cross-prompt-injection) detection on the prompt and is REQUIRED for every agent that consumes untrusted retrieved content - web-search, osint-proxy, sharepoint-graph, sharepoint-grounding, confluence-cloud or enx-gateway-mcp. Both policies are created by infra/main.bicep on the account; scripts/verify_kit.py fails the kit when an agent carrying one of those tools is not on 'infosec-web-facing'. The assignment itself is made at agent creation / in the portal (enterprise/portal/agent-checklist.md) - the pinned SDK does not expose it on update_agent.",
   "connections": {
     "jira-cloud": {
       "type": "openapi",
@@ -201,6 +201,7 @@
         "defender-graph"
       ],
       "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
       "_comment": "Tools aligned with workflows/pipelines.json 'deepsearch-report' notes (SecurityScorecard, IAF, ENX gateway, Defender Graph, Jira Assets CMDB - all read-only) plus osint-proxy for PHASE 2 page reads (Trust Center, privacy/DPA, subprocessor lists, IAF CertSearch)."
     },
     "ai-deepsearch-osint-gathering-report": {
@@ -209,7 +210,8 @@
         "securityscorecard",
         "osint-proxy"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "cyber-forum": {
       "tools": [
@@ -227,7 +229,8 @@
         "osint-proxy",
         "azure-devops"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "dpia": {
       "tools": [
@@ -235,14 +238,16 @@
         "sharepoint-graph",
         "iaf-api"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "onetrust-form-b": {
       "tools": [
         "onetrust",
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "ciso-reporting": {
       "tools": [
@@ -250,18 +255,21 @@
         "sharepoint-graph",
         "jira-cloud"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "ciso-executive-summary": {
       "tools": [
         "onetrust",
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "enx-tprm-control-center": {
       "tools": [],
       "model_tier": "light",
+      "guardrail_policy": "infosec-security-analysis",
       "_comment": "Router only ('must stay cheap'): no enterprise tools, light tier, no advisory addendum. It dispatches to the worker agents via connected-agent tools created by create_orchestrator.py / create_agents.py; the workers carry the tools."
     },
     "dora": {
@@ -278,7 +286,8 @@
         "enx-gateway-mcp",
         "web-search"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "nis2": {
       "tools": [
@@ -294,7 +303,8 @@
         "enx-gateway-mcp",
         "web-search"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "eu-ai-act": {
       "tools": [
@@ -310,7 +320,8 @@
         "enx-gateway-mcp",
         "web-search"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "iso27001": {
       "tools": [
@@ -326,7 +337,8 @@
         "enx-gateway-mcp",
         "web-search"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "iso42001": {
       "tools": [
@@ -342,7 +354,8 @@
         "enx-gateway-mcp",
         "web-search"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "tpsrca-assessment-engine": {
       "tools": [
@@ -360,51 +373,60 @@
         "osint-proxy"
       ],
       "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
       "_comment": "Agent 3 Evidence Validator: URL accessibility/content checks via osint-proxy (HEAD/GET on public URLs). When the tool is unavailable or the host is not allow-listed, Accessibility = 'not verified' (score 0.5) and the URL is listed under validated_sources with status 'unverified' - never silently defaulted."
     },
     "tprm-slide-generator": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "pptx-executive-summary-ciso": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "pdf-full-coverage-analyzer": {
       "tools": [],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis"
     },
     "whisperx-transcribe-diarize": {
       "tools": [],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-security-analysis"
     },
     "docx": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "light"
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
     },
     "pdf": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "light"
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
     },
     "pptx": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "light"
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
     },
     "xlsx": {
       "tools": [
         "sharepoint-graph"
       ],
-      "model_tier": "light"
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
     },
     "ciso-global-report": {
       "tools": [
@@ -412,29 +434,34 @@
         "jira-assets-cmdb",
         "sharepoint-graph"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "tpa-evidence-analyzer": {
       "tools": [
         "sharepoint-graph",
         "exchange-graph"
       ],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
     },
     "soc-report-analyzer": {
       "tools": [],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis"
     },
     "pentest-report-analyzer": {
       "tools": [],
-      "model_tier": "reasoning"
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis"
     },
     "template-manager": {
       "tools": [
         "sharepoint-graph",
         "azure-devops"
       ],
-      "model_tier": "chat"
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
     },
     "infosec-assurance-advisor": {
       "tools": [
@@ -454,6 +481,7 @@
         "azure-devops"
       ],
       "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
       "_comment": "Requirement i: full enterprise read surface, READ-ONLY (non-GET stripped; no write_connections). Web search only after query sanitisation per governance/DATA_PROTECTION_GUARDRAILS.md."
     },
     "doc-coauthoring": {
@@ -462,6 +490,7 @@
         "confluence-cloud"
       ],
       "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing",
       "example": true
     },
     "internal-comms": {
@@ -471,6 +500,7 @@
         "sharepoint-graph"
       ],
       "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing",
       "example": true,
       "_comment": "Slack/Gmail/Google Calendar context gathering -> Teams + Outlook via delegated OBO reads."
     },
@@ -479,11 +509,13 @@
         "web-search"
       ],
       "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing",
       "example": true
     },
     "mcp-builder": {
       "tools": [],
       "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis",
       "example": true,
       "_comment": "Knowledge-only: authors MCP servers as code; no enterprise tools."
     },
@@ -493,6 +525,7 @@
         "teams-graph"
       ],
       "model_tier": "light",
+      "guardrail_policy": "infosec-security-analysis",
       "example": true,
       "_comment": "Routine replaced by workflows/morning-brief.json (Logic App gathers calendar/mail/chats and calls the agent); the agent itself only formats. Delegated OBO when invoked interactively."
     }

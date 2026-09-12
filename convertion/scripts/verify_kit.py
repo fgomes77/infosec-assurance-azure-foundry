@@ -155,6 +155,18 @@ def check_crossrefs(findings: list[str]) -> None:
             if not conn.get("enabled", True):
                 findings.append(f"XREF     registry agent {name}: connection {t!r} is "
                                 f"disabled (enabled=false) but attached")
+        # finding C14 / D-EB7: an agent that consumes untrusted retrieved content
+        # must carry the RAI policy with indirect-attack (XPIA) detection
+        untrusted = {"web-search", "osint-proxy", "sharepoint-graph",
+                     "sharepoint-grounding", "confluence-cloud", "enx-gateway-mcp"}
+        policy = cfg.get("guardrail_policy", "infosec-security-analysis")
+        if set(cfg.get("tools", [])) & untrusted and policy != "infosec-web-facing":
+            findings.append(f"XREF     registry agent {name}: carries an untrusted-content "
+                            f"tool but guardrail_policy is {policy!r} — must be "
+                            f"'infosec-web-facing' (finding C14)")
+        if policy not in ("infosec-security-analysis", "infosec-web-facing"):
+            findings.append(f"XREF     registry agent {name}: unknown guardrail_policy "
+                            f"{policy!r} (infra/main.bicep creates two RAI policies)")
         writes = cfg.get("write_connections", [])
         if writes and name not in reg.get("write_exceptions", {}):
             findings.append(f"XREF     registry agent {name}: write_connections {writes} "

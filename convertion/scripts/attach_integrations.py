@@ -262,7 +262,9 @@ def main() -> int:
             labelled = [t + ("" if t in writes
                              or REGISTRY["connections"][t]["type"] != "openapi"
                              else " [read-only]") for t in cfg["tools"]]
-            print(f"[dry-run] {name}: +{labelled or ['(none)']} model={model}")
+            guard = cfg.get("guardrail_policy", "infosec-security-analysis")
+            print(f"[dry-run] {name}: +{labelled or ['(none)']} model={model} "
+                  f"rai={guard}")
         print(f"\n{len(wanted)} agents would be updated "
               f"(writes granted: "
               f"{sum(bool(c.get('write_connections')) for c in wanted.values())})")
@@ -294,7 +296,12 @@ def main() -> int:
             agent.id, model=model,
             tools=kept + build_tools(cfg["tools"],
                                      cfg.get("write_connections", []), False))
-        print(f"updated  {name}: +{cfg['tools']} model={model}")
+        guard = cfg.get("guardrail_policy", "infosec-security-analysis")
+        # The pinned SDK does not expose the agent-level RAI assignment on
+        # update_agent; it is set at creation / in the portal and verified by
+        # enterprise/portal/agent-checklist.md (finding C14 / D-EB7).
+        print(f"updated  {name}: +{cfg['tools']} model={model} "
+              f"rai={guard} (assignment verified in the portal checklist)")
 
     print(f"\ndone: {len(wanted)} agents processed")
     if not args.only:
