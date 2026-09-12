@@ -1,6 +1,6 @@
 # Threads & Memory Conventions — Per-User Threads, Shared Team Memory, GDPR Minimisation
 
-Two kinds of state exist (`../ARCHITECTURE.md` "Memory/state"): Foundry
+Two kinds of state exist (`../../ARCHITECTURE.md` "Memory/state"): Foundry
 **threads** (session context) and the durable **`vs-assurance-memory`**
 vector store (team knowledge). Neither is private storage; both are
 in-scope for the RoPA entry `{ropa:infosec-foundry}` and the ISMS record
@@ -25,7 +25,7 @@ schedule.
 | What goes in | Durable, professional facts only: decisions, agreed risk positions, supplier facts, template-cycle audit lines, open actions — exactly what the advisor's `MEMORY:` block emits |
 | What never goes in | Special-category data; personal data about individuals beyond role/company; credentials, hostnames, internal IPs; anything copied verbatim from a supplier contract; personal reminders |
 | Format | One note = one file: `YYYY-MM-DD | <Subject: supplier/topic> | <fact> | by {upn} | review <YYYY-Qn>` (`scripts/memory_store.py add`) |
-| Who adds | Any assurance user, under their own identity (`memory_store.py` or MCP `save_memory`) — the human act is the approval (`../governance/HUMAN_APPROVAL.md` scope notes) |
+| Who adds | Any assurance user, under their own identity (`memory_store.py` or MCP `save_memory`) — the human act is the approval (`../../governance/HUMAN_APPROVAL.md` scope notes) |
 | Who deletes | The author at any time; the owner after a `MEMORY_DELETE` approval (`APPROVAL_ROUTING.md`); nobody else |
 | Who reads | Every agent that has the store attached (advisor, orchestrator) and therefore every user — memory is shared context, not per-user |
 | Review | Quarterly, with the access review: `memory_store.py list` → prune superseded/expired notes; DPO informed of the note count and categories |

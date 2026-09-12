@@ -35,7 +35,7 @@ be the only person who can approve that change.
 Start point for every row: what a user physically needs to press the
 button and receive the result. Agent-side credentials (Foundry
 connections) are never user permissions — the agent, not the person,
-holds the read-only enterprise access (`../governance/DATA_PROTECTION_GUARDRAILS.md` §2).
+holds the read-only enterprise access (`../../governance/DATA_PROTECTION_GUARDRAILS.md` §2).
 
 | Req | System | User action | Minimum user grant | Agent/pipeline identity involved | Approver |
 |---|---|---|---|---|---|
@@ -56,7 +56,7 @@ What users do **not** get, and why:
 | Not granted | Reason |
 |---|---|
 | Any Azure RBAC beyond `Azure AI User` on the project | Portal visibility of Key Vault, Logic Apps, Function, storage is not needed to use a–j; all outputs arrive via thread, Teams and SharePoint |
-| SharePoint write on `Reports/` or `Templates/` | The delivery Function's managed identity is the only writer (`../sharepoint/README.md`); templates change only via the approved workflow |
+| SharePoint write on `Reports/` or `Templates/` | The delivery Function's managed identity is the only writer (`../../sharepoint/README.md`); templates change only via the approved workflow |
 | Foundry connection secrets, Key Vault | Agents hold the credentials; users never need them |
 | GitHub write | Template and platform changes flow through `template-manager` + `update_templates.py`, not through git commits by users |
 | Log Analytics access | Users receive their run results in-thread; audit access is the owner's/auditor's, not a per-user need |
@@ -76,7 +76,7 @@ What users do **not** get, and why:
 | A9 | `{upn:deputy-approver}` | Membership of `sg-infosec-foundry-platform-approvers` for owner-requested changes only; **eligible** member of `sg-infosec-foundry-breakglass` | Segregation of duties (A.5.3) and continuity (DORA Art. 9) | Routing rule in `approvals/routing.json`; PIM approval by `{upn:line-manager}` |
 | A10 | `sp-infosec-foundry-deploy` (GitHub OIDC federated credential, no secret) | `Contributor` on the RG + `Role Based Access Control Administrator` constrained to the role set in `infra/rbac.bicep` | Reproducible, reviewable deployments; removes the need for the owner's standing write access | GitHub environment protection (owner approval on `prod`); ABAC condition on assignable roles |
 | A11 | Logic Apps MI | `Azure AI User` on the project; `Key Vault Secrets User`; `Storage Blob Data Contributor` on its own runtime storage | Runs agents, reads API tokens by reference, Logic Apps Standard runtime requirement | Managed identity, no keys |
-| A12 | Delivery Function MI | Graph `Sites.Selected` with **write** on the one InfoSec Assurance site; `Storage Blob Data Contributor` on its runtime storage | The single write path to SharePoint after verifier PASS + human approval | `../functions/delivery/README.md` |
+| A12 | Delivery Function MI | Graph `Sites.Selected` with **write** on the one InfoSec Assurance site; `Storage Blob Data Contributor` on its runtime storage | The single write path to SharePoint after verifier PASS + human approval | `../../functions/delivery/README.md` |
 | A13 | Foundry project MI | Graph application permissions (all read) for `defender-graph`, `sharepoint-graph`, `entra-iam-graph`; `Key Vault Secrets User` | OpenAPI tools authenticate with managed identity instead of secrets; the agent surface is read-only by construction | Non-GET stripped; admin consent recorded |
 | A14 | `sg-infosec-foundry-auditors` (empty by default) | `Log Analytics Reader`, `Logic Apps Standard Reader`, SharePoint `Governance/` Read | Internal audit / ISO 27001 surveillance evidence without touching the owner's account | Populated per audit engagement, removed after; A.5.35 |
 

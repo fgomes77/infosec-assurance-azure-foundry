@@ -1,0 +1,26 @@
+{
+  "_comment": "OPTIONAL custom role for sg-infosec-foundry-users (team/README.md §4.1): the Azure AI User data plane WITHOUT agent authoring, so prompt/tool changes stay owner-only preventively rather than only detectively. Populate Actions/DataActions from the CURRENT provider operations before creating it: `az provider operation show --namespace Microsoft.CognitiveServices --query \"resourceTypes[?name=='accounts/projects' || name=='accounts'].operations[].name\"` and the Azure AI User definition (`az role definition list --name 'Azure AI User'`). Keep every read/use action; remove the agent create/update/delete data actions marked {to-confirm}. If the tenant does not permit custom roles, leave agentConsumerRoleDefinitionId empty in rbac.parameters and rely on the drift alert.",
+  "Name": "InfoSec Foundry Agent Consumer",
+  "IsCustom": true,
+  "Description": "Use the InfoSec Assurance agents (threads, runs, messages, files, vector-store retrieval) without creating or modifying agents, connections or deployments.",
+  "Actions": [
+    "Microsoft.CognitiveServices/accounts/read",
+    "Microsoft.CognitiveServices/accounts/projects/read",
+    "Microsoft.CognitiveServices/accounts/deployments/read",
+    "Microsoft.CognitiveServices/accounts/connections/read",
+    "Microsoft.Insights/alertRules/read",
+    "Microsoft.Resources/deployments/read",
+    "Microsoft.Resources/subscriptions/resourceGroups/read"
+  ],
+  "NotActions": [],
+  "DataActions": [
+    "{to-confirm: every Azure AI User data action EXCEPT agents/write and agents/delete, e.g. Microsoft.CognitiveServices/accounts/AIServices/agents/threads/*, .../agents/runs/*, .../agents/messages/*, .../agents/files/read, .../agents/vectorStores/read, Microsoft.CognitiveServices/accounts/OpenAI/*/read}"
+  ],
+  "NotDataActions": [
+    "{to-confirm: Microsoft.CognitiveServices/accounts/AIServices/agents/write}",
+    "{to-confirm: Microsoft.CognitiveServices/accounts/AIServices/agents/delete}"
+  ],
+  "AssignableScopes": [
+    "/subscriptions/{subscriptionId}/resourceGroups/rg-infosec-foundry"
+  ]
+}

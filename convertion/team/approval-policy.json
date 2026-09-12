@@ -1,0 +1,58 @@
+{
+  "_comment": "Approval routing of record (team/README.md §7). Consumed by the approval flow behind the workflows' approvalWebhookUrl (Power Automate or Function). The flow MUST: (1) resolve the tier from 'kind' in the subscribe body; (2) verify the approver's token UPN is a member of every group in 'approver_groups' (Graph checkMemberGroups); (3) reject when approver == requestedBy (requestedBy is a token claim set by the workflow, never body text); (4) persist {kind, correlationId, requestedBy, approver, decision, timestamp} before POSTing {decision, approver} to callbackUrl. Group names are Entra ID security groups; ids are placeholders.",
+  "groups": {
+    "report_approvers": { "name": "sg-infosec-foundry-report-approvers", "object_id": "{objectId:sg-infosec-foundry-report-approvers}" },
+    "senior_approvers": { "name": "sg-infosec-foundry-senior-approvers", "object_id": "{objectId:sg-infosec-foundry-senior-approvers}" },
+    "owner": { "name": "sg-infosec-foundry-owner", "object_id": "{objectId:sg-infosec-foundry-owner}" }
+  },
+  "tiers": {
+    "A": {
+      "label": "four-eyes peer",
+      "approver_groups": ["report_approvers"],
+      "self_approval": false,
+      "min_approvals": 1,
+      "gate_timeout": "P3D",
+      "fallback": null
+    },
+    "B": {
+      "label": "senior four-eyes (owner or deputy)",
+      "approver_groups": ["senior_approvers"],
+      "self_approval": false,
+      "min_approvals": 1,
+      "gate_timeout": "P3D",
+      "fallback": {
+        "after_business_days": 2,
+        "approver_groups": ["report_approvers"],
+        "notify": ["{upn:francisco.gomes}"],
+        "log_as": "TIER_B_FALLBACK_EXCEPTION"
+      }
+    },
+    "C": {
+      "label": "owner-only change approval",
+      "approver_groups": ["owner"],
+      "self_approval": true,
+      "self_approval_compensating_control": "code-owner or visual-diff review by {upn:deputy} recorded in the same run (reviewedBy field required when requestedBy == approver)",
+      "min_approvals": 1,
+      "gate_timeout": "P7D",
+      "fallback": null
+    }
+  },
+  "kinds": {
+    "REPORT_DEEPSEARCH":   { "tier": "A", "requirement": "a",  "pipelines": ["deepsearch-report", "scheduled-deepsearch"] },
+    "REPORT_EVIDENCE":     { "tier": "A", "requirement": "d2", "pipelines": ["tpa-evidence-analysis"] },
+    "REPORT_SOC":          { "tier": "A", "requirement": "e",  "pipelines": ["soc-report-summary"] },
+    "REPORT_PENTEST":      { "tier": "A", "requirement": "f",  "pipelines": ["pentest-report-summary"] },
+    "REPORT_DPO":          { "tier": "B", "requirement": "b",  "pipelines": ["dpia-dpo-report", "onetrust-assessment-intake"] },
+    "REPORT_CYBERFORUM":   { "tier": "B", "requirement": "c",  "pipelines": ["cyber-forum-pptx"] },
+    "REPORT_CISO_GLOBAL":  { "tier": "B", "requirement": "d",  "pipelines": ["ciso-global-pptx"] },
+    "JIRA_CREATE":         { "tier": "A", "requirement": "-",  "pipelines": ["defender-incident-brief", "scheduled-deepsearch"] },
+    "IAF_SUBMIT":          { "tier": "A", "requirement": "-",  "pipelines": ["jira-finding-sync"] },
+    "TEMPLATE_UPDATE":     { "tier": "C", "requirement": "j",  "pipelines": ["template-update-approval"] },
+    "PLATFORM_CHANGE":     { "tier": "C", "requirement": "-",  "pipelines": ["github:production-environment"] }
+  },
+  "record": {
+    "store": "SharePoint list {list:ApprovalDecisions} on the InfoSec Assurance site (site members: Read; the approval flow's connection: write)",
+    "fields": ["kind", "tier", "correlationId", "requestedBy", "approver", "reviewedBy", "decision", "timestamp", "reportPath"],
+    "retention": "P1Y minimum (DORA Art. 28 evidence); aligned to the ISMS record schedule"
+  }
+}

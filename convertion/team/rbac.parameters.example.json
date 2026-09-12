@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "foundryAccountName": { "value": "infosecfoundry-aif" },
+    "projectName": { "value": "infosecfoundry-proj" },
+    "logAnalyticsName": { "value": "infosecfoundry-logs" },
+    "appInsightsName": { "value": "infosecfoundry-appi" },
+    "storageAccountName": { "value": "infosecfoundrysa" },
+    "keyVaultName": { "value": "{keyvault-name}" },
+    "usersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-users}" },
+    "ownerGroupObjectId": { "value": "{objectId:sg-infosec-foundry-owner}" },
+    "readersGroupObjectId": { "value": "{objectId:sg-infosec-foundry-readers}" },
+    "pimGroupObjectId": { "value": "{objectId:sg-infosec-foundry-admin-pim}" },
+    "deployerPrincipalId": { "value": "{principalId:app-infosec-foundry-deployer}" },
+    "logicAppPrincipalId": { "value": "{principalId:mi-infosecfoundry-la}" },
+    "deliveryFunctionPrincipalId": { "value": "{principalId:mi-infosec-delivery-fn}" },
+    "agentConsumerRoleDefinitionId": { "value": "" }
+  }
+}

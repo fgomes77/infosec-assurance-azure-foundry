@@ -1,6 +1,6 @@
 # Approval Routing — Who Approves What, Segregation of Duties, Break-Glass
 
-Extends `../governance/HUMAN_APPROVAL.md` (which says *that* every
+Extends `../../governance/HUMAN_APPROVAL.md` (which says *that* every
 submission of record needs a human) with *who* that human is. The
 approval flow behind `approvalWebhookUrl` (Power Automate or the approval
 Function) reads `approvals/routing.json` and resolves the approver set at
@@ -11,9 +11,9 @@ run time; the Logic Apps gates stay unchanged.
 | Tier | What | Minimum approver | Rule | Why this tier |
 |---|---|---|---|---|
 | **1 — Four-eyes peer** | Reports that leave the team or bind a stakeholder: **b** DPO report, **c** Cyber Forum deck, **d** Global CISO deck; every Jira issue creation and IAF submission (`defender-incident-brief`, `scheduled-deepsearch` ticket branch, `jira-finding-sync`); scheduled runs with no human requester (`onetrust-assessment-intake`, `scheduled-deepsearch` upload) | One member of `sg-infosec-foundry-report-approvers` **who is not the requester** | Approver ≠ requester enforced by the flow (requester UPN from `requestedBy`); the owner's reports are approved by a peer like anyone else's | External audience or record of record: an author cannot be the sole check on a document a CISO or the DPO will act on (EU AI Act Art. 14; ISO 27001 A.5.3) |
-| **2 — Author sign-off** | Internal working papers stored under `Reports/<Supplier>/<Service>/`: **a** DeepSearch, **d2** evidence analysis, **e** SOC summary, **f** pentest summary | The requesting assurance user (a natural person reviewing the verifier-passed draft) | Requester approves own run; **escalates to tier 1** when the report is attached to a supplier risk decision, shared outside the team, or the requester marks `stakeholderFacing: true` at trigger time; peer sampling of 10 % per quarter (`../operations/access-review/`) | Minimum that still satisfies "human approval before any write"; these reports are inputs to the analyst's own work, and a second approver on every SOC summary would slow the team without changing the risk. Sampling catches drift |
+| **2 — Author sign-off** | Internal working papers stored under `Reports/<Supplier>/<Service>/`: **a** DeepSearch, **d2** evidence analysis, **e** SOC summary, **f** pentest summary | The requesting assurance user (a natural person reviewing the verifier-passed draft) | Requester approves own run; **escalates to tier 1** when the report is attached to a supplier risk decision, shared outside the team, or the requester marks `stakeholderFacing: true` at trigger time; peer sampling of 10 % per quarter (`../../operations/access-governance/`) | Minimum that still satisfies "human approval before any write"; these reports are inputs to the analyst's own work, and a second approver on every SOC summary would slow the team without changing the risk. Sampling catches drift |
 | **3 — Owner only** | Template changes (`template-update-approval`, kind `TEMPLATE_UPDATE`); platform changes: Bicep, `integrations/registry.json` (tools, `model_tier`, `write_connections`), OpenAPI specs, workflow definitions, `agents/*_instructions.md`, `persona_system_prompt.md`, knowledge packs, Graph permission consents, Key Vault secret scope, group membership of privileged groups; memory **deletions** not by the author | `{upn:francisco.gomes}` | If the requester is the owner → `{upn:deputy-approver}` approves (SoD). Platform changes additionally need a GitHub PR review (owner reviews users' and deputy's PRs; deputy reviews the owner's) | Configuration of record affects every user's outputs; one accountable approver, with an independent reviewer for his own changes (A.5.3, DORA Art. 9(4)(e)) |
-| **Never auto-approved** | Anything above | — | Break-glass grants *access*, never approval; expiry (P3D reports, P7D templates) rejects | `../governance/HUMAN_APPROVAL.md` Layer 3 |
+| **Never auto-approved** | Anything above | — | Break-glass grants *access*, never approval; expiry (P3D reports, P7D templates) rejects | `../../governance/HUMAN_APPROVAL.md` Layer 3 |
 
 Threshold or scoring changes inside a template (moving the TPRM red band)
 remain tier 3 **plus** the explicit methodology confirmation the
@@ -60,7 +60,7 @@ or `-platform-admins` (Entra IAM team owns those groups).
 | Duration | 8 h max, single activation per incident, MFA required |
 | What it does **not** do | It does not approve anything: tier-1/3 approvals still need a human in the routing table; the deputy may *disable* (a workflow, a connection, an agent) without approval, but may *change* only with the owner's retrospective approval |
 | After | Owner reviews the Activity Log and Foundry tracing of the window within 5 business days; a break-glass report goes to `Governance/AccessReviews/` |
-| Runbook | `../operations/BREAK_GLASS.md` |
+| Runbook | `../../operations/access-governance/BREAK_GLASS.md` |
 
 ## 5. Approval evidence (what an auditor sees)
 

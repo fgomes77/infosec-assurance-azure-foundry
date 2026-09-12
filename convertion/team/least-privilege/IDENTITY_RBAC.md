@@ -15,7 +15,7 @@ DORA Art. 9(4)(c)–(d), NIS2 Art. 21(2)(i)–(j).
 | `sg-infosec-foundry-report-approvers` | Four-eyes approvers of tier-1 reports and Jira/IAF submissions (approval flow resolves this group minus the requester) | same five | `{upn:francisco.gomes}` | Owner | Quarterly |
 | `sg-infosec-foundry-platform-approvers` | Approvers of template, platform, prompt, registry changes | `{upn:francisco.gomes}`; `{upn:deputy-approver}` (used only when requester = owner) | **Entra IAM team**, not the owner (the owner cannot widen who approves his changes) | Owner, with `{upn:line-manager}` confirmation | Quarterly, reviewer = line manager |
 | `sg-infosec-foundry-platform-admins` | Azure privileged roles (all PIM-eligible) listed in §2 | `{upn:francisco.gomes}` | Entra IAM team | Line manager | Quarterly, reviewer = line manager; PIM activations reviewed monthly |
-| `sg-infosec-foundry-breakglass` | Eligible (never active by default) membership that grants the platform-admin role set for a bounded window | none active; eligible: `{upn:deputy-approver}` | Entra IAM team | Deputy, on incident/unavailability trigger (`../operations/BREAK_GLASS.md`) | Each activation reviewed by owner within 5 business days |
+| `sg-infosec-foundry-breakglass` | Eligible (never active by default) membership that grants the platform-admin role set for a bounded window | none active; eligible: `{upn:deputy-approver}` | Entra IAM team | Deputy, on incident/unavailability trigger (`../../operations/access-governance/BREAK_GLASS.md`) | Each activation reviewed by owner within 5 business days |
 | `sg-infosec-foundry-auditors` | Read-only evidence access for internal audit / certification bodies | none | `{upn:francisco.gomes}` | Head of internal audit | Populated per engagement, emptied after |
 
 Design notes:
@@ -88,7 +88,7 @@ overwrites drift on every re-sync, (2) the Activity/diagnostic-log alert
 | Logic Apps MI | none on Graph | — | pipelines call the delivery Function for every SharePoint action | Keeps a single Graph writer |
 
 Admin consent is recorded by the Entra IAM team with the ticket id in
-`../operations/access-review/` evidence. Consent for a new permission is a
+`../../operations/access-governance/` evidence. Consent for a new permission is a
 platform change (owner approval, `APPROVAL_ROUTING.md`).
 
 ## 4. SharePoint site roles (InfoSec Assurance site)
@@ -103,7 +103,7 @@ platform change (owner approval, `APPROVAL_ROUTING.md`).
 | `sg-infosec-foundry-auditors` | Visitors | — | — | — | — | Read | — |
 | Site-collection admin | M365 SharePoint admin team | — | — | — | — | — | — |
 
-Rules: no anonymous links (org-scoped view links only, `../sharepoint/README.md`);
+Rules: no anonymous links (org-scoped view links only, `../../sharepoint/README.md`);
 library versioning on with ≥ 50 major versions; `Reports/` and
 `Templates/` break permission inheritance; the site is excluded from
 tenant-wide "Everyone except external users" defaults; sensitivity label
@@ -139,8 +139,8 @@ change (owner approval + deputy review).
 
 | Surface | Users | Owner | Notes |
 |---|---|---|---|
-| **Copilot Studio** (`../integrations/copilot/README.md` option 1) | Consume the published agent in M365 Copilot/Teams; the app is published to `sg-infosec-foundry-users` only | Environment Maker in a dedicated Power Platform environment `{env:infosec-foundry}`; Power Platform admin team holds Environment Admin | Connector auth: delegated (user token, OBO) so answers respect the user's own permissions; DLP policy blocks any connector other than the Foundry HTTP connector |
-| **MCP server, local** (`../mcp-server/README.md`) | Run `server.py` under their own `az login`; access = their `Azure AI User` role; tracing records the caller identity | — | No shared credentials; `PROJECT_ENDPOINT` is not a secret; revocation = group removal |
+| **Copilot Studio** (`../../integrations/copilot/README.md` option 1) | Consume the published agent in M365 Copilot/Teams; the app is published to `sg-infosec-foundry-users` only | Environment Maker in a dedicated Power Platform environment `{env:infosec-foundry}`; Power Platform admin team holds Environment Admin | Connector auth: delegated (user token, OBO) so answers respect the user's own permissions; DLP policy blocks any connector other than the Foundry HTTP connector |
+| **MCP server, local** (`../../mcp-server/README.md`) | Run `server.py` under their own `az login`; access = their `Azure AI User` role; tracing records the caller identity | — | No shared credentials; `PROJECT_ENDPOINT` is not a secret; revocation = group removal |
 | **MCP server, hosted** (Container Apps) | Easy Auth, allowed group `sg-infosec-foundry-users`, MFA via CA | Container App MI `Azure AI User` | Deploy only if a shared endpoint is needed; adds an identity to review |
 | **GitHub repo** | `Read` (docs) | `Maintain` + CODEOWNERS on `convertion/**`; branch protection: 1 review from CODEOWNERS, owner's own PRs reviewed by `{upn:deputy-approver}` (`Write`) | Org admin holds `Admin`; Actions deploy via OIDC federated credential to `sp-infosec-foundry-deploy`; `prod` environment requires owner approval; secret scanning + push protection on |
 
@@ -163,5 +163,5 @@ az rest --method get --url "https://graph.microsoft.com/v1.0/sites/{siteId}/perm
 az keyvault secret list --vault-name {baseName}-kv --query "[].{n:name,updated:attributes.updated}" -o table
 ```
 
-`../operations/scripts/access_snapshot.sh` runs all of these and stores the
+`../../operations/access-governance/scripts/access_snapshot.sh` runs all of these and stores the
 output as quarterly evidence.
