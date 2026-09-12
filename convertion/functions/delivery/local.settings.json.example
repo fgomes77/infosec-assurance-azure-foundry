@@ -1,0 +1,21 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "PROJECT_ENDPOINT": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}",
+    "FOUNDRY_API_VERSION": "2025-05-15-preview",
+    "SHAREPOINT_SITE_ID": "{sharepoint-site-id}",
+    "SHAREPOINT_REPORTS_DRIVE_ID": "{sharepoint-reports-drive-id}",
+    "PORTFOLIO_LIST_NAME": "TPRM Portfolio",
+    "HISTORY_LIST_NAME": "TPSRCA History",
+    "OFFICE_TOOLS_BASE_URL": "https://{baseName}-office.azurewebsites.net/api",
+    "ALLOWED_CALLER_PRINCIPAL_IDS": "{logic-apps-managed-identity-object-id},{foundry-project-managed-identity-object-id}",
+    "INTERNAL_DOMAIN_SUFFIXES": "{internal-domain-suffix}",
+    "ALLOWLIST_EXTRA": "",
+    "ENABLE_SECURITYHEADERS_GRADE": "0",
+    "MAX_PAYLOAD_BYTES": "52428800",
+    "ENX_DATA_BOUNDARY": "EU",
+    "PLAYWRIGHT_BROWSERS_PATH": "/ms-playwright"
+  }
+}

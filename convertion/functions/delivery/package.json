@@ -1,0 +1,11 @@
+{
+  "name": "infosec-delivery-function",
+  "private": true,
+  "description": "Node dependencies for every staged renderer executed by the delivery Function (pptxgenjs: ciso-global, tprm-board-slide, ciso-exec-summary; docx: dpia golden comparison; mermaid-cli: diagrams). Installed once at image build (npm ci) and resolved through NODE_PATH.",
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "pptxgenjs": "3.12.0",
+    "docx": "8.5.0",
+    "@mermaid-js/mermaid-cli": "11.4.2"
+  }
+}
