@@ -93,3 +93,20 @@ Per-user site roles for the five assurance users, the owner and the DPO, the
 custom "Contribute (no delete)" level, the unique permissions on `Reports/`,
 `Templates/` and `Governance/`, and the grant/list/revoke commands for the
 three `Sites.Selected` identities: `../team/sharepoint-permissions.md`.
+
+## `{list:PlatformFeedback}` (learning loop)
+
+A SharePoint list on the same site, with columns mirroring
+`../enterprise/memory/feedback-schema.json`:
+
+`id`, `timestamp`, `source`, `submitted_by`, `channel`, `agent`,
+`agent_version`, `pipeline`, `requirement`, `run_id`, `conversation_id`,
+`category`, `thumbs`, `rating`, `verdict`, `finding_code`, `description`,
+`severity`, `ai_concern`, `triage_status`, `ticket`, `retain_until`.
+
+Read/write for `sg-infosec-foundry-users`. **No report content and no personal
+data** — identifiers and generic descriptions only (`learning_loop.py` masks
+e-mail/IP/secret-like strings and flags the record). Retention 24 months
+(`retain_until`). Exported monthly to
+`build/learning/inbox/feedback-{yyyy-mm}.json` for
+`../enterprise/memory/learning_loop.py`.

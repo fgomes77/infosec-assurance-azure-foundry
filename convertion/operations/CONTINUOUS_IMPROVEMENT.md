@@ -35,10 +35,11 @@ concerns about AI outputs), A.8.4; EU AI Act Art. 26(5), 26(7); DORA Art.
 | S10 | Access-review findings, ledger rows removed, drift | `QUARTERLY_ACCESS_REVIEW.md`; H8 | quarterly | always | access / control |
 | S11 | Memory quality (W5), retention breaches | `memory_store.py list` review | weekly / quarterly | R13/R14 amber | data hygiene |
 | S12 | DR / restore test findings | `BACKUP_DR.md` §6 | semi-annual | always | resilience |
-| S13 | Model, SDK, API retirement notices; new EU-region models (incl. Claude tiers) | Azure notices; `LIFECYCLE.md` §5 | monthly M3 | always (plan the bump) | lifecycle |
+| S13 | Model, SDK, API retirement notices; new EU-region models (incl. Claude tiers) | `../enterprise/upgrade/check_model_lifecycle.py`; Azure Service Health notices to `{owner-mailbox}`; `LIFECYCLE.md` §5 | monthly M3 | always (plan the bump) | lifecycle |
 | S14 | User satisfaction and free text | monthly question (`SUPPORT_MODEL.md` §7) | monthly | Q6 amber or any concrete suggestion | usability |
 | S15 | Concern about an AI output (bias, wrong regulatory claim, hallucinated citation, injection suspected) | any user, any channel; DPO/ISMS | as raised | always — logged the same day, acknowledged in the channel | AI concern (ISO 42001 A.8.3; EU AI Act Art. 26(7)) |
 | S16 | Regulatory or framework change (DORA RTS, NIS2 transposition, ISO amendments) | advisors' web grounding + the team's own watch | as raised | affects knowledge packs, verifier rules or thresholds | knowledge |
+| S17 | Feedback records (`../enterprise/memory/feedback-schema.json`) and the monthly learning proposal (`python3 ../enterprise/memory/learning_loop.py --dry-run --month {yyyy-mm}`) | `build/learning/{yyyy-mm}/proposal.md`; `{list:PlatformFeedback}` | monthly M1 | every accepted item; AI concerns mandatory | per proposal |
 
 Everything enters the same place: Jira project `{jira:INFOSEC-PLAT}`,
 issue type *Improvement* (or *Corrective action* for S9/S10 and any

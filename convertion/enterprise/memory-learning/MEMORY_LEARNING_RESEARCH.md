@@ -1,5 +1,12 @@
 # Memory and learning options for the InfoSec Assurance agents (research note, 2026-09-12)
 
+> **Superseded for the memory-tier design** by `../MEMORY_AND_LEARNING.md`
+> (2026-09-12): the advisor cannot carry two vector stores (one store per agent
+> limit, finding C3); durable memory moves to the AI Search index
+> `kb-assurance-memory`; native Memory stays disabled. §3 (the evaluation loop)
+> remains valid and is implemented by `../memory/learning_loop.py` +
+> `../UPDATE_AND_UPGRADE_REVIEW_POLICY.md`.
+
 Scope: how the platform's agents should remember, ground, and improve — and how
 they are kept from changing themselves without review. Evidence is from
 Microsoft Learn / Foundry blog pages read on 2026-09-12; status is as of that date.
