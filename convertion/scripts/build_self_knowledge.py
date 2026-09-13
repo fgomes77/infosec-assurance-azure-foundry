@@ -29,6 +29,13 @@ fallback tables in place and adds the markers.
     python3 build_self_knowledge.py --out build/platform-self-knowledge.md
 
 Offline and deterministic: no Azure call, no credentials.
+
+The pack of record is generated from the FULL conversion — the one CI step
+[1] runs (`ACCEPT_ANTHROPIC_LICENSE=1 convert_skills.py`, 22 agents),
+which is why the inventory carries the document agents (docx/xlsx/pptx/pdf).
+A partial local build makes `--check` report STALE for that reason alone:
+re-run the full conversion before regenerating, or the pack will differ from
+what CI compares against.
 """
 
 from __future__ import annotations
