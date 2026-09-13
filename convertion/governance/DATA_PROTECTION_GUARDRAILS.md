@@ -64,6 +64,32 @@ data, so no Euronext data leaves the EU through them — the accepted residual
 risk below concerns the **Bing grounding query text**, which is a different
 and narrower exposure.
 
+**The research ledger.** What the platform learns from those sources is kept
+per supplier — the question, the result, the date, the citation and the action
+that caused it — in the `Supplier Research Ledger` list and the supplier's
+knowledge file `Reports/<Supplier>/_Knowledge/research-ledger.md`
+(`../sharepoint/README.md`). Three properties matter here rather than in the
+performance story it was built for:
+
+- It **cannot launder an identifier**. The Function applies the same outbound
+  DLP to what it stores as to what it fetches: a record whose query or notes
+  carry an internal marker is stored with that text replaced, never as
+  written. Without this, the one identifier that never left in a query could
+  re-enter the platform through the ledger and be treated by a later run as
+  established public fact.
+- It is **Euronext Confidential**, because the list of questions asked about a
+  supplier reveals that the supplier is under assessment. It lives beside the
+  reports, under the same label and the same permissions, and is never sent to
+  a web-facing tool.
+- It **never stores a conclusion**, only an observation. A time-dependent
+  status — a certificate's validity, whether an act is in force, whether a
+  vulnerability is exploited — is recomputed against each report's own
+  reference date, exactly as in the evidence cache.
+
+Agent-emitted records are written only after the verifier passes and a person
+approves, so research behind a rejected draft never becomes a fact a later run
+inherits. Reads are a GET-only tool; no agent can write to the ledger.
+
 The citation discipline the sources exist to support — precedence, format,
 freshness, and treating fetched pages as untrusted content — is in
 `../agents/knowledge-packs/authoritative-sources.md`, attached to every agent

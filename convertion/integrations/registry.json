@@ -173,6 +173,13 @@
       "auth": "anonymous",
       "identity": "none - public unauthenticated read endpoint; the Foundry connection carries no secret (nvd-cve: an optional NVD rate-limit key only, held in Key Vault)",
       "_comment": "FIRST EPSS - probability of exploitation in the next 30 days, used WITH CVSS (severity) and KEV (observed exploitation) to order remediation. Public, auth=anonymous. A probability, never a severity: it may raise priority, it never lowers a severity that CVSS or KEV justifies, and the score is always reported with the date it was read."
+    },
+    "research-ledger": {
+      "type": "openapi",
+      "spec": "integrations/openapi/research-ledger.yaml",
+      "foundry_connection": "conn-osint-proxy",
+      "identity": "project_connection_custom_keys (conn-osint-proxy; the same delivery Function key as osint-proxy, research_ledger GET only)",
+      "_comment": "The supplier research ledger (delivery Function GET /api/research_ledger): every search, fetch and authority lookup already made about a supplier, with its date, its citation and the action that caused it. Read BEFORE searching - a fresh record is quoted instead of re-fetched, which is where a reassessment saves its time and tokens; a stale one is re-fetched. GET-only, so no agent can write to it: the Function records the fetches it serves, and the pipeline writes the rest after approval (workflows/report-delivery-pipeline.json Store_research_ledger). The human-readable form of the same records is Reports/<Supplier>/_Knowledge/research-ledger.md. A time-dependent status is never reused from it - only the observation behind it."
     }
   },
   "model_tiers": {
@@ -266,7 +273,8 @@
         "defender-graph",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -280,7 +288,8 @@
         "passive-recon",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing"
@@ -303,7 +312,8 @@
         "eur-lex",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing"
@@ -451,7 +461,8 @@
         "iaf-api",
         "enx-gateway-mcp",
         "web-search",
-        "osint-proxy"
+        "osint-proxy",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -543,7 +554,8 @@
       "tools": [
         "onetrust",
         "jira-assets-cmdb",
-        "sharepoint-graph"
+        "sharepoint-graph",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing"
@@ -553,21 +565,25 @@
         "sharepoint-graph",
         "exchange-graph",
         "evidence-cache",
-        "eur-lex"
+        "eur-lex",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing"
     },
     "soc-report-analyzer": {
-      "tools": [],
+      "tools": [
+        "research-ledger"
+      ],
       "model_tier": "reasoning",
-      "guardrail_policy": "infosec-security-analysis"
+      "guardrail_policy": "infosec-web-facing"
     },
     "pentest-report-analyzer": {
       "tools": [
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -600,7 +616,8 @@
         "eur-lex",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -662,7 +679,8 @@
         "iaf-api",
         "enx-gateway-mcp",
         "evidence-cache",
-        "web-search"
+        "web-search",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -676,7 +694,8 @@
         "jira-assets-cmdb",
         "onetrust",
         "enx-gateway-mcp",
-        "eur-lex"
+        "eur-lex",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -691,7 +710,8 @@
         "iaf-api",
         "enx-gateway-mcp",
         "evidence-cache",
-        "eur-lex"
+        "eur-lex",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -707,7 +727,8 @@
         "enx-gateway-mcp",
         "osint-proxy",
         "web-search",
-        "evidence-cache"
+        "evidence-cache",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -724,7 +745,8 @@
         "enx-gateway-mcp",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -746,7 +768,8 @@
         "eur-lex",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -759,7 +782,8 @@
         "jira-cloud",
         "confluence-cloud",
         "entra-iam-graph",
-        "enx-gateway-mcp"
+        "enx-gateway-mcp",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -776,7 +800,8 @@
         "evidence-cache",
         "nvd-cve",
         "cisa-kev",
-        "first-epss"
+        "first-epss",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",
@@ -802,7 +827,8 @@
         "confluence-cloud",
         "sharepoint-graph",
         "enx-gateway-mcp",
-        "eur-lex"
+        "eur-lex",
+        "research-ledger"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing",

@@ -1,0 +1,134 @@
+# Purpose: the supplier research ledger - every web search, page fetch and
+#   authority lookup this platform has made about a supplier, what it
+#   returned, WHEN, and which action asked for it. Read it BEFORE searching:
+#   a fresh record is quoted with its observation date instead of being
+#   fetched again, which is where the speed comes from (a reassessment
+#   repeats most of the previous assessment's research).
+# Why it exists: the same questions were asked of the same sources on every
+#   run - the supplier's Trust Center, its sub-processor list, the CVEs in
+#   its stack, the certificates in the registry - and each run paid the
+#   latency, the tokens and the outbound call again, while nothing kept a
+#   record of what had been asked or why.
+# Served by: the delivery Function (GET /api/research_ledger), reading the
+#   SharePoint list that the same Function writes. The human-readable form of
+#   the same records is Reports/<Supplier>/_Knowledge/research-ledger.md.
+# Read-only: GET only, so attach_integrations.py attaches it whole and no
+#   agent can write to the ledger. Records are written by the Function itself
+#   (for the fetches it serves) and by the pipeline after approval.
+# Freshness: each record carries observedAt, ageDays, ttlDays and `fresh`.
+#   TTLs are per source family (cisa-kev/first-epss 1 day, nvd-cve 7,
+#   eur-lex 90, ISO/NIST 180 ...). A TIME-DEPENDENT status - certificate
+#   validity, "is it in force", "is it exploited" - is ALWAYS recomputed;
+#   only the underlying observation is reused.
+# Contains: public queries and public results only. The Function refuses to
+#   store text carrying an internal marker, so the ledger cannot launder an
+#   identifier back into a later run. The ledger itself is Euronext
+#   Confidential (it reveals which suppliers are under assessment) and is
+#   never sent to a web-facing tool.
+openapi: 3.0.3
+info:
+  title: ENX supplier research ledger - what we already know, and when we learned it
+  description: >-
+    Read-only lookup of prior research observations for a supplier (and
+    optionally one service), filtered by source, by the exact question, or by
+    topic. Returns each record with its date, age, freshness verdict,
+    citation, the facts extracted, and the action and run that produced it.
+  version: "1.0"
+servers:
+  - url: https://{delivery-function}.azurewebsites.net/api
+security:
+  - functionKey: []
+components:
+  securitySchemes:
+    functionKey:
+      type: apiKey
+      in: header
+      name: x-functions-key
+paths:
+  /research_ledger:
+    get:
+      operationId: lookupResearchLedger
+      summary: What has already been researched about this supplier
+      description: >-
+        Call this before any web search, page fetch or authority lookup about
+        a supplier. When a record comes back with fresh=true, use its facts
+        and cite it as reused with its observedAt date - do not search again.
+        When it is stale (fresh=false) or absent, do the research and let the
+        run record it. Recompute any time-dependent status yourself from the
+        observation; never reuse a stored status.
+      parameters:
+        - name: supplier
+          in: query
+          required: true
+          schema: { type: string }
+          description: Supplier name as used in the storage path.
+        - name: service
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Narrow to one service. Omit to see everything known about the
+            supplier - useful at intake, and for the radar.
+        - name: sourceId
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Source id from integrations/knowledge-sources.json (eur-lex,
+            nvd-cve, cisa-kev, first-epss, iaf-certsearch, transparency,
+            vendor-advisories, web-search, osint-proxy, passive-recon ...).
+        - name: query
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            The exact question, to look for that same question asked before
+            (matched on a normalised hash of supplier+service+source+query).
+        - name: topic
+          in: query
+          required: false
+          schema: { type: string }
+          description: Free-text filter across the stored question and topic.
+        - name: maxAgeDays
+          in: query
+          required: false
+          schema: { type: integer }
+          description: >-
+            Override the per-source freshness window for this call - pass a
+            smaller number when the deliverable needs tighter currency.
+      responses:
+        "200":
+          description: Matching records, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hit: { type: boolean, description: at least one FRESH record }
+                  freshCount: { type: integer }
+                  staleCount: { type: integer }
+                  reason:
+                    type: string
+                    description: "'', not-recorded, only-stale or ledger-unavailable"
+                  records:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sourceId: { type: string }
+                        tool: { type: string }
+                        tier: { type: string }
+                        query: { type: string }
+                        topic: { type: string }
+                        url: { type: string }
+                        title: { type: string }
+                        citation: { type: string }
+                        facts: { type: object }
+                        observedAt: { type: string, format: date-time }
+                        ageDays: { type: integer }
+                        ttlDays: { type: integer }
+                        fresh: { type: boolean }
+                        originatingAction: { type: string }
+                        runId: { type: string }
+        "400": { description: supplier not supplied. }
+        "503": { description: Ledger not configured - proceed with the research. }

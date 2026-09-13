@@ -21,6 +21,22 @@ egress and read-only rules of this environment.)
 5. **Secondary press and blogs:** corroborate with a higher tier before
    relying on them.
 
+## Before you search: the supplier research ledger
+
+On supplier work, call `lookupResearchLedger` (supplier, and service /
+sourceId / query when known) BEFORE searching. A record that comes back
+`fresh` is quoted with its observation date and not fetched again; a stale
+one, or none, means do the research. A ledger failure changes nothing — it is
+a speed-up, never a gate. Never reuse a stored time-dependent STATUS (valid /
+in force / exploited): recompute it from the observation against today's
+reference date.
+
+Record what you did research: emit `researchRecords[]` (sourceId, query, url,
+citation, facts, observedAt, originatingAction) in your contract. The
+pipeline stores it after approval, into the supplier's knowledge file
+`Reports/<Supplier>/_Knowledge/research-ledger.md`. Details and the record
+shape: knowledge pack `authoritative-sources.md` §2c.
+
 ## Discipline
 
 - Every claim carries a citation (source, date) or is listed under

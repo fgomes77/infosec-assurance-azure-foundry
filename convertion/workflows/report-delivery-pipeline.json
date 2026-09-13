@@ -987,7 +987,7 @@
                   }
                 },
                 "runAfter": {
-                  "If_evidence_cache_records": [
+                  "If_research_records": [
                     "Succeeded"
                   ]
                 }
@@ -1087,6 +1087,66 @@
                         "files": "@json(outputs('Extract_json_contract'))?['cacheRecords']",
                         "extractorRef": "@{outputs('Resolve_agent_ref')}",
                         "runId": "@{workflow().run.name}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "If_research_records": {
+                "_comment": "Requirement: every search this run made is kept in the supplier's own knowledge file with its date and the action that caused it, so the next run reads instead of re-searching. The agent emits researchRecords[] (sourceId, query, url, title, citation, facts, observedAt) for every web search, page read and authority lookup it performed; the Function stores them and refreshes Reports/<Supplier>/_Knowledge/research-ledger.md. AFTER verifier PASS and human approval, like the evidence cache: research behind a rejected draft never becomes a fact the next run reuses. Fetches the delivery Function itself served (osint-proxy, passive-recon) are already recorded at the point of the call.",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('renderFormat')",
+                          "html"
+                        ]
+                      }
+                    },
+                    {
+                      "equals": [
+                        "@contains(outputs('Extract_json_contract'), 'researchRecords')",
+                        true
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "If_evidence_cache_records": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Store_research_ledger": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/research_ledger",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "supplier": "@{outputs('Resolve_supplier_name')}",
+                        "service": "@{outputs('Resolve_service_name')}",
+                        "records": "@json(outputs('Extract_json_contract'))?['researchRecords']",
+                        "runId": "@{workflow().run.name}",
+                        "originatingAction": "@{parameters('reportType')} (@{workflow().name})",
+                        "driveId": "@{parameters('sharepointDriveId')}",
+                        "reportsRoot": "@{parameters('libraryRootItemId')}"
                       },
                       "retryPolicy": {
                         "type": "exponential",

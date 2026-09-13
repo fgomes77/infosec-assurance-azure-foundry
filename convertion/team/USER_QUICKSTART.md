@@ -154,6 +154,25 @@ Trigger body for the report pipelines (Teams form fields map 1:1;
 - **Output:** DOCX briefing → `Advisory/Regulatory/Change-Watch/`: what changed, applicability, **which platform artefacts must change**, gaps, actions dated backwards from the application date, and a confidence rating per item.
 - **Approval:** Tier **A**. Any platform change it proposes still goes through `../operations/CHANGE_MANAGEMENT.md`.
 
+### Every supplier has a knowledge file
+
+`Reports/<Supplier>/_Knowledge/research-ledger.md` holds every search and
+lookup the platform has made about that supplier: what was asked, what came
+back, **when**, the citation, and the action that caused it. The agents read
+it before searching — a fresh answer is quoted with its date instead of being
+looked up again, which is why a reassessment is much faster than a first
+assessment — and they add to it as they work.
+
+- **Read it** before starting on a supplier: it tells you what is already
+  known and how current it is.
+- **Do not edit it.** It is regenerated from the runs; a hand edit is lost and,
+  worse, would look like evidence.
+- A date in it is the date the platform *observed* something, not a statement
+  that it is still true. Validity, in-force status and exploitation are always
+  recomputed for the report you are producing.
+- It says which suppliers are under assessment, so it is Euronext Confidential
+  like the reports beside it — never paste from it into anything web-facing.
+
 ## 3. If something goes wrong
 
 | Symptom | Do |

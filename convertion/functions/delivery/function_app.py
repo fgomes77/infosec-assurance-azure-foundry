@@ -32,6 +32,16 @@ read-only, see ../../sharepoint/README.md.
       tool) returns the FACTS extracted from a file whose Graph eTag is
       unchanged; the POST records them, from the pipeline, after approval. Time-dependent STATUS (VALID / EXPIRING /
       EXPIRED) is never cached — it is recomputed at each report date.
+  GET  /api/research_ledger?supplier=&service=&sourceId=&query=&topic=&maxAgeDays=
+  POST /api/research_ledger  {supplier, service?, records:[...], runId, originatingAction}
+      The supplier research ledger: every web search and authority lookup,
+      what it returned, WHEN, and which action asked for it. The GET is a
+      read-only agent tool answered before searching again — a fresh
+      observation is reused and cited as such; a stale one is re-fetched.
+      The POST is the pipeline's post-approval write, and it also refreshes
+      the human-readable knowledge file
+      Reports/<Supplier>/_Knowledge/research-ledger.md.
+
   POST /api/extract_pdf      {model?: prebuilt-read|prebuilt-layout, pages?,
                               contentBase64|driveId+itemId|fileId, attachToProject?}
       -> {content, pages, tables, confidence: {mean, min}, source}
@@ -60,6 +70,7 @@ header here for the image split.
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import json
 import logging
@@ -109,6 +120,37 @@ EVIDENCE_CACHE_LIST = os.environ.get("EVIDENCE_CACHE_LIST_NAME",
 # changes: evidence that nobody has re-read in six months is re-read, so a
 # silent mis-extraction cannot live in the register forever.
 EVIDENCE_CACHE_MAX_AGE_DAYS = int(os.environ.get("EVIDENCE_CACHE_MAX_AGE_DAYS", "180"))
+RESEARCH_LEDGER_LIST = os.environ.get("RESEARCH_LEDGER_LIST_NAME",
+                                      "Supplier Research Ledger")
+# How long an observation may be REUSED instead of re-fetched, per source
+# family. These are reuse windows, not truth windows: a fact whose value is
+# time-dependent (a validity status, "is it in force", an exploitation flag)
+# is recomputed every time regardless (see the knowledge pack). Overridable
+# per deployment with RESEARCH_TTL_OVERRIDES="nvd-cve=3,web-search=5".
+RESEARCH_TTL_DAYS = {
+    "eur-lex": 90,          # the text of an act does not move; a consolidation might
+    "iso": 180, "nist": 180, "cis": 180, "aicpa": 180, "iaasb": 180,
+    "esas": 30, "edpb": 30, "enisa": 30, "ec-europa": 30,
+    "eu-lex-national": 30, "company-registries": 90,
+    "iaf-certsearch": 30,   # a certificate can be withdrawn
+    "nvd-cve": 7, "cve-org": 7, "mitre-attack": 90,
+    "cisa-kev": 1, "first-epss": 1,   # both move daily
+    "vendor-advisories": 1, "transparency": 14,
+    "securityscorecard": 7, "ssl-observatories": 14,
+    "web-search": 7, "osint-proxy": 14, "passive-recon": 14,
+}
+RESEARCH_TTL_DEFAULT = int(os.environ.get("RESEARCH_TTL_DEFAULT_DAYS", "14"))
+# Nothing is reused past this, whatever its source says.
+RESEARCH_LEDGER_MAX_AGE_DAYS = int(
+    os.environ.get("RESEARCH_LEDGER_MAX_AGE_DAYS", "365"))
+for _pair in os.environ.get("RESEARCH_TTL_OVERRIDES", "").split(","):
+    if "=" in _pair:
+        _k, _, _v = _pair.partition("=")
+        try:
+            RESEARCH_TTL_DAYS[_k.strip()] = int(_v)
+        except ValueError:
+            pass
+
 PROJECT_ENDPOINT = os.environ.get("PROJECT_ENDPOINT", "").rstrip("/")
 FOUNDRY_API_VERSION = os.environ.get("FOUNDRY_API_VERSION", "2025-05-15-preview")
 
@@ -556,6 +598,269 @@ def evidence_cache_store(req: func.HttpRequest) -> func.HttpResponse:
     return _json(_evidence_cache_store(b.get("files") or [],
                                        b.get("extractorRef", ""),
                                        b.get("runId", "")))
+
+
+# ------------------------------------------------- supplier research ledger
+#
+# Requirement: every search — web, authority API or platform tool — and what
+# it returned is kept in the supplier's own knowledge file, with the date and
+# the action that caused it, so the next run reads instead of re-searching.
+#
+# Two representations of the same records, written by this Function (the only
+# writer identity on the platform):
+#   * a SharePoint list, for lookup (what the agent's GET queries);
+#   * Reports/<Supplier>/_Knowledge/research-ledger.md, for people — the
+#     "knowledge file" a reviewer opens to see what is known about a supplier
+#     and where each fact came from.
+#
+# What may be stored is exactly what was already allowed to leave: a public
+# query, a public URL, a public result. The same outbound DLP that guards the
+# fetch guards the ledger (_ledger_clean), so an internal marker cannot enter
+# it by way of a note field and be re-read later as if it were public.
+
+def _research_key(supplier: str, service: str, source_id: str,
+                  query: str) -> str:
+    """Stable identity of an observation: same supplier, same service, same
+    source, same question. A re-run overwrites rather than appends, so the
+    ledger records the LATEST answer per question and does not grow without
+    bound."""
+    norm = " ".join((query or "").lower().split())
+    raw = "|".join([normalise(supplier).lower(), normalise(service or "").lower(),
+                    (source_id or "").lower(), norm])
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:40]
+
+
+def _ledger_clean(value: str, limit: int = 2000) -> tuple[str, bool]:
+    """(text, redacted). Refuse to persist an internal marker: the ledger is
+    re-read by later runs and would otherwise launder an identifier that the
+    egress rule kept out of the query in the first place."""
+    text = (value or "").strip()[:limit]
+    if urlpolicy.INTERNAL_MARKER.search(text):
+        return "[redacted: internal marker — the record was stored without it]", True
+    return text, False
+
+
+def _ttl_days(source_id: str) -> int:
+    return RESEARCH_TTL_DAYS.get((source_id or "").lower(), RESEARCH_TTL_DEFAULT)
+
+
+def _ledger_lookup(supplier: str, service: str, source_id: str, query: str,
+                   topic: str, max_age_days: int | None) -> dict:
+    """Answer 'do we already know this?'. Never raises on a miss — a ledger
+    that fails closed would send the agent back to the web, which is the cost
+    this endpoint exists to avoid."""
+    if not SITE_ID:
+        raise Http(503, "SHAREPOINT_SITE_ID not configured")
+    flt = [f"fields/Supplier eq '{normalise(supplier).replace(chr(39), chr(39) * 2)}'"]
+    if service:
+        flt.append(f"fields/Service eq '{normalise(service).replace(chr(39), chr(39) * 2)}'")
+    if source_id:
+        flt.append(f"fields/SourceId eq '{source_id.replace(chr(39), chr(39) * 2)}'")
+    if query:
+        flt.append(f"fields/RecordKey eq '{_research_key(supplier, service, source_id, query)}'")
+    r = _graph("GET", f"{GRAPH}/sites/{SITE_ID}/lists/{RESEARCH_LEDGER_LIST}/items",
+               params={"$expand": "fields", "$filter": " and ".join(flt),
+                       "$top": "100", "$orderby": "fields/ObservedAt desc"},
+               headers={"Prefer": "HonorNonIndexedQueriesWarningMayFailRandomly"})
+    if r.status_code != 200:
+        return {"hit": False, "reason": "ledger-unavailable", "records": []}
+    now = datetime.now(timezone.utc)
+    topic_l = (topic or "").lower()
+    out: list[dict] = []
+    for row in r.json().get("value", []):
+        f = row.get("fields", {})
+        if topic_l and topic_l not in (f.get("Topic", "") + " " +
+                                       f.get("Query", "")).lower():
+            continue
+        try:
+            observed = datetime.fromisoformat(
+                (f.get("ObservedAt") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        age = (now - observed).days
+        if age > RESEARCH_LEDGER_MAX_AGE_DAYS:
+            continue
+        ttl = _ttl_days(f.get("SourceId", ""))
+        try:
+            facts = json.loads(f.get("Facts") or "{}")
+        except json.JSONDecodeError:
+            facts = {}
+        out.append({
+            "recordKey": f.get("RecordKey", ""),
+            "supplier": f.get("Supplier", ""), "service": f.get("Service", ""),
+            "sourceId": f.get("SourceId", ""), "tool": f.get("Tool", ""),
+            "tier": f.get("Tier"), "query": f.get("Query", ""),
+            "topic": f.get("Topic", ""), "url": f.get("Url", ""),
+            "title": f.get("Title", ""), "citation": f.get("Citation", ""),
+            "facts": facts, "observedAt": f.get("ObservedAt"),
+            "ageDays": age, "ttlDays": ttl,
+            "fresh": age <= (max_age_days if max_age_days is not None else ttl),
+            "originatingAction": f.get("OriginatingAction", ""),
+            "runId": f.get("RunId", ""),
+        })
+    fresh = [o for o in out if o["fresh"]]
+    return {"hit": bool(fresh), "records": out, "freshCount": len(fresh),
+            "staleCount": len(out) - len(fresh),
+            "reason": "" if fresh else ("only-stale" if out else "not-recorded")}
+
+
+def _ledger_markdown(supplier: str, records: list[dict]) -> str:
+    """The supplier's knowledge file, rebuilt from the ledger rows. Plain
+    Markdown on purpose: a reviewer, an auditor and the next analyst all read
+    it without a renderer, and every line carries its date and its cause."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [f"# {supplier} — research knowledge file", "",
+             f"Every search and authority lookup this platform made about "
+             f"{supplier}, what it returned, when, and which action asked for "
+             f"it. Regenerated {now} by the delivery Function; do not edit by "
+             f"hand — records come from the runs themselves.", "",
+             "Reuse rule: a record inside its freshness window is quoted with "
+             "its observation date instead of being searched again; anything "
+             "older is re-fetched. A time-dependent status (certificate "
+             "validity, in-force, exploited-in-the-wild) is always recomputed, "
+             "never reused.", "",
+             "| Observed | Service | Source | Question / query | Result | "
+             "Citation | Originating action | Run |",
+             "|---|---|---|---|---|---|---|---|"]
+    for rec in sorted(records, key=lambda r: r.get("observedAt", ""),
+                      reverse=True):
+        facts = rec.get("facts") or {}
+        esc = lambda t: (t or "").replace("|", "\\|").replace("\n", " ")
+        summary = esc(facts.get("summary") or rec.get("title") or "")
+        lines.append(
+            f"| {(rec.get('observedAt') or '')[:10]} | {rec.get('service') or '—'} "
+            f"| {rec.get('sourceId') or rec.get('tool') or '—'} "
+            f"| {esc(rec.get('query'))[:120]} "
+            f"| {summary[:200]} | {esc(rec.get('citation'))[:160]} "
+            f"| {rec.get('originatingAction') or '—'} | {rec.get('runId') or '—'} |")
+    lines += ["", f"{len(records)} record(s). Source registry: "
+                  "integrations/knowledge-sources.json. Citation discipline: "
+                  "agents/knowledge-packs/authoritative-sources.md."]
+    return "\n".join(lines) + "\n"
+
+
+def _ledger_write_file(drive_id: str, reports_root: str, supplier: str,
+                       records: list[dict]) -> dict:
+    """Refresh Reports/<Supplier>/_Knowledge/research-ledger.md."""
+    folder = ensure_path(drive_id, reports_root, [supplier, "_Knowledge"])
+    body = _ledger_markdown(supplier, records).encode("utf-8")
+    r = _graph("PUT",
+               f"{GRAPH}/drives/{drive_id}/items/{folder}:/research-ledger.md:/content",
+               data=body, headers={"Content-Type": "text/markdown"})
+    r.raise_for_status()
+    item = r.json()
+    return {"itemId": item.get("id"), "webUrl": item.get("webUrl"),
+            "bytes": len(body)}
+
+
+def _ledger_store(supplier: str, service: str, records: list[dict],
+                  run_id: str, originating_action: str,
+                  drive_id: str = "", reports_root: str = "") -> dict:
+    """Record what a run learned. Called from the pipeline after the verifier
+    passed and a person approved — the same discipline as the evidence cache,
+    so nothing a human rejected can be reused later as if it were established.
+    The Function's own fetch endpoints record their observations directly
+    (they never produce a deliverable to approve)."""
+    if not supplier:
+        raise Http(400, "supplier is required — the ledger is per supplier")
+    now = datetime.now(timezone.utc).isoformat()
+    stored, redacted = 0, 0
+    for rec in records:
+        source_id = (rec.get("sourceId") or rec.get("tool") or "").strip()
+        query, q_red = _ledger_clean(rec.get("query") or rec.get("topic") or "")
+        if not source_id or not query:
+            continue
+        facts = rec.get("facts") or {}
+        facts_text, f_red = _ledger_clean(
+            json.dumps(facts, ensure_ascii=False), 8000)
+        citation, c_red = _ledger_clean(rec.get("citation") or "", 400)
+        url, u_red = _ledger_clean(rec.get("url") or "", 500)
+        if any((q_red, f_red, c_red, u_red)):
+            redacted += 1
+        _list_upsert(RESEARCH_LEDGER_LIST,
+                     {"RecordKey": _research_key(supplier, service, source_id,
+                                                 query)},
+                     {"Supplier": normalise(supplier),
+                      "Service": normalise(service or ""),
+                      "SourceId": source_id,
+                      "Tool": (rec.get("tool") or source_id)[:100],
+                      "Tier": str(rec.get("tier") or ""),
+                      "Query": query, "Topic": (rec.get("topic") or "")[:200],
+                      "Url": url, "Title": (rec.get("title") or "")[:300],
+                      "Citation": citation,
+                      "Facts": facts_text if not f_red else "{}",
+                      "ObservedAt": rec.get("observedAt") or now,
+                      "OriginatingAction": (originating_action or
+                                            rec.get("originatingAction") or "")[:200],
+                      "RunId": run_id})
+        stored += 1
+    out = {"stored": stored, "redacted": redacted, "storedAt": now}
+    if stored and drive_id and reports_root:
+        found = _ledger_lookup(supplier, "", "", "", "", None)
+        out["knowledgeFile"] = _ledger_write_file(drive_id, reports_root,
+                                                  supplier, found["records"])
+    return out
+
+
+def _ledger_observe(tool: str, source_id: str, req: func.HttpRequest,
+                    query: str, facts: dict, url: str = "",
+                    title: str = "") -> None:
+    """Record an observation the Function itself made (fetch_public_page,
+    passive_recon). Best-effort by design: a ledger failure must never fail
+    the fetch the analyst is waiting for — it is a speed-up, not a control."""
+    supplier = (req.params.get("supplier") or "").strip()
+    if not supplier or not SITE_ID:
+        return
+    try:
+        _ledger_store(supplier, (req.params.get("service") or "").strip(),
+                      [{"sourceId": source_id, "tool": tool, "query": query,
+                        "url": url, "title": title, "facts": facts,
+                        "citation": f"{url} (retrieved {facts.get('retrievedAt', '')[:10]})"
+                                    if url else ""}],
+                      run_id=(req.params.get("runId") or ""),
+                      originating_action=(req.params.get("originatingAction")
+                                          or ""))
+    except Exception as e:                                    # noqa: BLE001
+        _audit("research_ledger.observe_failed", tool=tool,
+               error=str(e)[:200])
+
+
+@app.route(route="research_ledger", methods=["GET"])
+@_guard
+def research_ledger_lookup(req: func.HttpRequest) -> func.HttpResponse:
+    """READ-ONLY agent tool (research-ledger.yaml): what do we already know
+    about this supplier, from which source, how old is it, and who asked?
+    GET keeps it inside the read-only rule attach_integrations.py enforces —
+    an agent can read the ledger and can never write to it."""
+    q = req.params
+    if not q.get("supplier"):
+        raise Http(400, "missing query parameter: supplier")
+    max_age = q.get("maxAgeDays")
+    out = _ledger_lookup(q["supplier"], q.get("service", ""),
+                         q.get("sourceId", ""), q.get("query", ""),
+                         q.get("topic", ""),
+                         int(max_age) if max_age else None)
+    # Measured, not assumed: operations/kql/research-reuse-rate.kql reads these
+    # to show whether the ledger is actually saving the work it claims to.
+    _audit("research_ledger.lookup", supplier=normalise(q["supplier"]),
+           sourceId=q.get("sourceId", ""),
+           outcome=("fresh" if out["hit"] else
+                    {"only-stale": "stale", "not-recorded": "miss",
+                     "ledger-unavailable": "unavailable"}.get(out["reason"],
+                                                              "miss")),
+           freshCount=out.get("freshCount", 0),
+           staleCount=out.get("staleCount", 0))
+    return _json(out)
+
+
+@app.route(route="research_ledger", methods=["POST"])
+@_guard
+def research_ledger_store(req: func.HttpRequest) -> func.HttpResponse:
+    b = _body(req, "research_ledger")
+    return _json(_ledger_store(b.get("supplier", ""), b.get("service", ""),
+                               b.get("records") or [], b.get("runId", ""),
+                               b.get("originatingAction", ""),
+                               b.get("driveId", ""), b.get("reportsRoot", "")))
 
 
 @app.route(route="fetch_evidence", methods=["POST"])
@@ -1153,6 +1458,16 @@ def fetch_public_page(req: func.HttpRequest) -> func.HttpResponse:
     if urlpolicy.INTERNAL_MARKER.search(out["text"][:200000]):
         out["dlpNote"] = "internal-marker pattern seen in the PUBLIC page text (reported, not redacted)"
     _audit("fetch_public_page", url=url[:300], mode=mode, status=r.status_code, bytes=len(raw))
+    # The page was fetched for a reason; record it against the supplier so the
+    # next run reads the ledger instead of fetching it again (no-op unless the
+    # caller named the supplier).
+    _ledger_observe("osint-proxy", req.params.get("sourceId") or "osint-proxy",
+                    req, query=url,
+                    facts={"retrievedAt": out["retrievedAt"],
+                           "status": out["status"],
+                           "summary": (out.get("title") or
+                                       out.get("text", "")[:300]).strip()},
+                    url=out["finalUrl"], title=out.get("title", ""))
     return _json(out)
 
 
@@ -1233,6 +1548,13 @@ def passive_recon(req: func.HttpRequest) -> func.HttpResponse:
         except requests.RequestException:
             out["securityHeadersGrade"] = None
     _audit("passive_recon", domain=domain)
+    _ledger_observe("passive-recon", "passive-recon", req,
+                    query=f"passive fingerprint of {domain}",
+                    facts={"retrievedAt": out.get("retrievedAt", ""),
+                           "summary": f"DNS/TLS/header fingerprint of {domain}",
+                           "dns": out.get("dns"), "tls": out.get("tls"),
+                           "http": out.get("http")},
+                    title=domain)
     return _json(out)
 
 

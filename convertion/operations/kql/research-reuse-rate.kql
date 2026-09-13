@@ -1,0 +1,52 @@
+// Research reuse rate — is the supplier research ledger actually saving work?
+//
+// The ledger exists so a reassessment does not re-ask the questions the last
+// assessment already answered. That claim is measurable: every lookup the
+// delivery Function serves is audited, and a lookup that came back FRESH is a
+// web call, a wait and a token spend that did not happen.
+//
+// Read it as two numbers, not one:
+//   * reuse_rate  — of the questions asked, how many were already known and
+//                   still fresh. It should climb over a supplier's life and
+//                   sit highest on reassessments.
+//   * stale_rate  — known, but too old to reuse. A high stale rate is not a
+//                   failure: it is the ledger correctly refusing to serve an
+//                   answer past its freshness window. A stale rate near 100 %
+//                   on a fast-moving source (cisa-kev, first-epss) is normal;
+//                   on eur-lex or ISO it means the TTL table is too tight.
+//
+// A FALLING reuse rate with steady volume usually means one of three things,
+// in this order of likelihood: the agents stopped calling lookupResearchLedger
+// before searching (charter or overlay drift), the questions are being phrased
+// differently each run so the record key never matches, or the ledger list is
+// unavailable and every lookup is silently degrading to a miss — which the
+// `unavailable` column separates out, because that one is an incident and the
+// other two are drift.
+//
+// Review: monthly with the token-economy loop (operations/TOKEN_ECONOMY_PLAYBOOK.md);
+// the ledger's own design is in sharepoint/README.md.
+// Target: reuse_rate >= 0.35 across a 30-day window once a supplier has been
+// assessed twice; `unavailable` = 0.
+// Controls: ISO 27001:2022 A.8.6 (capacity management), A.5.22 (monitoring of
+// supplier services — the ledger is how that monitoring stays affordable),
+// DORA Art. 9(2) (efficient use of resources).
+//
+let window = 30d;
+AppTraces
+| where TimeGenerated > ago(window)
+| extend audit = parse_json(tostring(Message))
+| where tostring(audit.audit) startswith "research_ledger"
+| extend kind = tostring(audit.audit),
+         supplier = tostring(audit.supplier),
+         sourceId = tostring(audit.sourceId),
+         outcome = tostring(audit.outcome)      // fresh | stale | miss | unavailable
+| summarize
+    asked        = count(),
+    reused       = countif(outcome == "fresh"),
+    stale        = countif(outcome == "stale"),
+    never_seen   = countif(outcome == "miss"),
+    unavailable  = countif(outcome == "unavailable")
+  by sourceId
+| extend reuse_rate = round(1.0 * reused / asked, 3),
+         stale_rate = round(1.0 * stale  / asked, 3)
+| order by asked desc

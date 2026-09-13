@@ -361,3 +361,122 @@ def test_store_skips_entries_without_facts(monkeypatch):
         "tpa-evidence-analyzer:7", "run-9")
     assert out["stored"] == 1
     assert seen == [{"CacheKey": "d1|i1"}]
+
+
+# --------------------------------------------------- supplier research ledger
+# The ledger exists to stop a reassessment paying for the same research twice.
+# What has to hold: a fresh record is reusable, a stale one is not, a failure
+# never blocks the work, and nothing internal can enter it and be re-read later
+# as if it had always been public.
+def _ledger_row(**over):
+    base = {"RecordKey": "k1", "Supplier": "Northwind", "Service": "SFTP",
+            "SourceId": "iaf-certsearch", "Tool": "osint-proxy", "Tier": "1",
+            "Query": "certificate 12345", "Topic": "certification",
+            "Url": "https://www.iafcertsearch.org/x", "Title": "Certificate",
+            "Citation": "IAF CertSearch, certificate 12345 (retrieved 2026-09-13)",
+            "Facts": json.dumps({"summary": "ISO/IEC 27001:2022",
+                                 "validTo": "2027-03-31"}),
+            "ObservedAt": fa.datetime.now(fa.timezone.utc).isoformat(),
+            "OriginatingAction": "tpa-evidence-analysis: certificate check",
+            "RunId": "run-7"}
+    base.update(over)
+    return _row(base)
+
+
+def test_ledger_returns_a_fresh_record_as_reusable(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_ledger_row()))
+    out = fa._ledger_lookup("Northwind", "SFTP", "iaf-certsearch", "", "", None)
+    assert out["hit"] is True and out["freshCount"] == 1
+    rec = out["records"][0]
+    assert rec["facts"]["validTo"] == "2027-03-31"
+    assert rec["originatingAction"].startswith("tpa-evidence-analysis")
+    assert rec["ttlDays"] == fa.RESEARCH_TTL_DAYS["iaf-certsearch"]
+
+
+def test_ledger_marks_an_out_of_ttl_record_stale_but_still_returns_it(monkeypatch):
+    """Stale means 'go and check', not 'pretend we never looked' — the agent
+    still sees what was believed before, and what changed."""
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    old = (fa.datetime.now(fa.timezone.utc) - fa.timedelta(days=40)).isoformat()
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_ledger_row(ObservedAt=old)))
+    out = fa._ledger_lookup("Northwind", "", "iaf-certsearch", "", "", None)
+    assert out["hit"] is False and out["reason"] == "only-stale"
+    assert out["records"][0]["fresh"] is False and out["records"][0]["ageDays"] == 40
+
+
+def test_ledger_honours_a_tighter_max_age_from_the_caller(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    old = (fa.datetime.now(fa.timezone.utc) - fa.timedelta(days=5)).isoformat()
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_ledger_row(ObservedAt=old)))
+    assert fa._ledger_lookup("Northwind", "", "", "", "", 2)["hit"] is False
+    assert fa._ledger_lookup("Northwind", "", "", "", "", 10)["hit"] is True
+
+
+def test_ledger_drops_anything_past_the_hard_cap(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "RESEARCH_LEDGER_MAX_AGE_DAYS", 365)
+    old = (fa.datetime.now(fa.timezone.utc) - fa.timedelta(days=400)).isoformat()
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_ledger_row(ObservedAt=old)))
+    out = fa._ledger_lookup("Northwind", "", "", "", "", None)
+    assert out["records"] == [] and out["reason"] == "not-recorded"
+
+
+def test_ledger_miss_is_never_an_error(monkeypatch):
+    """A ledger failure must cost a cache hit, never the research itself."""
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+
+    def _broken(method, url, **kw):
+        return FakeResp(500, {})
+
+    monkeypatch.setattr(fa, "_graph", _broken)
+    out = fa._ledger_lookup("Northwind", "", "", "", "", None)
+    assert out["hit"] is False and out["reason"] == "ledger-unavailable"
+
+
+def test_ledger_refuses_to_store_an_internal_marker(monkeypatch):
+    """The whole point of the egress rule is that the identifier never went
+    out; the ledger must not be the way it gets back in."""
+    seen = []
+    monkeypatch.setattr(fa, "_list_upsert",
+                        lambda lst, match, fields: seen.append(fields) or {"action": "created"})
+    out = fa._ledger_store("Northwind", "SFTP",
+                           [{"sourceId": "web-search",
+                             "query": "breach ENX-4471 assessment",
+                             "facts": {"summary": "nothing found"}}],
+                           "run-9", "deepsearch-report")
+    assert out["stored"] == 1 and out["redacted"] == 1
+    assert "ENX-4471" not in json.dumps(seen)
+
+
+def test_ledger_key_is_the_same_question_asked_again():
+    a = fa._research_key("Northwind", "SFTP", "nvd-cve", "CVE-2026-0001")
+    b = fa._research_key("Northwind", "SFTP", "nvd-cve", "  cve-2026-0001 ")
+    c = fa._research_key("Northwind", "SFTP", "nvd-cve", "CVE-2026-0002")
+    assert a == b and a != c
+
+
+def test_ledger_store_needs_a_supplier():
+    """The ledger is per supplier — an unattributed record could never be
+    found again, and would quietly grow a file nobody owns."""
+    try:
+        fa._ledger_store("", "", [{"sourceId": "web-search", "query": "x"}],
+                         "run-1", "action")
+    except fa.Http as e:
+        assert e.status == 400
+    else:
+        raise AssertionError("a record with no supplier was accepted")
+
+
+def test_knowledge_file_carries_date_cause_and_citation():
+    md = fa._ledger_markdown("Northwind", [
+        {"observedAt": "2026-09-13T09:14:00Z", "service": "SFTP",
+         "sourceId": "iaf-certsearch", "query": "certificate 12345",
+         "citation": "IAF CertSearch, certificate 12345",
+         "facts": {"summary": "ISO/IEC 27001:2022 | scope covers SFTP"},
+         "originatingAction": "tpa-evidence-analysis", "runId": "run-7"}])
+    assert "# Northwind — research knowledge file" in md
+    assert "2026-09-13" in md and "tpa-evidence-analysis" in md
+    assert "IAF CertSearch, certificate 12345" in md
+    # a pipe inside a value must not break the table
+    assert md.count("|") % 2 == 0 and "ISO/IEC 27001:2022 \\| scope" in md

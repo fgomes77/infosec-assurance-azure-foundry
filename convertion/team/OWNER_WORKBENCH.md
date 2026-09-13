@@ -115,6 +115,7 @@ gate that stops each step going wrong:
 |---|---|
 | What is it costing, and which agent? | `operations/kql/latency-and-tokens.kql`, `FINOPS.md` |
 | Are the caches working? | `operations/kql/prompt-cache-hit-rate.kql` (target ≥ 0.6) |
+| Is research being reused instead of repeated? | `operations/kql/research-reuse-rate.kql` (target ≥ 0.35 once a supplier has been assessed twice; `unavailable` = 0) |
 | Is quality holding? | `operations/kql/verifier-fail-rate.kql`, the weekly evaluation run |
 | Is anything waiting on a person? | `operations/kql/approval-sla.kql` |
 | Did anything leave that should not have? | `operations/kql/egress-detection.kql` |

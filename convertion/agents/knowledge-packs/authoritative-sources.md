@@ -60,6 +60,64 @@ Tier 2 adds CIS, CSA CCM/CAIQ/STAR, PCI SSC, ATT&CK, national accreditation
 bodies and supplier trust centres; tier 3 is SecurityScorecard and the public
 TLS/header observatories — a pointer, never a conclusion.
 
+## 2c. Check the ledger before you search
+
+Every search, page read and authority lookup this platform makes about a
+supplier is kept in that supplier's **research ledger** — the question, what
+came back, the date, and the action that caused it. A reassessment repeats
+most of the previous assessment's research; the ledger is how it stops paying
+for the same answers twice.
+
+**Before** any web search, page fetch or authority call on supplier work:
+
+1. Call `lookupResearchLedger` with the supplier (and the service, the
+   `sourceId`, or the exact `query` when you have it).
+2. A record with `fresh: true` — **use it**. Quote its `facts` and cite it as
+   the original source with its observation date:
+   *IAF CertSearch, certificate 12345, valid to 2027-03-31 (observed
+   2026-08-02, reused from run `…`)*. Do not fetch it again.
+3. A record with `fresh: false`, or `reason: not-recorded` — do the research.
+   The run records it, so the next one is faster.
+4. `reason: ledger-unavailable` — proceed exactly as if it were empty. The
+   ledger is a speed-up, never a gate: a lookup failure must never stop the
+   work or become "not retrievable".
+
+Freshness is per source, because sources move at different speeds: KEV and
+EPSS are a day, NVD a week, a supplier trust centre two weeks, the ESAs and
+ENISA a month, EUR-Lex ninety days, ISO/NIST six months. Pass `maxAgeDays`
+when your deliverable needs tighter currency than the default.
+
+**What is never reused:** a *time-dependent status*. Whether a certificate is
+valid, whether an act is in force, whether a vulnerability is being exploited
+— recompute all of these against the report's own reference date from the
+underlying observation (issue date, validity period, KEV `dateAdded`). The
+ledger stores what was observed, not what it meant on the day it was
+observed. The same rule as the evidence cache, for the same reason.
+
+**When you do research, record it.** Emit a `researchRecords[]` array in your
+output contract, one entry per search or lookup you actually performed:
+
+```json
+{"sourceId": "iaf-certsearch", "tool": "osint-proxy",
+ "query": "certificate 12345 Northwind Cloud Services",
+ "url": "https://www.iafcertsearch.org/…", "title": "…",
+ "citation": "IAF CertSearch, certificate 12345, valid to 2027-03-31 (retrieved 2026-09-13)",
+ "facts": {"summary": "ISO/IEC 27001:2022, scope covers the managed SFTP service", "validTo": "2027-03-31"},
+ "observedAt": "2026-09-13T09:14:00Z",
+ "originatingAction": "tpa-evidence-analysis: certificate verification"}
+```
+
+Write `originatingAction` for a reader a year from now: what were you doing
+that made this question worth asking. Records are stored after the verifier
+passes and a person approves — research behind a rejected draft never becomes
+a fact the next run inherits — and public terms only, exactly as in §5: the
+Function refuses to store text carrying an internal marker.
+
+The human-readable form of the same records is
+`Reports/<Supplier>/_Knowledge/research-ledger.md`, the supplier's knowledge
+file: open it to see everything the platform knows about a supplier, when it
+learned it, and why it went looking.
+
 ## 3. Precedence
 
 - The authority that made the rule outranks anyone describing it: EUR-Lex

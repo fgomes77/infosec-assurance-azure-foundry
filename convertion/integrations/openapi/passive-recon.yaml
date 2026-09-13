@@ -62,6 +62,27 @@ paths:
           schema:
             type: string
             maxLength: 253
+        - name: supplier
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Supplier this fingerprint is research FOR. When present, the
+            Function records the observation in that supplier's research
+            ledger so a re-run reads it instead of repeating the lookups.
+        - name: service
+          in: query
+          required: false
+          schema: { type: string }
+        - name: originatingAction
+          in: query
+          required: false
+          schema: { type: string }
+          description: What caused this call, in a few public words.
+        - name: runId
+          in: query
+          required: false
+          schema: { type: string }
       responses:
         "200":
           description: Passive fingerprint of the domain.

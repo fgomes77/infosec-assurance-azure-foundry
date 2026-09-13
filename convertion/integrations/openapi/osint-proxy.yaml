@@ -68,6 +68,42 @@ paths:
           in: query
           required: false
           schema: { type: integer, default: 1048576, maximum: 4194304 }
+        - name: supplier
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Supplier this fetch is research FOR. When present, the Function
+            records the observation in that supplier's research ledger
+            (integrations/openapi/research-ledger.yaml) so the next run reads
+            it instead of fetching again. Always pass it on supplier work.
+        - name: service
+          in: query
+          required: false
+          schema: { type: string }
+          description: Service the fetch relates to, for the ledger record.
+        - name: originatingAction
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            What caused this fetch, in a few words - the pipeline or task
+            ("deepsearch-report PHASE 2B subprocessors",
+            "supplier-incident-assessment: vendor advisory"). It is what makes
+            the ledger readable a year later; public terms only.
+        - name: sourceId
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Source id from integrations/knowledge-sources.json when the page
+            belongs to a registered authority (enisa, esas, iaf-certsearch,
+            transparency ...) - it sets the freshness window of the record.
+        - name: runId
+          in: query
+          required: false
+          schema: { type: string }
+          description: Pipeline run id, so a record can be traced to its run.
       responses:
         "200":
           description: Extracted page content.
