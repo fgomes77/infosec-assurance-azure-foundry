@@ -124,6 +124,13 @@
       "status": "preview",
       "identity": "delegated_obo (the signed-in assurance user's own SharePoint permissions; no app-only path - finding C9)",
       "_comment": "Finding C9: the native SharePoint grounding tool (preview) grounds INTERACTIVE advisory answers in the InfoSec Assurance site, on-behalf-of the signed-in user (OBO only - it cannot run app-only, so it is unusable from the scheduled Logic Apps). Registered here so the connection is provisioned and inventoried, but enabled=false: it is NOT in any agent's 'tools' list and create_connections.sh skips disabled entries. Pipelines and every unattended read keep the sharepoint-graph OpenAPI tool (project managed identity, Sites.Selected) and deliveries keep the delivery Function. Enable only after (a) the tool reaches GA, (b) the licence/entitlement decision in enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md, (c) attach_integrations.py gains a 'sharepoint_grounding' branch (shared delta) - today an unknown tool type is silently dropped by build_tools(). Doc: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/sharepoint (preview, 2026-09-02)."
+    },
+    "evidence-cache": {
+      "type": "openapi",
+      "spec": "integrations/openapi/evidence-cache.yaml",
+      "foundry_connection": "conn-evidence-cache",
+      "identity": "project_connection_custom_keys (conn-evidence-cache; the same delivery Function key, evidence_cache GET only)",
+      "_comment": "Delta re-analysis for requirement d2 (delivery Function GET /api/evidence_cache). Returns the facts a previously APPROVED run extracted from an evidence file whose SharePoint eTag has not changed, so a reassessment reads only what actually moved — the heaviest recurring run in the platform becomes a delta. GET-only: the write side is a POST called by the pipeline after the verifier passes and a human approves, so no draft extraction can enter the cache. Time-dependent status (VALID / EXPIRING / EXPIRED) is never cached and is always recomputed at the report date."
     }
   },
   "model_tiers": {
@@ -487,7 +494,8 @@
     "tpa-evidence-analyzer": {
       "tools": [
         "sharepoint-graph",
-        "exchange-graph"
+        "exchange-graph",
+        "evidence-cache"
       ],
       "model_tier": "reasoning",
       "guardrail_policy": "infosec-web-facing"

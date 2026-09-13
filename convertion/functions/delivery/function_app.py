@@ -24,6 +24,14 @@ read-only, see ../../sharepoint/README.md.
   POST /api/portfolio_update {supplierName, serviceName, tpaStatus, reportType, reportUrl, runId, approvedBy}
   POST /api/history_append   {supplierName, serviceName, assessmentDate, composite, reportType, reportUrl, runId}
   POST /api/fetch_evidence   {driveId, itemId} -> {fileId, fileName, bytes}   (SharePoint -> Foundry file)
+  GET  /api/evidence_cache?driveId=&itemId=&eTag=&extractorRef=
+  POST /api/evidence_cache   {files:[{driveId,itemId,eTag,facts}], extractorRef, runId}
+      Delta re-analysis for requirement d2. A supplier's TPA/Active tree
+      barely changes between assessments, but every reassessment used to
+      re-read every file on the reasoning tier. The GET (a read-only agent
+      tool) returns the FACTS extracted from a file whose Graph eTag is
+      unchanged; the POST records them, from the pipeline, after approval. Time-dependent STATUS (VALID / EXPIRING /
+      EXPIRED) is never cached — it is recomputed at each report date.
   POST /api/extract_pdf      {model?: prebuilt-read|prebuilt-layout, pages?,
                               contentBase64|driveId+itemId|fileId, attachToProject?}
       -> {content, pages, tables, confidence: {mean, min}, source}
@@ -64,7 +72,7 @@ import subprocess
 import tempfile
 import time
 import zipfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -95,6 +103,12 @@ ALLOWED_PRINCIPALS = {p.strip() for p in os.environ.get("ALLOWED_CALLER_PRINCIPA
 SITE_ID = os.environ.get("SHAREPOINT_SITE_ID", "")
 PORTFOLIO_LIST = os.environ.get("PORTFOLIO_LIST_NAME", "TPRM Portfolio")
 HISTORY_LIST = os.environ.get("HISTORY_LIST_NAME", "TPSRCA History")
+EVIDENCE_CACHE_LIST = os.environ.get("EVIDENCE_CACHE_LIST_NAME",
+                                     "TPA Evidence Cache")
+# A cached extraction is trusted for this long even if the file never
+# changes: evidence that nobody has re-read in six months is re-read, so a
+# silent mis-extraction cannot live in the register forever.
+EVIDENCE_CACHE_MAX_AGE_DAYS = int(os.environ.get("EVIDENCE_CACHE_MAX_AGE_DAYS", "180"))
 PROJECT_ENDPOINT = os.environ.get("PROJECT_ENDPOINT", "").rstrip("/")
 FOUNDRY_API_VERSION = os.environ.get("FOUNDRY_API_VERSION", "2025-05-15-preview")
 
@@ -178,6 +192,29 @@ REQUEST_SCHEMAS: dict[str, dict] = {
         "type": "object",
         "required": ["driveId", "itemId"],
         "properties": {"driveId": _FILE_SOURCE["driveId"], "itemId": _FILE_SOURCE["itemId"]},
+    },
+    "evidence_cache": {
+        "type": "object",
+        "required": ["files"],
+        "properties": {
+            "extractorRef": {"type": "string", "maxLength": 200},
+            "runId": {"type": "string", "maxLength": 200},
+            "files": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                    "type": "object",
+                    "required": ["driveId", "itemId", "eTag"],
+                    "properties": {
+                        "driveId": {"type": "string", "maxLength": 300},
+                        "itemId": {"type": "string", "maxLength": 300},
+                        "eTag": {"type": "string", "maxLength": 300},
+                        "fileName": {"type": "string", "maxLength": 400},
+                        "facts": {"type": "object"},
+                    },
+                },
+            },
+        },
     },
     "extract_pdf": {
         "type": "object",
@@ -416,6 +453,109 @@ def _foundry_download(file_id: str) -> bytes:
                      headers={"Authorization": f"Bearer {_token('https://ai.azure.com/.default')}"}, timeout=300)
     r.raise_for_status()
     return r.content
+
+
+# ------------------------------------------------- evidence cache (req. d2)
+# Why this exists: the TPA evidence analysis is the heaviest recurring run in
+# the platform — a whole supplier tree read on the reasoning tier with the
+# chunked full-coverage method. Between two assessments almost none of those
+# files change, yet every one of them used to be re-read in full.
+#
+# What is cached: the FACTS a reader cannot recompute — document type, issuer,
+# content identification, scope statement, emission date, validity window,
+# findings. What is NEVER cached: anything time-dependent. VALID / EXPIRING
+# <=90 days / EXPIRED / period-gap are recomputed against the report date on
+# every run, because a certificate that was VALID in March is not valid in
+# September and a cached status would quietly assert that it is.
+#
+# Invalidation, three ways, all of them cheap:
+#   1. the Graph eTag changed          -> the file was edited or replaced
+#   2. the extractor ref changed       -> a new agent version reads differently
+#   3. the entry is older than the cap -> nothing is trusted indefinitely
+def _cache_key(drive_id: str, item_id: str) -> str:
+    return f"{drive_id}|{item_id}"
+
+
+def _evidence_cache_lookup(drive_id: str, item_id: str, etag: str,
+                           extractor_ref: str) -> dict:
+    """One file. Returns {hit, facts?, reason} — never raises on a miss: a
+    cache that fails closed would make the analyzer read everything, which is
+    exactly the behaviour this endpoint exists to avoid being forced into."""
+    if not SITE_ID:
+        raise Http(503, "SHAREPOINT_SITE_ID not configured")
+    key = _cache_key(drive_id, item_id)
+    r = _graph("GET", f"{GRAPH}/sites/{SITE_ID}/lists/{EVIDENCE_CACHE_LIST}/items",
+               params={"$expand": "fields",
+                       "$filter": f"fields/CacheKey eq '{key.replace(chr(39), chr(39) * 2)}'"},
+               headers={"Prefer": "HonorNonIndexedQueriesWarningMayFailRandomly"})
+    row = (r.json().get("value") or [None])[0] if r.status_code == 200 else None
+    if not row:
+        return {"hit": False, "reason": "not-cached"}
+    fields = row.get("fields", {})
+    if fields.get("ETag") != etag:
+        return {"hit": False, "reason": "etag-changed"}
+    if extractor_ref and fields.get("ExtractorRef") != extractor_ref:
+        return {"hit": False, "reason": "extractor-changed"}
+    try:
+        stored_at = datetime.fromisoformat(
+            fields.get("StoredAt", "").replace("Z", "+00:00"))
+    except ValueError:
+        return {"hit": False, "reason": "unreadable"}
+    age_days = (datetime.now(timezone.utc) - stored_at).days
+    if age_days > EVIDENCE_CACHE_MAX_AGE_DAYS:
+        return {"hit": False, "reason": "expired", "ageDays": age_days}
+    try:
+        facts = json.loads(fields.get("Facts") or "{}")
+    except json.JSONDecodeError:
+        return {"hit": False, "reason": "unreadable"}
+    return {"hit": True, "facts": facts, "fileName": fields.get("FileName", ""),
+            "storedAt": fields.get("StoredAt"), "ageDays": age_days,
+            "sourceRunId": fields.get("RunId", ""),
+            "extractorRef": fields.get("ExtractorRef", "")}
+
+
+def _evidence_cache_store(files: list[dict], extractor_ref: str,
+                          run_id: str) -> dict:
+    """Record the facts of a run that PASSED the verifier and was approved.
+    Called from the pipeline's post-approval branch only — an unapproved
+    extraction never enters the cache, so reuse can never launder a draft."""
+    now = datetime.now(timezone.utc).isoformat()
+    stored = 0
+    for f in files:
+        if not f.get("facts"):
+            continue                      # nothing extracted: nothing to reuse
+        _list_upsert(EVIDENCE_CACHE_LIST,
+                     {"CacheKey": _cache_key(f["driveId"], f["itemId"])},
+                     {"DriveId": f["driveId"], "ItemId": f["itemId"],
+                      "ETag": f["eTag"], "FileName": f.get("fileName", ""),
+                      "Facts": json.dumps(f["facts"], ensure_ascii=False),
+                      "ExtractorRef": extractor_ref, "RunId": run_id,
+                      "StoredAt": now})
+        stored += 1
+    return {"stored": stored, "storedAt": now}
+
+
+@app.route(route="evidence_cache", methods=["GET"])
+@_guard
+def evidence_cache_lookup(req: func.HttpRequest) -> func.HttpResponse:
+    """READ-ONLY agent tool (evidence-cache.yaml). GET keeps it inside the
+    read-only rule that attach_integrations.py enforces: an agent may ask what
+    was already extracted, and can never write to the cache."""
+    q = req.params
+    missing = [k for k in ("driveId", "itemId", "eTag") if not q.get(k)]
+    if missing:
+        raise Http(400, f"missing query parameter(s): {', '.join(missing)}")
+    return _json(_evidence_cache_lookup(q["driveId"], q["itemId"], q["eTag"],
+                                        q.get("extractorRef", "")))
+
+
+@app.route(route="evidence_cache", methods=["POST"])
+@_guard
+def evidence_cache_store(req: func.HttpRequest) -> func.HttpResponse:
+    b = _body(req, "evidence_cache")
+    return _json(_evidence_cache_store(b.get("files") or [],
+                                       b.get("extractorRef", ""),
+                                       b.get("runId", "")))
 
 
 @app.route(route="fetch_evidence", methods=["POST"])

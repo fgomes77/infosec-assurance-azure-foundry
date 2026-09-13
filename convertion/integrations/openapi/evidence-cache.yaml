@@ -1,0 +1,121 @@
+# Purpose: delta re-analysis for requirement d2. The TPA evidence analysis is
+#   the heaviest recurring run in the platform — a whole supplier tree read on
+#   the reasoning tier with the chunked full-coverage method. Between two
+#   assessments almost none of those files change, yet each reassessment
+#   re-read every one of them. This surface lets the analyzer ask what was
+#   already extracted from a file whose SharePoint eTag has not moved.
+#
+# GET-only by construction. The agent may READ the cache and can never write
+#   it: the write side is a POST called by the delivery pipeline AFTER the
+#   verifier has passed and a human has approved, so a draft extraction can
+#   never enter the cache and be laundered into a later report
+#   (governance/HUMAN_APPROVAL.md Layer 1 needs no exception here).
+#
+# What is cached: FACTS a reader cannot recompute — document type, issuer,
+#   content identification, scope statement, emission date, validity window,
+#   findings. What is NEVER cached: anything time-dependent. VALID /
+#   EXPIRING <=90 days / EXPIRED / period-gap are recomputed against THIS
+#   run's report date, because a certificate valid in March is not valid in
+#   September and a cached status would quietly assert that it is.
+#
+# Invalidation: the eTag changed (the file was edited or replaced), the
+#   extractor ref changed (a new charter version reads differently), or the
+#   entry aged past EVIDENCE_CACHE_MAX_AGE_DAYS (nothing is trusted forever).
+#
+# Auth: Foundry connection conn-evidence-cache (delivery Function key from Key
+#   Vault); never in this file. Residency: the list lives on the same EU
+#   SharePoint site as the evidence itself — nothing leaves the tenant.
+openapi: 3.0.3
+info:
+  title: ENX TPA evidence cache - previously extracted facts
+  description: >-
+    Ask what a previously approved run extracted from one evidence file. A
+    `hit` means the file is byte-identical to what was read then: reuse the
+    facts and do not read the file again. A miss carries the reason, which
+    belongs in the evidence inventory so a reader can see why the file was
+    re-read. Recompute every date-dependent status yourself; this surface
+    deliberately returns none.
+  version: "1.0"
+servers:
+  - url: https://{delivery-function}.azurewebsites.net/api
+security:
+  - functionKey: []
+paths:
+  /evidence_cache:
+    get:
+      operationId: lookupEvidenceCache
+      summary: Facts previously extracted from one evidence file, if still valid
+      description: >-
+        Call this once per file you enumerated under TPA/Active, BEFORE reading
+        it. On a hit, use the returned facts and mark the inventory row
+        `reused:<sourceRunId>`. On a miss, read the file in full and mark the
+        row `fresh`, carrying the miss reason. Never reuse a cached finding
+        that drives a HIGH or CRITICAL verdict in this report without
+        re-reading the file first.
+      parameters:
+        - name: driveId
+          in: query
+          required: true
+          description: Graph drive id of the evidence library.
+          schema: { type: string, maxLength: 300 }
+        - name: itemId
+          in: query
+          required: true
+          description: Graph item id of the file.
+          schema: { type: string, maxLength: 300 }
+        - name: eTag
+          in: query
+          required: true
+          description: >-
+            The file's current Graph eTag, as returned by listChildren. The
+            cache answers `hit` only when this matches what was read.
+          schema: { type: string, maxLength: 300 }
+        - name: extractorRef
+          in: query
+          required: false
+          description: >-
+            Your own `<agent-name>:<version>`. When given, a cache entry
+            written by a different version is a miss — a changed charter reads
+            documents differently, so its output is not interchangeable.
+          schema: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: Cache answer. Check `hit` before using `facts`.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hit:
+                    type: boolean
+                    description: true = the facts are for this exact file content.
+                  reason:
+                    type: string
+                    enum: [not-cached, etag-changed, extractor-changed, expired, unreadable]
+                    description: Present on a miss. Report it in the inventory row.
+                  facts:
+                    type: object
+                    description: >-
+                      What the previous approved run extracted — document type,
+                      issuer, content identification, scope, emission date,
+                      validity window, findings. No status field: compute that.
+                  fileName: { type: string }
+                  storedAt: { type: string, format: date-time }
+                  ageDays:
+                    type: integer
+                    description: Age of the entry. State it when reusing evidence older than a quarter.
+                  sourceRunId:
+                    type: string
+                    description: The approved run the facts come from. Cite it in the inventory row.
+                  extractorRef: { type: string }
+        "400":
+          description: driveId, itemId or eTag missing.
+        "503":
+          description: The cache is not configured. Read every file in full and say so in the report.
+components:
+  securitySchemes:
+    functionKey:
+      type: apiKey
+      in: header
+      name: x-functions-key
+      description: Delivery Function key held in Key Vault and bound to the Foundry connection conn-evidence-cache.

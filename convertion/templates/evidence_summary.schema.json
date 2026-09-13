@@ -74,7 +74,7 @@
         "type": "object",
         "minProperties": 1
       },
-      "description": "d2 per-file evidence inventory; free column set (the renderer takes the first row's keys as the header)."
+      "description": "d2 per-file evidence inventory; free column set (the renderer takes the first row's keys as the header). Every row carries a `source` column: `fresh` when the file was read in this run, `reused:<runId>` when its facts came from the evidence cache — a reader must be able to see which evidence was re-verified today and which was carried forward, and the approver signs off on that distinction (agents/tpa-evidence-analyzer_instructions.md, Evidence already extracted)."
     },
     "timeline": {
       "type": [
@@ -202,6 +202,42 @@
           "name",
           "sha256"
         ]
+      }
+    },
+    "cacheRecords": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "description": "Delta re-analysis (requirement d2): one entry per file READ IN FULL in this run. The pipeline writes them to the TPA Evidence Cache list AFTER the verifier passes and the report is approved, so the next assessment reads only what changed. Files whose facts were reused need no entry. Never include a computed status here — VALID / EXPIRING / EXPIRED are recomputed at each report date, never cached.",
+      "items": {
+        "type": "object",
+        "required": [
+          "driveId",
+          "itemId",
+          "eTag",
+          "facts"
+        ],
+        "properties": {
+          "driveId": {
+            "type": "string"
+          },
+          "itemId": {
+            "type": "string"
+          },
+          "eTag": {
+            "type": "string",
+            "description": "The eTag listChildren returned for this file in THIS run."
+          },
+          "fileName": {
+            "type": "string"
+          },
+          "facts": {
+            "type": "object",
+            "minProperties": 1,
+            "description": "Facts a reader cannot recompute: document type, issuer, content identification, scope statement, emission date, validity window, findings."
+          }
+        }
       }
     }
   }

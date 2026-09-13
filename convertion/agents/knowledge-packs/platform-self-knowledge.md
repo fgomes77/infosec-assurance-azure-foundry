@@ -100,7 +100,7 @@ and that file as the record, so the quarterly re-check updates one place.*
 | `pentest-report-analyzer` | Penetration test report analysis: full normalised findings register, scope/currency adequacy, Euronext relevance, reliance verdict. | reasoning | 0 | pentest-report-summary |
 | `soc-report-analyzer` | SOC 1/2/3 (Type 1/2) report analysis: opinion, scope, period, every exception, CUEC mapping, subservice carve-outs, reliance verdict. | reasoning | 0 | soc-report-summary |
 | `template-manager` | Controlled template change process: inventory, analyse, edit, visual before/after review, approval-gated propagation… | chat | 2 | — |
-| `tpa-evidence-analyzer` | Analyses the SharePoint TPA/Active evidence tree for a supplier/service: per-file content id, scope, emission date, validity period, findings; consoli… | reasoning | 2 | tpa-evidence-analysis |
+| `tpa-evidence-analyzer` | Analyses the SharePoint TPA/Active evidence tree for a supplier/service: per-file content id, scope, emission date, validity period, findings; consoli… | reasoning | 3 | tpa-evidence-analysis |
 
 29 agents. Names are the hand-off targets: reply `ROUTE: <agent-name>` with the name exactly as spelled above. Alias twins are not deployed separately; a platform-specific example agent is never routed to.
 

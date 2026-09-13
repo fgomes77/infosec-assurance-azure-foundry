@@ -987,7 +987,7 @@
                   }
                 },
                 "runAfter": {
-                  "If_history_enabled": [
+                  "If_evidence_cache_records": [
                     "Succeeded"
                   ]
                 }
@@ -1031,6 +1031,62 @@
                         "shareUrl": "@{body('Upload_and_share')?['shareUrl']}",
                         "overallScore": "@{outputs('Overall_score')}",
                         "approver": "@{body('Human_approval_gate')?['approver']}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "If_evidence_cache_records": {
+                "_comment": "Delta re-analysis (requirement d2): record what this run extracted so the next assessment reads only the evidence that actually changed. AFTER the verifier passed AND the report was approved — an unapproved extraction never enters the cache. The agent emits cacheRecords only for files it read in full; reused files are already there.",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('renderFormat')",
+                          "html"
+                        ]
+                      }
+                    },
+                    {
+                      "equals": [
+                        "@contains(outputs('Extract_json_contract'), 'cacheRecords')",
+                        true
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "If_history_enabled": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Store_evidence_cache": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/evidence_cache",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "files": "@json(outputs('Extract_json_contract'))?['cacheRecords']",
+                        "extractorRef": "@{outputs('Resolve_agent_ref')}",
+                        "runId": "@{workflow().run.name}"
                       },
                       "retryPolicy": {
                         "type": "exponential",

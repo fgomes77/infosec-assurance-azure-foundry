@@ -86,6 +86,23 @@ Logic App connector and no agent can write to them.
 |---|---|
 | `TPRM Portfolio` | `SupplierName`, `ServiceName`, `TPAStatus` (`Ongoing` \| `Complete`), `LastDeepSearchUrl`, `LastCisoDeckUrl`, `UpdatedBy`, `UpdatedAt` — upserted on `SupplierName`+`ServiceName` by `POST /api/portfolio_update` |
 | `TPSRCA History` | `SupplierName`, `ServiceName`, `AssessmentDate`, `Composite`, `ReportType`, `ReportUrl`, `RunId` — append-only via `POST /api/history_append` |
+| `TPA Evidence Cache` | `CacheKey` (`<driveId>\|<itemId>`, indexed), `DriveId`, `ItemId`, `ETag`, `FileName`, `Facts` (multi-line text: the extracted JSON), `ExtractorRef`, `RunId`, `StoredAt` — upserted on `CacheKey` by `POST /api/evidence_cache` **after approval only**; read by the analyzer through the read-only `GET /api/evidence_cache` |
+
+**Why the evidence cache exists.** The TPA evidence analysis is the heaviest
+recurring run in the platform: a whole supplier tree read on the reasoning tier
+with the chunked full-coverage method. Between two assessments almost none of
+those files change, yet every reassessment re-read all of them. The cache turns
+that into a delta — the analyzer asks, per file, what a previously approved run
+extracted, and reads in full only what the eTag says actually moved.
+
+Three invalidations keep it honest: a changed eTag (the file was edited or
+replaced), a changed `ExtractorRef` (a new charter version reads documents
+differently), and age (`EVIDENCE_CACHE_MAX_AGE_DAYS`, so nothing is trusted
+indefinitely). **No time-dependent value is ever cached**: VALID / EXPIRING ≤90
+days / EXPIRED / period-gap are recomputed against each report date, because a
+certificate valid in March is not valid in September. Every inventory row says
+`fresh` or `reused:<runId>`, so the approver signs off on evidence whose
+provenance they can see.
 
 The `Supplier Watchlist` list (read by `workflows/scheduled-deepsearch.json`)
 carries `SupplierName`, **`ServiceName`** (text) and **`Active`** (Yes/No) in

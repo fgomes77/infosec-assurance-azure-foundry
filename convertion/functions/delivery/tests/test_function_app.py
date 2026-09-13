@@ -267,3 +267,97 @@ def test_docintel_confidence_summarises_word_confidence():
     c = fa._docintel_confidence({"pages": [{"words": [{"confidence": 0.9}, {"confidence": 0.7}]}]})
     assert c["mean"] == 0.8 and c["min"] == 0.7 and c["words"] == 2
     assert fa._docintel_confidence({"pages": []})["mean"] is None
+
+
+# --- evidence cache (delta re-analysis, requirement d2) --------------------
+# Each test encodes a way the cache could return a WRONG answer, which matters
+# more than whether it returns a fast one: a bad hit puts stale facts in a
+# report of record.
+class _CacheGraph:
+    """Stands in for the Graph list API with one stored row."""
+
+    def __init__(self, row):
+        self.row = row
+        self.writes = []
+
+    def __call__(self, method, url, **kw):
+        if method == "GET":
+            value = [self.row] if self.row else []
+            return FakeResp(200, {"value": value})
+        self.writes.append((url, kw.get("json")))
+        return FakeResp(200, {"id": "1"})
+
+
+def _row(fields):
+    return {"id": "1", "fields": fields}
+
+
+def _fresh_row(**over):
+    base = {"CacheKey": "d1|i1", "ETag": "etag-1", "FileName": "iso27001.pdf",
+            "Facts": json.dumps({"documentType": "ISO 27001 certificate"}),
+            "ExtractorRef": "tpa-evidence-analyzer:7",
+            "RunId": "run-123",
+            "StoredAt": fa.datetime.now(fa.timezone.utc).isoformat()}
+    base.update(over)
+    return _row(base)
+
+
+def test_cache_hit_returns_the_stored_facts(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_fresh_row()))
+    out = fa._evidence_cache_lookup("d1", "i1", "etag-1", "tpa-evidence-analyzer:7")
+    assert out["hit"] is True
+    assert out["facts"]["documentType"] == "ISO 27001 certificate"
+    assert out["sourceRunId"] == "run-123"
+
+
+def test_changed_etag_is_a_miss(monkeypatch):
+    """The file was edited or replaced: its old facts describe other bytes."""
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_fresh_row()))
+    out = fa._evidence_cache_lookup("d1", "i1", "etag-2", "tpa-evidence-analyzer:7")
+    assert out == {"hit": False, "reason": "etag-changed"}
+
+
+def test_changed_extractor_is_a_miss(monkeypatch):
+    """A newer charter reads documents differently, so its output is not
+    interchangeable with the old one."""
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_fresh_row()))
+    out = fa._evidence_cache_lookup("d1", "i1", "etag-1", "tpa-evidence-analyzer:8")
+    assert out == {"hit": False, "reason": "extractor-changed"}
+
+
+def test_entry_past_the_age_cap_is_a_miss(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "EVIDENCE_CACHE_MAX_AGE_DAYS", 180)
+    old = (fa.datetime.now(fa.timezone.utc) - fa.timedelta(days=200)).isoformat()
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_fresh_row(StoredAt=old)))
+    out = fa._evidence_cache_lookup("d1", "i1", "etag-1", "tpa-evidence-analyzer:7")
+    assert out["hit"] is False and out["reason"] == "expired"
+
+
+def test_missing_row_is_a_miss_not_an_error(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(None))
+    assert fa._evidence_cache_lookup("d1", "i1", "e", "")["reason"] == "not-cached"
+
+
+def test_unreadable_facts_are_a_miss(monkeypatch):
+    monkeypatch.setattr(fa, "SITE_ID", "site")
+    monkeypatch.setattr(fa, "_graph", _CacheGraph(_fresh_row(Facts="{not json")))
+    assert fa._evidence_cache_lookup("d1", "i1", "etag-1", "")["reason"] == "unreadable"
+
+
+def test_store_skips_entries_without_facts(monkeypatch):
+    """Nothing extracted means nothing to reuse — an empty row would turn into
+    a hit that silently contributes no evidence."""
+    seen = []
+    monkeypatch.setattr(fa, "_list_upsert",
+                        lambda lst, match, fields: seen.append(match) or {"action": "created"})
+    out = fa._evidence_cache_store(
+        [{"driveId": "d1", "itemId": "i1", "eTag": "e1", "facts": {"documentType": "SOC 2"}},
+         {"driveId": "d1", "itemId": "i2", "eTag": "e2", "facts": {}}],
+        "tpa-evidence-analyzer:7", "run-9")
+    assert out["stored"] == 1
+    assert seen == [{"CacheKey": "d1|i1"}]

@@ -29,6 +29,44 @@ Report** (DOCX via the delivery pipeline).
    `exchange-graph` — the files themselves are already filed under
    `Infosec Assurance/GRC/TPA/Inbox/`.
 
+## Evidence already extracted (delta re-analysis)
+
+After listing the supplier's files and BEFORE reading any of them, call
+`lookupEvidenceCache` (tool `evidence-cache`, read-only) once per file with its
+`driveId`, `itemId` and the `eTag` that `listChildren` returned, plus your own
+`extractorRef`. A `hit` means the file is byte-identical to what a previously
+**approved** run read: reuse those facts and do not read the file again.
+
+Rules, in order of precedence:
+
+1. **Read in full every file the cache misses**, and carry the returned
+   `reason` into the inventory — `not-cached` (new file), `etag-changed`
+   (edited or replaced), `extractor-changed` (a newer charter reads
+   differently), `expired` (nothing is trusted forever), `unreadable`.
+2. **Recompute every time-dependent value yourself**, from the cached dates:
+   VALID / EXPIRING ≤90 days / EXPIRED / period-gap are computed against the
+   REPORT DATE of *this* run. A cached status is never reused — a certificate
+   valid in March is not valid in September.
+3. **Mark provenance in the inventory.** Each row carries `source`:
+   `fresh` (read in this run) or `reused:<runId>`. A reader must be able to see
+   which evidence was re-verified today and which was carried forward, and the
+   approver signs off on that distinction.
+4. **Re-read regardless of the cache** when the supplier's risk picture changed
+   (a new incident, a scope change, a contract change) or when the requester
+   asks for a full refresh. Say so in the executive summary when you do.
+5. **Never cache-reuse a finding you are about to escalate.** If a cached
+   finding drives a HIGH/CRITICAL conclusion in this report, re-read that file
+   and confirm it first — the cheap path may not decide an expensive verdict.
+6. **Emit `cacheRecords`** in your output contract: one entry per file you read
+   in full this run, with `driveId`, `itemId`, `eTag`, `fileName` and the
+   `facts` you extracted (document type, issuer, content identification, scope,
+   emission date, validity window, findings — never a computed status). The
+   pipeline writes them to the cache **after** the verifier passes and the
+   report is approved. Files you reused need no entry; they are already there.
+7. **Say so in the executive summary**: how many files were read fresh, how
+   many reused, and the oldest reuse in days. An approver signs off on evidence
+   whose provenance they can see.
+
 ## Per-file analysis
 
 Evidence you will meet: ISO/IEC certificates (27001, 27017, 27018, 22301,
