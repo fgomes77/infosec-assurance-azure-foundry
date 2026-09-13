@@ -120,10 +120,15 @@ if [ -n "$DRY" ]; then
   # a rehearsal must not write into agents/ (the pack is a committed file):
   # report only. Add `build_self_knowledge.py --check` to the pipeline once
   # the regenerated pack is in git, to fail on a stale one.
-  python3 build_self_knowledge.py --dry-run | tail -1
+  python3 build_self_knowledge.py --dry-run --allow-partial | tail -1
 else
   set +e
-  python3 build_self_knowledge.py --changed-exit 9
+  # --allow-partial on purpose: a DEPLOYMENT's pack must describe the set
+  # being deployed, which is 18 agents until the Anthropic licence position is
+  # recorded (THIRD_PARTY_IP.md §2). The pack COMMITTED to the repository is a
+  # different artefact: it is generated from the full conversion, because that
+  # is what CI's [4c] gate rebuilds and compares against.
+  python3 build_self_knowledge.py --changed-exit 9 --allow-partial
   sk_rc=$?
   set -e
   case "$sk_rc" in

@@ -80,6 +80,7 @@ and that file as the record, so the quarterly re-check updates one place.*
 | `ciso-reporting` | Generates the three Euronext Group CISO Governance Meeting deliverables from a verified OneTrust Infosec Form (v14) assessment — an interactive HTML d… | chat | 3 | cyber-forum-pptx |
 | `cyber-forum` | Answers open-ended cybersecurity, GRC, and third-party-risk questions for the ENX Information Security Assurance team — a conversational Q&A and threa… | reasoning | 13 | cyber-forum-brief |
 | `deepsearch-protocol` | Executes the Supplier Security DeepSearch Protocol V17.02.11 — a full OSINT-based third-party security assessment that produces a professional HTML da… | reasoning | 8 | deepsearch-report |
+| `docx` | Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx)… | light | 1 | — |
 | `dora` | Expert DORA (Regulation (EU) 2022/2554 — Digital Operational Resilience Act) compliance advisor for EU financial entities… | reasoning | 11 | — |
 | `dpia` | Analyzes OneTrust third-party assessment PDF reports and generates InfoSec TPA Reports in DOCX format for DPO team review… | chat | 3 | dpia-dpo-report |
 | `enx-tprm-control-center` | Entry point and router for the ENX TPRM toolset. Use ONLY when the user explicitly says "open ENX menu", "ENX control center", "ENX menu", "TPRM menu"… | light | 0 | — |
@@ -88,17 +89,20 @@ and that file as the record, so the quarterly re-check updates one place.*
 | `iso42001` | Expert ISO 42001 AI Management System (AIMS) compliance advisor. Use this skill whenever a user asks about ISO/IEC 42001:2023, AI governance, AI manag… | reasoning | 11 | — |
 | `nis2` | EU NIS2 Directive (Directive (EU) 2022/2555) compliance advisor for essential and important entities — entity classification, Art… | reasoning | 11 | — |
 | `onetrust-form-b` | Assists with completing the OneTrust Non-Critical Form B supplier assessment questionnaire — drafts evidence-led responses for each question, validate… | chat | 2 | — |
+| `pdf` | Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging… | light | 1 | — |
 | `pdf-full-coverage-analyzer` | Exhaustive, accuracy-grade PDF analysis: process documents of any size in deterministic chunks and guarantee every line is read, every detail preserve… | reasoning | 0 | — |
+| `pptx` | Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both… | light | 1 | — |
 | `tprm-slide-generator` | Full end-to-end TPRM (Third-Party Risk Management) executive summary slide generator… Also answers requests phrased for 'pptx-executive-summary-ciso'. | chat | 1 | — |
 | `tpsrca-assessment-engine` | Comprehensive assessment engine for TPSRCA with 12 specialized agents for risk calculation (inherent/residual), score aggregation, data confidence val… | reasoning | 12 | — |
 | `whisperx-transcribe-diarize` | Transcribe audio or video files locally on macOS (Apple Silicon M1/M2/M3) with speaker diarization and word-level timestamps using WhisperX, pyannote.… | chat | 0 | transcript-summary |
+| `xlsx` | Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an ex… | light | 1 | — |
 | `ciso-global-report` | Global CISO 9-slide PPTX briefing on one supplier/service assessment: contract owner, impacted ENX entities, service+supplier description, risk & cont… | reasoning | 3 | ciso-global-pptx |
 | `pentest-report-analyzer` | Penetration test report analysis: full normalised findings register, scope/currency adequacy, Euronext relevance, reliance verdict. | reasoning | 0 | pentest-report-summary |
 | `soc-report-analyzer` | SOC 1/2/3 (Type 1/2) report analysis: opinion, scope, period, every exception, CUEC mapping, subservice carve-outs, reliance verdict. | reasoning | 0 | soc-report-summary |
 | `template-manager` | Controlled template change process: inventory, analyse, edit, visual before/after review, approval-gated propagation… | chat | 2 | — |
 | `tpa-evidence-analyzer` | Analyses the SharePoint TPA/Active evidence tree for a supplier/service: per-file content id, scope, emission date, validity period, findings; consoli… | reasoning | 3 | tpa-evidence-analysis |
 
-25 agents. Names are the hand-off targets: reply `ROUTE: <agent-name>` with the name exactly as spelled above. Alias twins are not deployed separately; a platform-specific example agent is never routed to.
+29 agents. Names are the hand-off targets: reply `ROUTE: <agent-name>` with the name exactly as spelled above. Alias twins are not deployed separately; a platform-specific example agent is never routed to.
 
 <!-- /generated:agent-inventory -->
 

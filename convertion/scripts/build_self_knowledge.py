@@ -82,12 +82,37 @@ def _json(rel: str) -> dict:
         sys.exit(f"{path}: {e}")
 
 
-def manifest_agents() -> list[dict]:
+def manifest_agents(allow_partial: bool = False) -> list[dict]:
+    """The converted agents, from a build that covers the FULL set.
+
+    The pack of record is generated from the same conversion CI runs
+    (`ACCEPT_ANTHROPIC_LICENSE=1`, which adds the document agents). A partial
+    build produces a pack that is internally consistent and that CI then
+    rejects as stale — a confusing failure that has cost two CI cycles, so it
+    is refused here with the command that fixes it instead.
+    """
     path = BUILD / "manifest.json"
     if not path.is_file():
         sys.exit("missing build/manifest.json — run convert_skills.py first "
                  "(the pack describes the DEPLOYED set, not the export)")
-    return json.loads(path.read_text(encoding="utf-8"))["agents"]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    opts = data.get("options", {})
+    partial = not opts.get("accept_anthropic_license") or opts.get("only")
+    if partial and not allow_partial:
+        sys.exit(
+            "build/manifest.json is a PARTIAL conversion "
+            f"({len(data['agents'])} agents, accept_anthropic_license="
+            f"{bool(opts.get('accept_anthropic_license'))}, only={opts.get('only')!r}).\n"
+            "The pack of record is generated from the full set — the one CI "
+            "converts — so a pack built from this would fail the [4c] gate as "
+            "stale. Run:\n"
+            "    ACCEPT_ANTHROPIC_LICENSE=1 python3 scripts/convert_skills.py\n"
+            "then re-run this script.\n"
+            "--allow-partial is for the one case where a partial pack is "
+            "correct: deploy.sh building the pack for a deployment that is "
+            "itself partial (THIRD_PARTY_IP.md §2). Do not use it to make a "
+            "committed pack.")
+    return data["agents"]
 
 
 def cell(text: str, limit: int = 150) -> str:
@@ -260,6 +285,9 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true",
                     help="print the generated blocks; write nothing")
+    ap.add_argument("--allow-partial", action="store_true",
+                    help="generate from a partial conversion anyway (the pack "
+                         "will not match what CI builds)")
     ap.add_argument("--check", action="store_true",
                     help="exit 1 when the pack is out of date (CI gate)")
     ap.add_argument("--changed-exit", type=int, default=0, metavar="CODE",
@@ -269,7 +297,7 @@ def main() -> int:
     args = ap.parse_args()
 
     ctx = {
-        "agents": manifest_agents(),
+        "agents": manifest_agents(args.allow_partial),
         "registry": _json("integrations/registry.json"),
         "pipes": _json("workflows/pipelines.json"),
         "templates": _json("templates/registry.json"),

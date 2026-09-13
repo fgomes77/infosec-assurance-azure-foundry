@@ -62,7 +62,10 @@ take seconds, and CI runs exactly the same scripts.
 ## 3. The full gate set, in the order CI runs it
 
 ```bash
-python3 scripts/convert_skills.py && python3 scripts/verify_conversion.py
+# the FULL set, as CI converts it — a partial build makes the self-knowledge
+# pack look stale to gate [4c] even though nothing is wrong with the kit
+ACCEPT_ANTHROPIC_LICENSE=1 python3 scripts/convert_skills.py
+python3 scripts/verify_conversion.py
 python3 scripts/verify_kit.py
 convertion/ci/syntax_check.sh
 python3 ci/tests/test_residency.py
