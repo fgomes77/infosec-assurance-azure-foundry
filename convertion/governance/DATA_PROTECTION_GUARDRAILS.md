@@ -39,6 +39,36 @@ Continuous evaluation samples 10 % of production interactions into
 Application Insights (`../enterprise/series/08-guardrails-observability-evaluation.md`
 §4); those samples are subject to the same retention and the same RoPA entry.
 
+### 1a. Authoritative sources — what the platform may reach, and why
+
+Web reach is not open-ended. `../integrations/knowledge-sources.json` is the
+registry of record: per subject, the source that settles it, its access mode,
+its tier and the citation format its facts must carry. Three consequences
+follow, and all three are enforced rather than described:
+
+| Concern | Control |
+|---|---|
+| **Where the platform may go** | The delivery Function's outbound allow-list (`../functions/delivery/urlpolicy.py`) is **generated** from that registry (`scripts/sync_url_allowlist.py`); `scripts/check_knowledge_sources.py` fails CI (`[4c5]`) when the two disagree. A host nobody recorded a reason for is not reachable, and a source the registry promises cannot be quietly unreachable. Adding a source is a **Tier-B** change (`../operations/CHANGE_MANAGEMENT.md`) precisely because it widens egress. |
+| **How it gets there** | Three modes only: `api:<connection>` — a registered read-only OpenAPI tool (`eur-lex`, `nvd-cve`, `cisa-kev`, `first-epss`); `page:osint-proxy` — the sanitised, allow-listed, audited page fetch; `search:web-search` — Bing grounding on public terms, used to *find* the authoritative page, never to cite it. No generic HTTP tool exists. |
+| **What may leave** | Unchanged by having better sources, and it binds the new tools exactly as it binds a search: a CELEX number, a CVE id, a CPE, a public product name, a supplier's own public domain where the engagement is not confidential — never an ENX identifier, an assessment or ticket id, a person, contract or report content, or a finding's wording. A SPARQL query and an NVD `keywordSearch` are free text and are sanitised like any query. |
+
+The four public authorities carry **no credential at all** (`"auth":
+"anonymous"` in `../integrations/registry.json`; `attach_integrations.py`
+attaches them with `OpenApiAnonymousAuthDetails`), so there is no key to leak
+and no identity of Euronext's asserted to them. The optional NVD rate-limit
+key, if Euronext registers one, lives in Key Vault behind the connection.
+
+Residency: EUR-Lex/CELLAR is EU-hosted; NVD, CISA KEV and FIRST EPSS are US
+public services. The requests carry only public identifiers and no personal
+data, so no Euronext data leaves the EU through them — the accepted residual
+risk below concerns the **Bing grounding query text**, which is a different
+and narrower exposure.
+
+The citation discipline the sources exist to support — precedence, format,
+freshness, and treating fetched pages as untrusted content — is in
+`../agents/knowledge-packs/authoritative-sources.md`, attached to every agent
+that makes a regulatory, control, certification or vulnerability statement.
+
 ## 2. Read-only enterprise access (structural, not behavioural)
 
 - `attach_integrations.py` **strips every non-GET operation** from each

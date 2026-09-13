@@ -91,7 +91,10 @@ from inference_profiles import params_for  # noqa: E402
 
 _PACKS = ["agents/knowledge-packs/file-intake-foundry.md",
           "agents/knowledge-packs/pdf-reading-foundry.md",
-          "agents/knowledge-packs/enx-writing-style.md"]
+          "agents/knowledge-packs/enx-writing-style.md",
+          # what to read, and how to cite it, for every regulatory, control,
+          # certification and vulnerability statement these agents make
+          "agents/knowledge-packs/authoritative-sources.md"]
 _ADV = "agents/advisor-knowledge/"
 
 # name -> (model, knowledge sources [globs relative to repo], code files)

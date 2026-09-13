@@ -1,0 +1,126 @@
+# Purpose: authoritative vulnerability facts from the NIST National
+#   Vulnerability Database (CVE API 2.0) - CVE description, CVSS vectors and
+#   base scores, CWE, CPE configurations, references and publication /
+#   last-modified dates. Used by pentest-report-analyzer (severity
+#   normalisation against the published vector, not the tester's label),
+#   supplier-incident-assessor, deepsearch-protocol, cyber-forum and the
+#   advisor.
+# Why it exists: a CVSS score quoted from memory is a guess. Every severity
+#   statement in a Euronext deliverable must be traceable to the published
+#   vector and its date - this is where that comes from.
+# Auth: public. An NVD API key is OPTIONAL and only raises the rate limit
+#   (5 requests / 30 s without a key, 50 / 30 s with one); when Euronext
+#   registers a key it lives in the Foundry connection conn-nvd-cve / Key
+#   Vault and is sent as the apiKey header - never in this file.
+# Egress: only public identifiers (a CVE id, a CPE string, a date window, a
+#   product keyword). NEVER a Euronext hostname, asset name, internal id or
+#   the name of a supplier under assessment as a keyword - a keyword search
+#   is a web query and follows the same sanitisation rule
+#   (governance/DATA_PROTECTION_GUARDRAILS.md section 1).
+# Residency: nvd.nist.gov is a US public service; the request carries no
+#   Euronext and no personal data.
+openapi: 3.0.3
+info:
+  title: NVD CVE API 2.0 - published vulnerability record
+  description: >-
+    Read-only retrieval of CVE records from the NIST National Vulnerability
+    Database. Returns the CVE description, CVSS v3.1/v4.0 metrics with their
+    vectors, CWE mapping, affected configurations and references. Quote the
+    vector and the lastModified date; recompute nothing by hand.
+  version: "2.0"
+servers:
+  - url: https://services.nvd.nist.gov/rest/json
+security:
+  - apiKeyHeader: []
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: apiKey
+      description: >-
+        Optional NVD API key held in the Foundry connection (rate limit only).
+        Anonymous calls work; they are just slower.
+paths:
+  /cves/2.0:
+    get:
+      operationId: searchCves
+      summary: Retrieve one CVE, or the CVEs matching a bounded filter
+      description: >-
+        Use cveId for a single record (the normal case when a report names a
+        CVE). Use the date windows for "what changed since" work - the window
+        must be 120 days or less. keywordSearch is for PUBLIC product terms
+        only. Always page with resultsPerPage/startIndex rather than asking
+        for everything, and respect the rate limit (a 403/429 means back off,
+        not retry harder).
+      parameters:
+        - name: cveId
+          in: query
+          required: false
+          schema: { type: string, pattern: "^CVE-[0-9]{4}-[0-9]{4,}$" }
+          description: Exact CVE identifier, e.g. CVE-2026-12345.
+        - name: keywordSearch
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Public product or component terms (e.g. "MOVEit Transfer"). Never
+            a Euronext identifier; never the name of the supplier under
+            assessment when the assessment itself is confidential.
+        - name: cpeName
+          in: query
+          required: false
+          schema: { type: string }
+          description: CPE 2.3 name to match affected configurations.
+        - name: cvssV3Severity
+          in: query
+          required: false
+          schema: { type: string, enum: [LOW, MEDIUM, HIGH, CRITICAL] }
+        - name: pubStartDate
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: ISO-8601 start of the publication window (<= 120 days).
+        - name: pubEndDate
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: lastModStartDate
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+          description: >-
+            ISO-8601 start of the last-modified window (<= 120 days) - the
+            parameter for "what has changed since the last run".
+        - name: lastModEndDate
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: resultsPerPage
+          in: query
+          required: false
+          schema: { type: integer, default: 50, maximum: 2000 }
+        - name: startIndex
+          in: query
+          required: false
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: CVE records with their metrics.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resultsPerPage: { type: integer }
+                  startIndex: { type: integer }
+                  totalResults: { type: integer }
+                  timestamp: { type: string, format: date-time }
+                  vulnerabilities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cve: { type: object }
+        "403": { description: Rate limited / key rejected - back off. }
+        "404": { description: No such CVE. }

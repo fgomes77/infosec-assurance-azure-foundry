@@ -152,6 +152,15 @@ KNOWLEDGE_PACKS = {
                                             "ai-deepsearch-osint-gathering-report",
                                             "cyber-forum", "internal-comms",
                                             "doc-coauthoring"},
+    # Every converted agent that makes a regulatory, control, certification or
+    # vulnerability statement carries the citation discipline for the sources
+    # it can now reach (integrations/knowledge-sources.json).
+    "authoritative-sources.md": {"deepsearch-protocol",
+                                 "ai-deepsearch-osint-gathering-report",
+                                 "cyber-forum", "dora", "nis2", "eu-ai-act",
+                                 "iso27001", "iso42001",
+                                 "tpsrca-assessment-engine", "onetrust-form-b",
+                                 "ciso-executive-summary"},
 }
 # Extra Foundry-side code shipped INSIDE the package under foundry/ (never
 # written into the export): adapters for services that replace local tools.

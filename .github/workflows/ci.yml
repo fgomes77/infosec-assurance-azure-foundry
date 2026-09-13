@@ -128,6 +128,9 @@ jobs:
       - name: '[4c4] Cross-artefact coverage audit (the files agree with each other)'
         run: python3 convertion/scripts/audit_coverage.py
 
+      - name: '[4c5] Authoritative sources: registry, allow-list and citation pack agree'
+        run: python3 convertion/scripts/check_knowledge_sources.py
+
       - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
         run: |
           python3 -m pytest convertion/functions/delivery/tests \

@@ -1,0 +1,67 @@
+# Purpose: the CISA Known Exploited Vulnerabilities (KEV) catalogue - the
+#   authoritative public statement that a vulnerability is being exploited in
+#   the wild, with the remediation due date CISA sets and whether it is known
+#   to be used in ransomware campaigns. Used by pentest-report-analyzer and
+#   the remediation register to justify a severity escalation, by
+#   supplier-incident-assessor for exploitation status, and by
+#   deepsearch-protocol / cyber-forum for threat context.
+# Why it exists: "actively exploited" is the single fact that most often
+#   changes a finding's priority. It must come from a citable authority with
+#   a date, not from a vendor blog.
+# Auth: NONE - a public JSON feed. Connection conn-cisa-kev is anonymous.
+# Egress: a plain GET of a public file; no query, so nothing about Euronext
+#   can leave in it.
+# Residency: cisa.gov is a US public service; the request carries no data.
+# Freshness: the catalogue is updated on working days. Always report the
+#   catalogueVersion and dateReleased you read, and re-read rather than
+#   relying on an earlier run.
+openapi: 3.0.3
+info:
+  title: CISA Known Exploited Vulnerabilities catalogue
+  description: >-
+    Read-only fetch of the full KEV catalogue as published by CISA. Each
+    entry carries cveID, vendorProject, product, vulnerabilityName,
+    dateAdded, shortDescription, requiredAction, dueDate,
+    knownRansomwareCampaignUse and notes. Match on cveID; quote dateAdded
+    and dueDate.
+  version: "1.0"
+servers:
+  - url: https://www.cisa.gov
+paths:
+  /sites/default/files/feeds/known_exploited_vulnerabilities.json:
+    get:
+      operationId: getKnownExploitedVulnerabilities
+      summary: Fetch the current KEV catalogue
+      description: >-
+        Returns the whole catalogue in one document. Filter in your own
+        reasoning on the CVE ids present in the report under analysis; do not
+        summarise the catalogue as a whole. Tolerate new fields - CISA adds
+        them - and never treat absence from the catalogue as evidence that a
+        vulnerability is NOT exploited, only that CISA has not listed it.
+      responses:
+        "200":
+          description: The KEV catalogue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  title: { type: string }
+                  catalogVersion: { type: string }
+                  dateReleased: { type: string, format: date-time }
+                  count: { type: integer }
+                  vulnerabilities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cveID: { type: string }
+                        vendorProject: { type: string }
+                        product: { type: string }
+                        vulnerabilityName: { type: string }
+                        dateAdded: { type: string, format: date }
+                        shortDescription: { type: string }
+                        requiredAction: { type: string }
+                        dueDate: { type: string, format: date }
+                        knownRansomwareCampaignUse: { type: string }
+                        notes: { type: string }

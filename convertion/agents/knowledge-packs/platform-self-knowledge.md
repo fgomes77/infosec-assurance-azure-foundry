@@ -73,21 +73,21 @@ and that file as the record, so the quarterly re-check updates one place.*
 | Agent (exact name) | Purpose | Tier | Enterprise tools | Pipeline |
 |---|---|---|---|---|
 | `infosec-assurance-orchestrator` | single entry point: decomposes a request and answers `ROUTE: <agent-name>`; runs the verifier loop | reasoning | 0 | — |
-| `infosec-assurance-advisor` | cross-framework advisory on the combined knowledge base (vs-assurance-combined) with the team's durable memory | reasoning | 14 | — |
+| `infosec-assurance-advisor` | cross-framework advisory on the combined knowledge base (vs-assurance-combined) with the team's durable memory | reasoning | 18 | — |
 | `output-verifier` | independent PASS/FAIL check of every draft deliverable before human approval; generates nothing | reasoning | 0 | — |
-| `ai-deepsearch-osint-gathering-report` | Executes the AI DeepSearch OSINT Gathering Report — a full OSINT-based third-party security assessment that produces a professional HTML dashboard… | reasoning | 4 | ai-deepsearch-report |
+| `ai-deepsearch-osint-gathering-report` | Executes the AI DeepSearch OSINT Gathering Report — a full OSINT-based third-party security assessment that produces a professional HTML dashboard… | reasoning | 7 | ai-deepsearch-report |
 | `ciso-executive-summary` | Generates a CISO-grade TPRM Executive Summary HTML report from OneTrust Infosec Form assessment PDFs… | chat | 2 | ciso-exec-summary |
 | `ciso-reporting` | Generates the three Euronext Group CISO Governance Meeting deliverables from a verified OneTrust Infosec Form (v14) assessment — an interactive HTML d… | chat | 3 | cyber-forum-pptx |
-| `cyber-forum` | Answers open-ended cybersecurity, GRC, and third-party-risk questions for the ENX Information Security Assurance team — a conversational Q&A and threa… | reasoning | 13 | cyber-forum-brief |
-| `deepsearch-protocol` | Executes the Supplier Security DeepSearch Protocol V17.02.11 — a full OSINT-based third-party security assessment that produces a professional HTML da… | reasoning | 8 | deepsearch-report |
+| `cyber-forum` | Answers open-ended cybersecurity, GRC, and third-party-risk questions for the ENX Information Security Assurance team — a conversational Q&A and threa… | reasoning | 17 | cyber-forum-brief |
+| `deepsearch-protocol` | Executes the Supplier Security DeepSearch Protocol V17.02.11 — a full OSINT-based third-party security assessment that produces a professional HTML da… | reasoning | 11 | deepsearch-report |
 | `docx` | Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx)… | light | 1 | — |
-| `dora` | Expert DORA (Regulation (EU) 2022/2554 — Digital Operational Resilience Act) compliance advisor for EU financial entities… | reasoning | 11 | — |
+| `dora` | Expert DORA (Regulation (EU) 2022/2554 — Digital Operational Resilience Act) compliance advisor for EU financial entities… | reasoning | 12 | — |
 | `dpia` | Analyzes OneTrust third-party assessment PDF reports and generates InfoSec TPA Reports in DOCX format for DPO team review… | chat | 3 | dpia-dpo-report |
 | `enx-tprm-control-center` | Entry point and router for the ENX TPRM toolset. Use ONLY when the user explicitly says "open ENX menu", "ENX control center", "ENX menu", "TPRM menu"… | light | 0 | — |
-| `eu-ai-act` | EU AI Act (Regulation (EU) 2024/1689) compliance advisor — risk classification across all four tiers, all 8 prohibited practices (Art… | reasoning | 11 | — |
-| `iso27001` | Expert ISO 27001 compliance assistant for security and compliance teams. Use this skill whenever a user asks about ISO 27001 or ISO/IEC 27001, includi… | reasoning | 11 | — |
-| `iso42001` | Expert ISO 42001 AI Management System (AIMS) compliance advisor. Use this skill whenever a user asks about ISO/IEC 42001:2023, AI governance, AI manag… | reasoning | 11 | — |
-| `nis2` | EU NIS2 Directive (Directive (EU) 2022/2555) compliance advisor for essential and important entities — entity classification, Art… | reasoning | 11 | — |
+| `eu-ai-act` | EU AI Act (Regulation (EU) 2024/1689) compliance advisor — risk classification across all four tiers, all 8 prohibited practices (Art… | reasoning | 12 | — |
+| `iso27001` | Expert ISO 27001 compliance assistant for security and compliance teams. Use this skill whenever a user asks about ISO 27001 or ISO/IEC 27001, includi… | reasoning | 12 | — |
+| `iso42001` | Expert ISO 42001 AI Management System (AIMS) compliance advisor. Use this skill whenever a user asks about ISO/IEC 42001:2023, AI governance, AI manag… | reasoning | 12 | — |
+| `nis2` | EU NIS2 Directive (Directive (EU) 2022/2555) compliance advisor for essential and important entities — entity classification, Art… | reasoning | 12 | — |
 | `onetrust-form-b` | Assists with completing the OneTrust Non-Critical Form B supplier assessment questionnaire — drafts evidence-led responses for each question, validate… | chat | 2 | — |
 | `pdf` | Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging… | light | 1 | — |
 | `pdf-full-coverage-analyzer` | Exhaustive, accuracy-grade PDF analysis: process documents of any size in deterministic chunks and guarantee every line is read, every detail preserve… | reasoning | 0 | — |
@@ -98,19 +98,19 @@ and that file as the record, so the quarterly re-check updates one place.*
 | `xlsx` | Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an ex… | light | 1 | — |
 | `ciso-global-report` | Global CISO 9-slide PPTX briefing on one supplier/service assessment: contract owner, impacted ENX entities, service+supplier description, risk & cont… | reasoning | 3 | ciso-global-pptx |
 | `concentration-risk-analyzer` | DORA Art. 29 concentration and fourth-party chain analysis: provider / fourth-party / geography / technology / entity exposure, impact of failure agai… | reasoning | 9 | concentration-risk-analysis |
-| `continuous-monitoring-radar` | Third-Party Assurance Radar (HTML): evidence expiry, assessments due, external rating drift, overdue findings, expiring risk acceptances and undisposi… | reasoning | 7 | continuous-monitoring-radar |
-| `contract-security-review` | Contract, DPA and schedule review clause by clause against DORA Art. 30(2)/(3) and Art. 29, GDPR Art. 28(3) + SCCs, NIS2 Art… | reasoning | 6 | contract-security-review |
-| `dora-register-builder` | DORA Art. 28(3) Register of Information: builds the ITS tables (entities, arrangements, providers, services, functions, subcontracting chain, data loc… | reasoning | 7 | dora-register-of-information |
+| `continuous-monitoring-radar` | Third-Party Assurance Radar (HTML): evidence expiry, assessments due, external rating drift, overdue findings, expiring risk acceptances and undisposi… | reasoning | 10 | continuous-monitoring-radar |
+| `contract-security-review` | Contract, DPA and schedule review clause by clause against DORA Art. 30(2)/(3) and Art. 29, GDPR Art. 28(3) + SCCs, NIS2 Art… | reasoning | 7 | contract-security-review |
+| `dora-register-builder` | DORA Art. 28(3) Register of Information: builds the ITS tables (entities, arrangements, providers, services, functions, subcontracting chain, data loc… | reasoning | 8 | dora-register-of-information |
 | `exit-offboarding-assurance` | DORA Art. 28(8) exit strategy (triggers, options, transition plan, data exit, continuity, test record, readiness verdict) and the evidenced offboardin… | reasoning | 6 | exit-offboarding-assurance |
-| `findings-remediation-register` | Consolidated findings, remediation and risk-acceptance register: every finding normalised with severity, control reference, owner, due date, status an… | reasoning | 7 | findings-remediation-register |
+| `findings-remediation-register` | Consolidated findings, remediation and risk-acceptance register: every finding normalised with severity, control reference, owner, due date, status an… | reasoning | 10 | findings-remediation-register |
 | `isms-audit-pack` | ISO/IEC 27001:2022 governance packs for the third-party scope: SoA extract, internal audit plan and report (cl… | reasoning | 6 | isms-audit-pack |
-| `pentest-report-analyzer` | Penetration test report analysis: full normalised findings register, scope/currency adequacy, Euronext relevance, reliance verdict. | reasoning | 0 | pentest-report-summary |
-| `regulatory-change-watch` | Regulatory and standards horizon scanning with, per change, the ENX applicability, the named platform artefacts that must change, the gap assessment a… | reasoning | 5 | regulatory-change-watch |
+| `pentest-report-analyzer` | Penetration test report analysis: full normalised findings register, scope/currency adequacy, Euronext relevance, reliance verdict. | reasoning | 3 | pentest-report-summary |
+| `regulatory-change-watch` | Regulatory and standards horizon scanning with, per change, the ENX applicability, the named platform artefacts that must change, the gap assessment a… | reasoning | 6 | regulatory-change-watch |
 | `soc-report-analyzer` | SOC 1/2/3 (Type 1/2) report analysis: opinion, scope, period, every exception, CUEC mapping, subservice carve-outs, reliance verdict. | reasoning | 0 | soc-report-summary |
-| `supplier-incident-assessor` | Supplier incident impact on Euronext plus the notification-duty assessment with deadlines computed from the evidenced awareness timestamp (DORA Art… | reasoning | 11 | supplier-incident-assessment |
+| `supplier-incident-assessor` | Supplier incident impact on Euronext plus the notification-duty assessment with deadlines computed from the evidenced awareness timestamp (DORA Art… | reasoning | 15 | supplier-incident-assessment |
 | `supplier-intake-triage` | Lifecycle gate 1: supplier/service intake triage and tiering - supplier type, DORA critical-or-important-function test, inherent risk profile, the ass… | reasoning | 10 | supplier-intake-triage |
 | `template-manager` | Controlled template change process: inventory, analyse, edit, visual before/after review, approval-gated propagation… | chat | 2 | — |
-| `tpa-evidence-analyzer` | Analyses the SharePoint TPA/Active evidence tree for a supplier/service: per-file content id, scope, emission date, validity period, findings; consoli… | reasoning | 3 | tpa-evidence-analysis |
+| `tpa-evidence-analyzer` | Analyses the SharePoint TPA/Active evidence tree for a supplier/service: per-file content id, scope, emission date, validity period, findings; consoli… | reasoning | 4 | tpa-evidence-analysis |
 
 39 agents. Names are the hand-off targets: reply `ROUTE: <agent-name>` with the name exactly as spelled above. Alias twins are not deployed separately; a platform-specific example agent is never routed to.
 

@@ -1,0 +1,127 @@
+# Purpose: authentic EU legal texts and legal metadata, direct from the
+#   Publications Office of the European Union (CELLAR) - the source of record
+#   behind EUR-Lex. Used by regulatory-change-watch (requirement t), dora,
+#   nis2, eu-ai-act, contract-security-review and the advisor whenever an
+#   article number, a date of application or the operative wording of an EU
+#   instrument has to be QUOTED rather than remembered.
+# Why it exists: an LLM's memory of "Art. 30(3)(e)" or of an entry-into-force
+#   date is not evidence. This tool makes the authentic text and the official
+#   metadata reachable, so every regulatory statement in a deliverable can
+#   carry a CELEX number and a retrieval date (knowledge pack
+#   agents/knowledge-packs/authoritative-sources.md, citation rules).
+# Auth: NONE - CELLAR is a public, unauthenticated read endpoint. The Foundry
+#   connection conn-eur-lex is declared anonymous (registry.json "auth":
+#   "anonymous"); no key exists to leak.
+# Egress: only the CELEX identifier, a language code and a SPARQL query over
+#   PUBLIC legal metadata leave the boundary. Never a supplier name, an ENX
+#   identifier, an assessment id or any document content
+#   (governance/DATA_PROTECTION_GUARDRAILS.md section 1). A SPARQL query is
+#   free text: it is subject to the same sanitisation rule as a web search.
+# Residency: publications.europa.eu is operated by the Publications Office of
+#   the EU (EU-hosted); the request carries no personal and no Euronext data.
+openapi: 3.0.3
+info:
+  title: EUR-Lex / CELLAR - authentic EU legal texts and metadata
+  description: >-
+    Read-only access to the Publications Office CELLAR repository: retrieve
+    the authentic text of an EU instrument by CELEX number, and query the
+    Common Data Model (CDM) knowledge graph for legal metadata - dates of
+    document, entry into force and application, in-force status, amendments
+    and consolidations, EuroVoc subjects. Quote what this returns; do not
+    paraphrase an obligation from memory.
+  version: "1.0"
+servers:
+  - url: https://publications.europa.eu
+paths:
+  /resource/celex/{celex}:
+    get:
+      operationId: getCelexDocument
+      summary: Retrieve the authentic text of an EU legal act by CELEX number
+      description: >-
+        Content-negotiated retrieval of one work by CELEX identifier, e.g.
+        32022R2554 (DORA), 32022L2555 (NIS2), 32016R0679 (GDPR),
+        32024R1689 (EU AI Act), 32021D0914 (standard contractual clauses).
+        Prefer the CONSOLIDATED version when advising on the law in force -
+        a consolidated CELEX carries a 0 and a date segment (e.g.
+        02022R2554-20250117) - and say in the deliverable which version and
+        which consolidation date you read. Cite as: instrument, article,
+        CELEX, retrieval date.
+      parameters:
+        - name: celex
+          in: path
+          required: true
+          schema: { type: string }
+          description: >-
+            CELEX identifier of the work, with no spaces (e.g. 32022R2554 for
+            the original act, 02022R2554-20250117 for a consolidation).
+        - name: Accept
+          in: header
+          required: false
+          schema:
+            type: string
+            enum:
+              - text/html
+              - application/xhtml+xml
+              - application/xml
+              - application/pdf
+            default: text/html
+          description: Representation to return; text/html is the readable text.
+        - name: Accept-Language
+          in: header
+          required: false
+          schema: { type: string, default: eng }
+          description: >-
+            ISO 639-3 language code of the linguistic version (eng, fra, nld,
+            por ...). English unless the user asks for another language; a
+            national transposition is read in its own language.
+      responses:
+        "200":
+          description: The requested linguistic version and format of the work.
+          content:
+            text/html:
+              schema: { type: string }
+            application/xml:
+              schema: { type: string }
+        "404": { description: No such CELEX identifier / linguistic version. }
+        "406": { description: Requested representation not available. }
+  /webapi/rdf/sparql:
+    get:
+      operationId: queryEuLegalMetadata
+      summary: Query the CELLAR legal knowledge graph (SPARQL, read-only)
+      description: >-
+        Run a SPARQL 1.1 SELECT over the CDM metadata of EU acts - what was
+        published in a period, what amends or consolidates an instrument,
+        dates of entry into force and of application, in-force status,
+        implementing and delegated acts of a parent regulation. This is the
+        query that makes a change watch factual instead of anecdotal.
+        SELECT only, always with a LIMIT; never embed a Euronext term,
+        supplier name or internal identifier in the query text.
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string }
+          description: >-
+            URL-encoded SPARQL 1.1 SELECT query against the CDM ontology.
+            Keep it bounded (LIMIT <= 200) and time-boxed on the date of
+            document or date of publication.
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["application/sparql-results+json", "text/csv"]
+            default: "application/sparql-results+json"
+          description: Result serialisation.
+      responses:
+        "200":
+          description: SPARQL result set.
+          content:
+            application/sparql-results+json:
+              schema:
+                type: object
+                properties:
+                  head: { type: object }
+                  results: { type: object }
+        "400": { description: Malformed query. }
+        "429": { description: Rate limited - back off and narrow the query. }

@@ -175,8 +175,8 @@ def build_tools(agent_tools: list[str], write_connections: list[str],
     if dry:
         return []
     from azure.ai.agents.models import (
-        BingGroundingTool, OpenApiTool, OpenApiConnectionAuthDetails,
-        OpenApiConnectionSecurityScheme,
+        BingGroundingTool, OpenApiTool, OpenApiAnonymousAuthDetails,
+        OpenApiConnectionAuthDetails, OpenApiConnectionSecurityScheme,
     )
     defs = []
     for key in agent_tools:
@@ -186,9 +186,17 @@ def build_tools(agent_tools: list[str], write_connections: list[str],
                      f"(enabled=false) but is listed on an agent")
         if conn["type"] == "openapi":
             read_only = key not in write_connections
-            auth = OpenApiConnectionAuthDetails(
-                security_scheme=OpenApiConnectionSecurityScheme(
-                    connection_id=resolve_connection(conn["foundry_connection"])))
+            if conn.get("auth") == "anonymous":
+                # Public, unauthenticated authorities (EUR-Lex/CELLAR, NVD,
+                # CISA KEV, FIRST EPSS): there is no secret to hold, so the
+                # tool carries no connection. Declaring this explicitly keeps
+                # a key from being invented for an endpoint that needs none.
+                auth = OpenApiAnonymousAuthDetails()
+            else:
+                auth = OpenApiConnectionAuthDetails(
+                    security_scheme=OpenApiConnectionSecurityScheme(
+                        connection_id=resolve_connection(
+                            conn["foundry_connection"])))
             defs += OpenApiTool(
                 name=key.replace("-", "_"),
                 description=(f"{key} integration"

@@ -112,6 +112,9 @@ stages:
           - script: python3 convertion/scripts/audit_coverage.py
             displayName: '[4c4] Cross-artefact coverage audit'
 
+          - script: python3 convertion/scripts/check_knowledge_sources.py
+            displayName: '[4c5] Authoritative sources: registry, allow-list, pack'
+
           - script: |
               set -euo pipefail
               python3 -m pip install --quiet pytest jsonschema requests

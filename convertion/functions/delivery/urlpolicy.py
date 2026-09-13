@@ -20,15 +20,34 @@ import re
 import socket
 from urllib.parse import urlsplit
 
-# Curated public OSINT registries / authorities (extend via env ALLOWLIST_EXTRA)
+# BEGIN generated allow-list (scripts/sync_url_allowlist.py)
+# Generated from integrations/knowledge-sources.json — do not
+# edit by hand: add the source there (with its tier, citation
+# rule and reason) and re-run the script. Adding a domain here
+# widens what the platform can reach: Tier-B change.
 DEFAULT_ALLOWLIST = [
-    "iafcertsearch.org", "nvd.nist.gov", "cve.org", "cisa.gov",
-    "eur-lex.europa.eu", "enisa.europa.eu", "crt.sh",
-    "securityscorecard.com", "ssllabs.com", "securityheaders.com",
-    "sec.gov", "companieshouse.gov.uk", "ec.europa.eu", "edpb.europa.eu",
-    "iso.org", "pcisecuritystandards.org", "aicpa.org", "cloudsecurityalliance.org",
-    "trust.example-supplier.com",
+    "aicpa-cima.com", "aicpa.org", "api.first.org",
+    "api.securityscorecard.io", "attack.mitre.org", "aws.amazon.com",
+    "boe.es", "bsi.bund.de", "cert.europa.eu", "cert.pt",
+    "cert.ssi.gouv.fr", "cisa.gov", "cisecurity.org", "cloud.google.com",
+    "cloudsecurityalliance.org", "cofrac.fr", "companieshouse.gov.uk",
+    "crt.sh", "csrc.nist.gov", "cve.org", "cveproject.github.io",
+    "d3fend.mitre.org", "dakks.de", "digital-strategy.ec.europa.eu",
+    "dre.pt", "e-justice.europa.eu", "eba.europa.eu", "ec.europa.eu",
+    "edpb.europa.eu", "edps.europa.eu", "eiopa.europa.eu",
+    "enisa.europa.eu", "esma.europa.eu", "eur-lex.europa.eu",
+    "european-accreditation.org", "finance.ec.europa.eu", "first.org",
+    "gesetze-im-internet.de", "gleif.org", "iaasb.org",
+    "iafcertsearch.org", "iec.ch", "ifac.org", "ipac.pt", "iso.org",
+    "legifrance.gouv.fr", "legislation.gov.uk", "msrc.microsoft.com",
+    "ncsc.gov.uk", "ncsc.nl", "nist.gov", "normattiva.it", "nvd.nist.gov",
+    "nvlpubs.nist.gov", "observatory.mozilla.org", "op.europa.eu",
+    "owasp.org", "pcisecuritystandards.org", "pentest-standard.org",
+    "publications.europa.eu", "rva.nl", "sec.gov", "securityheaders.com",
+    "securityscorecard.com", "services.nvd.nist.gov", "ssllabs.com",
+    "ukas.com", "wetten.overheid.nl",
 ]
+# END generated allow-list
 
 INTERNAL_SUFFIXES = [s.strip().lower() for s in
                      os.environ.get("INTERNAL_DOMAIN_SUFFIXES",

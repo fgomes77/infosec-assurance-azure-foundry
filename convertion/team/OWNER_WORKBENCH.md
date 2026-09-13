@@ -54,6 +54,7 @@ the gate it must pass. `Tier A` self-service · `Tier B` peer-approved ·
 | Infrastructure | `infra/*.bicep`, parameters | `infra/validate.sh` + `ci/tests/test_residency.py` | `az deployment group create` (series 01–02) | C |
 | Model tier | registry `model_tiers` + infra params | `enterprise/upgrade/check_model_lifecycle.py --dry-run` | six-phase migration (policy R3) | C |
 | Durable knowledge | `agents/advisor-knowledge/` or a memory note | `memory_store.py --list` | `memory_store.py --add …` | A |
+| Web source of record | `integrations/knowledge-sources.json` (the source, its tier, its citation rule) | `sync_url_allowlist.py && check_knowledge_sources.py` | `attach_integrations.py --only <agent>` for an `api:` source; the allow-list ships with the delivery Function | B — it widens outbound reach |
 
 Two rules hold across all of them. **Never edit `build/` or
 `claude-account-export/`** — one is generated, the other is the byte-verified
@@ -74,6 +75,8 @@ python3 ci/tests/test_workflow_efficiency.py
 python3 scripts/build_self_knowledge.py --check
 python3 scripts/build_console.py --check
 python3 scripts/inference_profiles.py --check
+python3 scripts/audit_coverage.py
+python3 scripts/check_knowledge_sources.py
 python3 -m pytest functions/delivery/tests functions/office-tools/tests scripts/tests -q
 infra/validate.sh
 python3 scripts/scan_secrets.py
