@@ -100,6 +100,9 @@ stages:
           - script: python3 convertion/scripts/build_self_knowledge.py --check
             displayName: '[4c] Self-knowledge pack is in step with the kit'
 
+          - script: python3 convertion/scripts/inference_profiles.py --check
+            displayName: '[4c2] Inference profiles resolve for every agent'
+
           - script: |
               set -euo pipefail
               python3 -m pip install --quiet pytest jsonschema requests

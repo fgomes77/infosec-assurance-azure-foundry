@@ -64,6 +64,7 @@ except ImportError:
 
 HEREPATH = Path(__file__).resolve().parent
 sys.path.insert(0, str(HEREPATH))
+from inference_profiles import params_for, retrieval_for  # noqa: E402
 from _foundry_runtime import (ai_search_tool, get_runtime,  # noqa: E402
                               knowledge_source, record_version)
 from _azure_helpers import (dedupe_tools, kit_metadata,  # noqa: E402
@@ -164,7 +165,21 @@ def main() -> int:
         has_fs = any(tool_type(t) == "file_search" for t in tools)
         if ids and not has_fs:
             from azure.ai.agents.models import FileSearchTool
-            tools += FileSearchTool(vector_store_ids=ids).definitions
+            # Retrieval width is part of the inference profile: narrower
+            # retrieval is both cheaper and more accurate for agents whose
+            # answers must be sourced, wider for the full-coverage analyzer
+            # that may not lose a passage (integrations/inference-profiles.json).
+            fs_tuning = retrieval_for(name)
+            try:
+                tools += FileSearchTool(vector_store_ids=ids,
+                                        **fs_tuning).definitions
+            except TypeError:   # SDK without the tuning kwargs
+                defs = FileSearchTool(vector_store_ids=ids).definitions
+                for d in defs:
+                    fs = d.get("file_search") if isinstance(d, dict) else None
+                    if isinstance(fs, dict):
+                        fs.update(fs_tuning)
+                tools += defs
         has_search = any(tool_type(t) == "azure_ai_search" for t in tools)
         if search_defs and not has_search:
             tools += search_defs
@@ -177,6 +192,7 @@ def main() -> int:
             name=name, model=agent.model, description=agent.description,
             instructions=instructions, tools=tools,
             tool_resources=res or None, metadata=kit_metadata(),
+            inference=params_for(name, agent.model),
             existing=agent)
         record_version(updated, note="advisory profile")
         print(f"applied  {updated.ref}: "

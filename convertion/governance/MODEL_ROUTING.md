@@ -110,8 +110,25 @@ generation (`scripts/apply_advisory_profile.py`), and file rendering
 stays deterministic code — token economy for advisory systems comes from
 RAG retrieval and structured output contracts, not from a cheaper model.
 
+## Request-time profile (the other half of the routing decision)
+
+Choosing the model is half the decision; how it is called is the other half.
+Sampling determinism, reasoning effort, the output ceiling and retrieval
+width are set per agent CLASS in `../integrations/inference-profiles.json`,
+resolved by `../scripts/inference_profiles.py` and applied at agent save, at
+tier application and per request. The record, the class table, the
+model-family legality matrix (o-series takes `reasoning_effort` and rejects
+`temperature`; the gpt-4o family is the reverse), the prompt-caching rules
+and the accuracy floor: **`INFERENCE_PROFILES.md`**. CI gate `[4c2]`
+(`inference_profiles.py --check`) fails the build if any agent in the
+registry has no class, so no agent can ship on service defaults by omission.
+
 ## Token-economy rules (already engineered into the platform)
 
+0. **Request-time profiles** — every agent runs with an explicit
+   `temperature`/`reasoning_effort`, output ceiling and retrieval width
+   instead of service defaults (`INFERENCE_PROFILES.md`); routing and
+   extraction spend `low` effort, analysis and advisory spend `high`.
 1. **Deterministic code over generation** — everything renderable is
    rendered by scripts (code_interpreter or the delivery Function), never
    token-generated: PPTX/DOCX/XLSX bytes cost zero completion tokens and
@@ -138,6 +155,11 @@ RAG retrieval and structured output contracts, not from a cheaper model.
    quality holds on a cheaper tier moves down; one that loops or fails
    verification moves up. Change = edit `model_tier` in the registry +
    re-run `attach_integrations.py --only <agent>`.
+   The same review reads
+   `../operations/kql/prompt-cache-hit-rate.kql`: a falling cache hit rate
+   means a per-run value has entered an agent's instructions and broken its
+   cached prefix (`INFERENCE_PROFILES.md` §4), which is a defect to fix, not
+   a price to accept.
    Procedure: `../operations/TOKEN_ECONOMY_PLAYBOOK.md`; accuracy-floor
    evidence: `../operations/evaluation/run_evals.py` against
    `../operations/evaluation/golden-set.*.json` (gate G1); cost figures:

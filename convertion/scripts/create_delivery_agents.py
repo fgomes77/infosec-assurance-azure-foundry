@@ -71,6 +71,7 @@ from create_orchestrator import persona  # noqa: E402
 from convert_skills import APPROVAL_GATE  # noqa: E402
 from _azure_helpers import file_map_block, kit_metadata  # noqa: E402
 from _foundry_runtime import get_runtime, record_version  # noqa: E402
+from inference_profiles import params_for  # noqa: E402
 
 _PACKS = ["agents/knowledge-packs/file-intake-foundry.md",
           "agents/knowledge-packs/pdf-reading-foundry.md",
@@ -241,6 +242,7 @@ def main() -> int:
                                 instructions=instructions,
                                 tools=tools, tool_resources=resources,
                                 metadata=kit_metadata(),
+                                inference=params_for(name, spec["model"]),
                                 existing=live.get(name))
         record_version(agent)
         print(f"{'updated' if name in live else 'created'}  {agent.ref} "

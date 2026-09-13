@@ -107,6 +107,7 @@ from convert_skills import APPROVAL_GATE, ALIASES  # noqa: E402
 from _azure_helpers import (dedupe_tools, integration_tools,  # noqa: E402
                             kit_metadata, reconcile_store,
                             routing_table_block, tool_type)
+from inference_profiles import params_for  # noqa: E402
 from _foundry_runtime import (ai_search_tool, bing_grounding_tool,  # noqa: E402
                               get_runtime, knowledge_source, memory_backend,
                               record_version)
@@ -282,7 +283,9 @@ def main() -> int:
                     "knowledge base with durable team memory.",
         instructions=advisor_text,
         tools=tools, tool_resources=resources,
-        metadata=kit_metadata(), existing=live.get(ADVISOR))
+        metadata=kit_metadata(),
+        inference=params_for(ADVISOR, REASONING_MODEL),
+        existing=live.get(ADVISOR))
     record_version(advisor)
     print(f"{'updated' if had_advisor else 'created'}  {advisor.ref} "
           f"({advisor.id})")
@@ -297,7 +300,9 @@ def main() -> int:
                     "(completeness, threshold consistency, grounding, no "
                     "placeholders, data minimisation) and returns "
                     "PASS/FAIL before human approval. Generates nothing.",
-        instructions=verifier_instructions(), existing=live.get(VERIFIER))
+        instructions=verifier_instructions(),
+        inference=params_for(VERIFIER, REASONING_MODEL),
+        existing=live.get(VERIFIER))
     record_version(verifier)
     print(f"{'updated' if had_verifier else 'created'}  {verifier.ref} "
           f"({verifier.id})")
@@ -341,6 +346,7 @@ def main() -> int:
                     "Assurance requests across all agents.",
         instructions=orchestrator_instructions() + routing_table_block(rows),
         tools=dedupe_tools(otools, label=ORCHESTRATOR), metadata=kit_metadata(),
+        inference=params_for(ORCHESTRATOR, REASONING_MODEL),
         existing=live.get(ORCHESTRATOR))
     record_version(orchestrator, note="routing table")
     print(f"{'updated' if had_orch else 'created'}  {orchestrator.ref} "

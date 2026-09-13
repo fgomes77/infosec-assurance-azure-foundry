@@ -64,6 +64,7 @@ from _azure_helpers import (UploadCache, file_map_block,  # noqa: E402
                             routing_table_block, strip_deploy_blocks,
                             upload_files as _upload)
 from _foundry_runtime import get_runtime, record_version  # noqa: E402
+from inference_profiles import params_for  # noqa: E402
 
 _CACHE = UploadCache(BUILD / "upload-cache.json")
 
@@ -117,6 +118,7 @@ def ensure_agent(rt, spec: dict, existing: dict, dry: bool):
                             instructions=instructions,
                             tools=tools, tool_resources=tool_resources,
                             metadata=kit_metadata(),
+                            inference=params_for(spec["name"], MODEL),
                             existing=existing.get(spec["name"]))
     record_version(agent)
     print(f"{'updated' if had else 'created'}  {agent.ref} ({agent.id})")

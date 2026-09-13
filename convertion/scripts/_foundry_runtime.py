@@ -268,6 +268,13 @@ class AgentView:
                                else getattr(raw, "tool_resources", None))
         self.description = (getattr(d, "description", None)
                             or getattr(raw, "description", "") or "")
+        # The saved inference profile travels in the agent metadata, so a
+        # caller that did not pass one still runs the agent the way it was
+        # deployed (_request_params reads it back here).
+        md = getattr(raw, "metadata", None)
+        if md is None:
+            md = getattr(getattr(raw, "latest_version", None), "metadata", None)
+        self.metadata = dict(md) if isinstance(md, dict) else {}
 
     @property
     def ref(self) -> str:
@@ -318,20 +325,40 @@ class Runtime:
     def upsert_agent(self, *, name: str, model: str, instructions: str,
                      tools=None, tool_resources=None, description: str = "",
                      metadata: dict | None = None,
+                     inference: dict | None = None,
                      existing: AgentView | None = None) -> AgentView:
         """Create the agent or save a new version of it.
 
         `responses`: one immutable version per call (previous versions are
         kept and can be re-activated — the rollback in series/06 §G).
         `classic`: create or update in place (no versions exist).
+
+        `inference` is the resolved profile from
+        `inference_profiles.params_for(name, model)` — sampling determinism,
+        reasoning effort and the output ceiling. It is stamped into the
+        agent metadata as `inference_profile` whether or not the installed
+        SDK lets the definition carry the values, because `ask()` reads it
+        back from there and applies it per request. That way an agent
+        cannot end up serving traffic on service defaults just because the
+        SDK on the deploy host was older than the service.
         """
+        inference = dict(inference or {})
+        if inference:
+            metadata = dict(metadata or {})
+            metadata["inference_profile"] = json.dumps(
+                inference, separators=(",", ":"), sort_keys=True)
         if self.mode == "responses":
             from azure.ai.projects.models import PromptAgentDefinition
-            definition = PromptAgentDefinition(
-                model=model, instructions=instructions,
-                tools=list(tools or []) or None,
-                tool_resources=tool_resources or None,
-                description=description or None)
+            base = dict(model=model, instructions=instructions,
+                        tools=list(tools or []) or None,
+                        tool_resources=tool_resources or None,
+                        description=description or None)
+            try:
+                definition = PromptAgentDefinition(**base, **inference)
+            except TypeError:
+                # Older SDK: the definition has no such fields. The profile
+                # still applies — ask() reads it from the metadata above.
+                definition = PromptAgentDefinition(**base)
             created = self.project.agents.create_version(
                 agent_name=name, definition=definition,
                 metadata=metadata or None)
@@ -358,8 +385,15 @@ class Runtime:
 
     # -- conversation -------------------------------------------------------
     def ask(self, agent: AgentView, prompt: str,
-            conversation_id: str | None = None) -> tuple[str, str]:
-        """One turn. Returns (conversation/thread id, assistant text)."""
+            conversation_id: str | None = None,
+            inference: dict | None = None) -> tuple[str, str]:
+        """One turn. Returns (conversation/thread id, assistant text).
+
+        `inference` overrides the agent's stored profile for this call
+        (evaluation runs sweep it); omitted, the profile saved with the
+        agent applies — see `upsert_agent`.
+        """
+        params = _request_params(agent, inference, self.mode)
         if self.mode == "responses":
             conv = conversation_id or self._oai.conversations.create().id
             ref = {"name": agent.name, "type": "agent_reference"}
@@ -367,7 +401,7 @@ class Runtime:
                 ref["version"] = agent.version     # pin the promoted version
             resp = self._oai.responses.create(
                 conversation=conv, input=prompt,
-                extra_body={"agent_reference": ref})
+                extra_body={"agent_reference": ref, **params})
             if getattr(resp, "status", "completed") not in ("completed", None):
                 raise RuntimeError(f"response status {resp.status}: "
                                    f"{getattr(resp, 'error', None)}")
@@ -376,7 +410,7 @@ class Runtime:
         thread_id = conversation_id or ac.threads.create().id
         ac.messages.create(thread_id=thread_id, role="user", content=prompt)
         run = ac.runs.create_and_process(thread_id=thread_id,
-                                         agent_id=agent.id)
+                                         agent_id=agent.id, **params)
         if run.status != "completed":
             raise RuntimeError(f"run status {run.status}: {run.last_error}")
         for msg in ac.messages.list(thread_id=thread_id):
@@ -385,6 +419,40 @@ class Runtime:
                     p.text.value for p in msg.content
                     if getattr(p, "text", None))
         return thread_id, ""
+
+
+def _request_params(agent: "AgentView", inference: dict | None,
+                    mode: str) -> dict:
+    """Shape the inference profile for the wire surface in use.
+
+    Returns {} when there is nothing to send, so a caller that never set a
+    profile keeps the exact request it made before this existed.
+
+    responses: `reasoning_effort` travels as `reasoning: {effort}`; the
+               sampling keys are top-level.
+    classic:   runs take `temperature` / `top_p` / `max_completion_tokens`
+               and know nothing about reasoning effort — it is dropped
+               here rather than sent and rejected.
+    """
+    prof = dict(inference or {})
+    if not prof:
+        raw = (getattr(agent, "metadata", None) or {}).get("inference_profile")
+        if not raw:
+            return {}
+        try:
+            prof = json.loads(raw)
+        except (TypeError, ValueError):
+            return {}
+
+    effort = prof.pop("reasoning_effort", None)
+    if mode == "responses":
+        if effort:
+            prof["reasoning"] = {"effort": effort}
+        return prof
+    out = {k: prof[k] for k in ("temperature", "top_p") if k in prof}
+    if "max_output_tokens" in prof:
+        out["max_completion_tokens"] = prof["max_output_tokens"]
+    return out
 
 
 def get_runtime(endpoint: str | None = None) -> Runtime:

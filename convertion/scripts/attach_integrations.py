@@ -43,6 +43,7 @@ TIER_MODEL = {"light": LIGHT_MODEL, "chat": CHAT_MODEL, "reasoning": REASONING_M
 
 sys.path.insert(0, str(HERE))
 from _azure_helpers import dedupe_tools, tool_type  # noqa: E402
+from inference_profiles import params_for  # noqa: E402
 
 REGISTRY = json.loads((CONV / "integrations" / "registry.json").read_text())
 
@@ -351,7 +352,8 @@ def main() -> int:
                              else " [read-only]") for t in cfg["tools"]]
             guard = cfg.get("guardrail_policy", "infosec-security-analysis")
             print(f"[dry-run] {name}: +{labelled or ['(none)']} model={model} "
-                  f"rai={guard}")
+                  f"rai={guard} "
+                  f"profile={json.dumps(params_for(name, model), sort_keys=True)}")
         # Load every attached spec once so the read-only audit is populated
         # even in --dry-run, where build_tools() returns early.
         KEPT_POSTS.clear()
@@ -406,13 +408,28 @@ def main() -> int:
         tools = dedupe_tools(kept + build_tools(cfg["tools"],
                                                 cfg.get("write_connections", []),
                                                 False), label=name)
-        agents_client.update_agent(agent.id, model=model, tools=tools)
+        # This is where the TIER model is finally applied, so it is also
+        # where the inference profile has to be re-resolved: the legal
+        # parameters change with the model family (o-series takes
+        # reasoning_effort and rejects temperature; gpt-4o the reverse), and
+        # a profile stamped against the creation-time model would be wrong
+        # for the model that actually serves traffic.
+        stamp = json.dumps(params_for(name, model), separators=(",", ":"),
+                           sort_keys=True)
+        try:
+            agents_client.update_agent(
+                agent.id, model=model, tools=tools,
+                metadata={**(getattr(agent, "metadata", None) or {}),
+                          "inference_profile": stamp})
+        except TypeError:      # SDK without metadata on update_agent
+            agents_client.update_agent(agent.id, model=model, tools=tools)
         guard = cfg.get("guardrail_policy", "infosec-security-analysis")
         # The pinned SDK does not expose the agent-level RAI assignment on
         # update_agent; it is set at creation / in the portal and verified by
         # enterprise/portal/agent-checklist.md (finding C14 / D-EB7).
         print(f"updated  {name}: +{cfg['tools']} model={model} "
-              f"rai={guard} (assignment verified in the portal checklist)")
+              f"rai={guard} profile={stamp} "
+              f"(assignment verified in the portal checklist)")
 
     print(f"\ndone: {len(wanted)} agents processed")
     if not args.only:

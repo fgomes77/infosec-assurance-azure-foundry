@@ -96,6 +96,9 @@ jobs:
       - name: '[4c] Self-knowledge pack is in step with the kit'
         run: python3 convertion/scripts/build_self_knowledge.py --check
 
+      - name: '[4c2] Inference profiles resolve for every agent on its tier'
+        run: python3 convertion/scripts/inference_profiles.py --check
+
       - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
         run: |
           python3 -m pip install --quiet pytest jsonschema requests
