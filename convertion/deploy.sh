@@ -135,6 +135,14 @@ else
   esac
 fi
 
+# [1c] The ENX Assurance Console: one self-contained page (and the catalog.json
+# the MCP `catalog` tool serves) holding every system, agent, pipeline,
+# workflow, connection, template, query and runbook. Generated from the
+# registries, so it describes the platform as deployed rather than as
+# remembered - team/OWNER_WORKBENCH.md is the operator's entry point to it.
+echo "==> [1c/8] Building the assurance console + catalogue"
+python3 build_console.py ${DRY:+--out "${TMPDIR:-/tmp}/enx-console-dryrun"} | tail -1
+
 echo "==> [2/8] Verifying conversion fidelity (templates, rules, gates) + kit consistency"
 python3 verify_conversion.py
 python3 verify_kit.py

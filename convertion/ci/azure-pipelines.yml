@@ -106,6 +106,9 @@ stages:
           - script: python3 convertion/scripts/inference_profiles.py --check
             displayName: '[4c2] Inference profiles resolve for every agent'
 
+          - script: python3 convertion/scripts/build_console.py --check
+            displayName: '[4c3] Console catalogue: every item is described'
+
           - script: |
               set -euo pipefail
               python3 -m pip install --quiet pytest jsonschema requests

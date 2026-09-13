@@ -2,8 +2,18 @@
 
 Exposes the Foundry agent environment as MCP tools so any MCP client —
 Claude Desktop / Claude Code, the ENX gateway, or internal tooling — can
-drive it: `ask_orchestrator`, `ask_agent`, `list_agents`, `save_memory`,
-`search_memory`, `schedule_followup`. Context persists via the returned
+drive it: `ask_orchestrator`, `ask_agent`, `list_agents`, `catalog`,
+`save_memory`, `search_memory`, `schedule_followup`.
+
+`catalog` is the platform's own inventory — every system (a–j), agent,
+pipeline, workflow, connection, template, dashboard query and runbook,
+each with what it is and where it lives. It reads the same
+`build/console/catalog.json` the **ENX Assurance Console** page is built
+from (`../scripts/build_console.py`), so a chat client and the page can
+never disagree, and capability questions get answered from the deployed
+platform rather than from memory. Narrow it with `area=` (systems,
+develop, agents, pipelines, workflows, connections, templates, queries,
+docs). Context persists via the returned
 `conversation_id`
 (`thread_id` remains as a deprecated alias of the same value); durable team
 memory follows `MEMORY_BACKEND` — the `vs-assurance-memory` store or the

@@ -122,6 +122,9 @@ jobs:
       - name: '[4c2] Inference profiles resolve for every agent on its tier'
         run: python3 convertion/scripts/inference_profiles.py --check
 
+      - name: '[4c3] Console catalogue: every item is described'
+        run: python3 convertion/scripts/build_console.py --check
+
       - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
         run: |
           python3 -m pytest convertion/functions/delivery/tests \

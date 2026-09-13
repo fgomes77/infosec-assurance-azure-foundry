@@ -13,55 +13,64 @@
       "type": "openapi",
       "spec": "integrations/openapi/jira-cloud.yaml",
       "foundry_connection": "conn-jira-cloud",
-      "identity": "project_connection_custom_keys (conn-jira-cloud; browse-only Jira service account - a named non-human identity in team/ACCESS_REGISTER.md)"
+      "identity": "project_connection_custom_keys (conn-jira-cloud; browse-only Jira service account - a named non-human identity in team/ACCESS_REGISTER.md)",
+      "_comment": "Jira Cloud, read-only (searchIssuesJql, getIssue). Finding and remediation state for supplier and internal issues. searchIssuesJql is a POST kept by the READ_ONLY_POST_OPS allow-list because JQL search is Jira's only query surface; it writes nothing."
     },
     "jira-assets-cmdb": {
       "type": "openapi",
       "spec": "integrations/openapi/jira-assets-cmdb.yaml",
       "foundry_connection": "conn-jira-assets",
-      "identity": "project_connection_custom_keys (conn-jira-assets; Assets read + AQL only)"
+      "identity": "project_connection_custom_keys (conn-jira-assets; Assets read + AQL only)",
+      "_comment": "Jira Assets (CMDB), read-only (aqlSearchObjects, getObject, listObjectSchemas). Service ownership, dependencies and the impacted-entity picture behind requirement d. AQL search is an allow-listed query POST."
     },
     "onetrust": {
       "type": "openapi",
       "spec": "integrations/openapi/onetrust.yaml",
       "foundry_connection": "conn-onetrust",
-      "identity": "project_connection_custom_keys (conn-onetrust; OneTrust viewer role)"
+      "identity": "project_connection_custom_keys (conn-onetrust; OneTrust viewer role)",
+      "_comment": "OneTrust, read-only (listAssessments, getAssessment, exportAssessmentPdf, listInventoryVendors). The source for requirements b, c and d: completed assessments and the vendor inventory. The PDF export is a read of an artefact OneTrust already produced."
     },
     "securityscorecard": {
       "type": "openapi",
       "spec": "integrations/openapi/securityscorecard.yaml",
       "foundry_connection": "conn-securityscorecard",
-      "identity": "project_connection_custom_keys (conn-securityscorecard; read token)"
+      "identity": "project_connection_custom_keys (conn-securityscorecard; read token)",
+      "_comment": "SecurityScorecard, read-only (getCompanySummary, getCompanyFactors, getCompanyHistory, getPortfolios). External rating evidence for the OSINT assessments — one input among several, never the verdict on its own."
     },
     "defender-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/defender-graph.yaml",
       "foundry_connection": "conn-defender-graph",
-      "identity": "project_managed_identity (app-only Graph; SecurityIncident/SecurityAlert/ThreatHunting .Read.All)"
+      "identity": "project_managed_identity (app-only Graph; SecurityIncident/SecurityAlert/ThreatHunting .Read.All)",
+      "_comment": "Microsoft Defender via Graph security, read-only (listIncidents, getIncident, listAlerts, runHuntingQuery, listSecureScores). Incident context for briefs and the supplier-relevance question 'did this touch us?'. runHuntingQuery is an allow-listed KQL query POST."
     },
     "sharepoint-graph": {
       "type": "openapi",
       "spec": "integrations/openapi/sharepoint-graph.yaml",
       "foundry_connection": "conn-sharepoint-graph",
-      "identity": "project_managed_identity (app-only Graph; Sites.Selected read grant on the one InfoSec Assurance site)"
+      "identity": "project_managed_identity (app-only Graph; Sites.Selected read grant on the one InfoSec Assurance site)",
+      "_comment": "SharePoint through Microsoft Graph, read-only (listDrives, listChildren, listChildrenByPath, getItemByPath, driveSearch, small-file download). The evidence library for requirement d2 and prior reports for context. Writing is NOT here: only the delivery Function's managed identity writes, after approval. searchContent is an allow-listed query POST."
     },
     "iaf-api": {
       "type": "openapi",
       "spec": "integrations/openapi/iaf-api.yaml",
       "foundry_connection": "conn-iaf-api",
-      "identity": "project_connection_custom_keys (conn-iaf-api; X-API-Key, read scopes)"
+      "identity": "project_connection_custom_keys (conn-iaf-api; X-API-Key, read scopes)",
+      "_comment": "The internal assurance API (IAF), read-only for the agents (listSupplierAssessments, getAssessment, getControlCatalogue, getSupplierRiskProfile). submitFinding exists in the spec and is STRIPPED at attach time: findings reach IAF through the approved pipeline, never from an agent."
     },
     "confluence-cloud": {
       "type": "openapi",
       "spec": "integrations/openapi/confluence-cloud.yaml",
       "foundry_connection": "conn-confluence",
-      "identity": "project_connection_custom_keys (conn-confluence; read:content, read:space)"
+      "identity": "project_connection_custom_keys (conn-confluence; read:content, read:space)",
+      "_comment": "Euronext Confluence Cloud, read-only (searchContent, getPage, listChildPages, listAttachments, listSpaces). The advisory and forum agents read policy, standard and procedure pages so an answer reflects what Euronext has actually written down rather than the model's general knowledge. GET-only spec — nothing to strip."
     },
     "enx-gateway-mcp": {
       "type": "mcp",
       "config": "integrations/mcp/enx-gateway.json",
       "foundry_connection": "conn-enx-gateway",
-      "identity": "project_connection_custom_keys (conn-enx-gateway; bearer held in the connection, NOT in this repo and no longer passed as a run-time header - finding C10)"
+      "identity": "project_connection_custom_keys (conn-enx-gateway; bearer held in the connection, NOT in this repo and no longer passed as a run-time header - finding C10)",
+      "_comment": "The internal ENX gateway MCP server. Read-only tools only (readOnlyHint), bearer held in Key Vault behind the project connection — never in a header, a workflow body or this file. Gives the agents the internal tooling reach requirement i asks for."
     },
     "web-search": {
       "type": "bing_grounding",
@@ -73,7 +82,8 @@
       "type": "openapi",
       "spec": "integrations/openapi/entra-iam-graph.yaml",
       "foundry_connection": "conn-entra-iam",
-      "identity": "project_managed_identity (app-only Graph; User/Group/Application.Read.All, AccessReview.Read.All)"
+      "identity": "project_managed_identity (app-only Graph; User/Group/Application.Read.All, AccessReview.Read.All)",
+      "_comment": "Entra ID via Graph, read-only (listUsers, listGroups, listGroupMembers, listDirectoryRoles, listRoleMembers, listServicePrincipals, listAccessReviews). Identity and access context for assessments and access reviews — directory reads only, never a directory change."
     },
     "osint-proxy": {
       "type": "openapi",

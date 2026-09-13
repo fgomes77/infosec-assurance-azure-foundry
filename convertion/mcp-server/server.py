@@ -155,6 +155,33 @@ def list_agents() -> list[dict]:
 
 
 @mcp.tool()
+def catalog(area: str = "") -> dict:
+    """The platform's own catalogue: every system (a-j), agent, pipeline,
+    workflow, connection, template, dashboard query and runbook, each with
+    what it is and where it lives — the same inventory the ENX Assurance
+    Console page shows, so a chat client and the page can never disagree.
+
+    Pass `area` to narrow: systems | develop | agents | pipelines | workflows |
+    connections | templates | queries | docs. Omit it for everything.
+
+    Answer capability questions from THIS, never from memory: it is generated
+    from the registries, so it describes the platform as deployed rather than
+    as remembered.
+    """
+    path = Path(__file__).resolve().parent.parent / "build" / "console" / "catalog.json"
+    if not path.is_file():
+        return {"error": "catalogue not built",
+                "fix": "python3 scripts/build_console.py (deploy.sh runs it)"}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not area:
+        return data
+    if area not in data:
+        return {"error": f"unknown area {area!r}",
+                "areas": [k for k in data if k != "generated"]}
+    return {"generated": data["generated"], area: data[area]}
+
+
+@mcp.tool()
 def save_memory(note: str, subject: str = "", author: str = "") -> str:
     """Persist a durable team-memory note (decision, supplier fact, agreed
     position) into the team's durable memory. One self-contained fact per

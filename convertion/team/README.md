@@ -410,3 +410,8 @@ ISMS manager; DPO = DPO team; SOC = Euronext SOC/CSIRT.
 | `mcp-server/README.md` Security notes | add `- Clients: only MCP clients on the approved AI-tooling register may connect (team/README.md §12) — a client's model provider receives Euronext data.` |
 | `orchestrator/README.md` Governance | add `Thread and memory conventions (ownership metadata, retention, note format, who may delete): ../team/README.md §8.` |
 | `sharepoint/README.md` Permissions | add `Human roles on the site (owners/members/visitors, unique Read on Reports/ and Templates/): ../team/README.md §5.` |
+
+- `OWNER_WORKBENCH.md` — the accountable owner's single page: build and open
+  the ENX Assurance Console, the change map (what to edit, what to run
+  before, how to apply, which tier), the full gate set in CI order, how to
+  develop a new system end to end, what to watch, and the operating rhythm.

@@ -1,5 +1,12 @@
 # Microsoft Foundry Conversion
 
+> **Start here.** The whole platform in one page: build the **ENX Assurance
+> Console** with `python3 scripts/build_console.py` and open
+> `build/console/enx-console.html` — every system, agent, pipeline, workflow,
+> connection, template, dashboard query and runbook, each with what it is and
+> where it lives, filterable. The owner's change map, gate set and operating
+> rhythm: `team/OWNER_WORKBENCH.md`. Users: `team/USER_QUICKSTART.md`.
+
 This folder converts the Claude account export in `../claude-account-export/`
 into a deployable **Microsoft Foundry (formerly Azure AI Foundry)**
 environment that replicates the same toolset: every skill becomes a Foundry
