@@ -93,6 +93,31 @@ version is not in the ledger. Workflows that take the agent from the caller
 accept the same `<agent-name>:<version>` string and split it into the
 reference; a bare name is tolerated and pins nothing.
 
+## Loop concurrency (every `Foreach` is bounded on purpose)
+
+A Logic Apps `Foreach` with no `runtimeConfiguration.concurrency` runs up to
+**20 branches in parallel**. Every loop here calls a rate-limited API —
+Jira Cloud, Microsoft Graph, OneTrust, the Foundry data plane — which answers
+the excess with 429s that the connector then retries. Unbounded parallelism is
+therefore *slower and more expensive* than a small steady number of branches,
+and it burns the same per-action billing twice.
+
+Every `Foreach` in this folder declares its bound:
+
+| Workflow | Loop | Repetitions | Why that number |
+|---|---|---|---|
+| `agent-fanout` | `For_each_task` | 5 | Independent agent calls; 5 keeps the Foundry data plane inside its per-project rate limit |
+| `mailbox-intake` | `For_each_message` | 1 | Serial by design — a message may create a supplier folder another message also needs |
+| `mailbox-intake` | `For_each_attachment` | 2 | Graph throttles per site; the parent loop is serial, so the platform makes at most two concurrent Graph writes |
+| `jira-finding-sync` | `For_each_updated_finding_ticket` | 2 | Jira Cloud per-tenant rate limit |
+| `onetrust-assessment-intake` | `For_each_completed_assessment` | 2 | OneTrust API quota |
+| `report-delivery-pipeline` | `Upload_audit_artefacts` | 1 | Ordered audit trail; the artefacts are small |
+| `scheduled-deepsearch` | `For_each_watchlist_supplier` | 2 | Each branch is a full reasoning-tier assessment |
+| `scheduled-evaluation-redteam` | both loops | 1 | Evaluation must be reproducible, so runs never interleave |
+
+When adding a workflow: set the bound explicitly, and say in the action's
+`description` which limit it respects. "The default is fine" is not a bound.
+
 ## Human approval gates
 
 Every **submission of record** in these workflows — creating a Jira issue

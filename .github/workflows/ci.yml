@@ -55,13 +55,33 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Cache pip wheels
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: pip-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+
+      - name: Cache the pinned Bicep CLI
+        id: bicep-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/bicep
+          key: bicep-${{ runner.os }}-${{ env.BICEP_VERSION }}
+
       - name: Toolchain (no Azure SDK — every gate below runs without Azure)
         run: |
+          # One install for the whole job: the test step used to re-invoke pip
+          # mid-run, which re-resolved the index on a cold cache every time.
           python3 -m pip install --disable-pip-version-check --quiet \
-            PyYAML==6.0.2 jsonschema==4.23.0
-          curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
-            -o "${RUNNER_TEMP}/bicep"
-          sudo install -m 0755 "${RUNNER_TEMP}/bicep" /usr/local/bin/bicep
+            PyYAML==6.0.2 jsonschema==4.23.0 pytest requests
+          mkdir -p "$HOME/.local/bin"
+          if [ ! -x "$HOME/.local/bin/bicep" ]; then
+            curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
+              -o "$HOME/.local/bin/bicep"
+            chmod 0755 "$HOME/.local/bin/bicep"
+          fi
+          sudo install -m 0755 "$HOME/.local/bin/bicep" /usr/local/bin/bicep
           bicep --version
           # shellcheck: the shell lint of step [4]. Present on the hosted image;
           # installed from apt if a future image drops it, so REQUIRE_SHELLCHECK=1
@@ -93,6 +113,9 @@ jobs:
       - name: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'
         run: python3 convertion/ci/tests/test_residency.py
 
+      - name: '[4b2] Workflow efficiency gate (bounded Foreach concurrency)'
+        run: python3 convertion/ci/tests/test_workflow_efficiency.py
+
       - name: '[4c] Self-knowledge pack is in step with the kit'
         run: python3 convertion/scripts/build_self_knowledge.py --check
 
@@ -101,7 +124,6 @@ jobs:
 
       - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
         run: |
-          python3 -m pip install --quiet pytest jsonschema requests
           python3 -m pytest convertion/functions/delivery/tests \
             convertion/functions/office-tools/tests \
             convertion/scripts/tests -q

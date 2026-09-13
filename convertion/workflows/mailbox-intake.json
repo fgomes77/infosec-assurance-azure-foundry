@@ -170,7 +170,13 @@
                   ]
                 }
               }
-            }
+            },
+            "runtimeConfiguration": {
+              "concurrency": {
+                "repetitions": 2
+              }
+            },
+            "description": "Bounded to 2: the attachment loop uploads to SharePoint through Microsoft Graph, which throttles per site. The parent message loop is already serial (repetitions 1), so this caps the platform at two concurrent Graph writes — inside the throttling envelope, with no retry storm."
           },
           "Create_triage_conversation": {
             "_comment": "One conversation per inbound e-mail (the engagement context stays with the supplier/service pair).",

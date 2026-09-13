@@ -65,6 +65,9 @@
     "logRetentionDays": {
       "value": 365
     },
+    "logInteractiveRetentionDays": {
+      "value": 90
+    },
     "storageSku": {
       "value": "Standard_ZRS"
     },

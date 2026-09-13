@@ -16,9 +16,14 @@
 let lookback = 24h;
 let p95LatencyBudgetMs = 300000;          // 5 min per run — reasoning-tier deliverables
 let dailyTokenBudget   = 5000000;         // per agent per day; revisit monthly
-// EUR per 1M tokens — placeholders, keep aligned with the current Azure price list.
-let priceIn  = dynamic({"gpt-4o-mini": 0.15, "gpt-4o": 2.50, "o3-mini": 1.10});
-let priceOut = dynamic({"gpt-4o-mini": 0.60, "gpt-4o": 10.00, "o3-mini": 4.40});
+// EUR per 1M tokens — placeholders, keep aligned with the current Azure price
+// list AND with the deployments of record in integrations/registry.json
+// `model_tiers._deployment_of_record`. The reasoning tier is o4-mini, not
+// o3-mini (finding C4): a price map that names a model the platform does not
+// run prices the most expensive tier at zero, so the cost breach never fires
+// where it matters. `unpricedModel` below makes that failure visible instead.
+let priceIn  = dynamic({"gpt-4o-mini": 0.15, "gpt-4o": 2.50, "o4-mini": 1.10});
+let priceOut = dynamic({"gpt-4o-mini": 0.60, "gpt-4o": 10.00, "o4-mini": 4.40});
 AppDependencies
 | where TimeGenerated > ago(lookback)
 | where isnotempty(Properties["gen_ai.agent.name"]) or isnotempty(Properties["gen_ai.request.model"])
@@ -26,20 +31,30 @@ AppDependencies
          model     = coalesce(tostring(Properties["gen_ai.request.model"]), "(unknown)"),
          inTok     = tolong(Properties["gen_ai.usage.input_tokens"]),
          outTok    = tolong(Properties["gen_ai.usage.output_tokens"]),
-         isRun     = Name has "process_thread_run" or Name has "invoke_agent" or Name has "create_run"
-| summarize runs         = countif(isRun),
+         isRun     = Name has "process_thread_run" or Name has "invoke_agent" or Name has "create_run",
+         // sampling weight: 1 when nothing was sampled, n when this item
+         // stands for n. Without it a sampled workspace under-reports the
+         // token bill by the sampling ratio and the budget breach never fires.
+         weight    = toreal(coalesce(ItemCount, 1))
+| summarize runs         = toreal(sum(iff(isRun, weight, 0.0))),
             p50Ms        = percentile(iff(isRun, DurationMs, real(null)), 50),
             p95Ms        = percentile(iff(isRun, DurationMs, real(null)), 95),
-            inputTokens  = sum(inTok),
-            outputTokens = sum(outTok)
+            inputTokens  = sum(inTok * weight),
+            outputTokens = sum(outTok * weight)
           by agentName, model
 | extend totalTokens = inputTokens + outputTokens
 | extend estCostEur = round((todouble(inputTokens)  / 1000000.0) * todouble(priceIn[model])
                           + (todouble(outputTokens) / 1000000.0) * todouble(priceOut[model]), 2)
+| extend unpricedModel = isnull(priceIn[model]) or isnull(priceOut[model])
 | extend breach = case(p95Ms > p95LatencyBudgetMs, "latency-p95",
                        totalTokens > dailyTokenBudget, "token-budget",
+                       // a model the price map does not know is a breach of
+                       // its own: its cost is invisible until someone adds it
+                       unpricedModel and totalTokens > 0, "unpriced-model",
                        "")
-| project agentName, model, runs, p50Ms = round(p50Ms, 0), p95Ms = round(p95Ms, 0),
-          inputTokens, outputTokens, totalTokens, estCostEur, breach
+| project agentName, model, runs = round(runs, 0),
+          p50Ms = round(p50Ms, 0), p95Ms = round(p95Ms, 0),
+          inputTokens = round(inputTokens, 0), outputTokens = round(outputTokens, 0),
+          totalTokens = round(totalTokens, 0), estCostEur, breach
 | where isnotempty(breach)
 | order by totalTokens desc

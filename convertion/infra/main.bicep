@@ -114,9 +114,17 @@ param publicNetworkAccess string = 'Enabled'
 @description('Deploy the VNet, private DNS zones and private endpoints (network.bicep)')
 param enablePrivateNetworking bool = false
 
-@description('Log Analytics / App Insights retention in days (≥ 365 for DORA Art. 28 evidence)')
+@description('TOTAL log retention in days — interactive + archive (≥ 365 for DORA Art. 28 evidence)')
 @minValue(365)
 param logRetentionDays int = 365
+
+@description('INTERACTIVE (queryable) retention in days. Everything between this and logRetentionDays is held in the archive tier, which costs roughly a tenth of interactive storage and is still retained evidence: it is restored or searched when an audit or an investigation needs it. 90 days covers every query the platform ships (longest lookback: 30 days) plus a full quarter of incident review.')
+@minValue(30)
+@maxValue(730)
+param logInteractiveRetentionDays int = 90
+
+@description('Daily ingestion cap in GB for the workspace. -1 = uncapped, which is the DEFAULT ON PURPOSE: a cap does not slow ingestion, it DROPS telemetry for the rest of the day, and the dropped items would include the egress detector\'s AppDependencies and the DORA Art. 28 evidence trail. Cost is bounded by the retention tiering above and watched by the budget alert in cost.bicep — not by discarding security evidence. Set a positive value only for a short-lived non-production workspace.')
+param logDailyQuotaGb int = -1
 
 @description('Deliverables storage redundancy (ZRS or GRS within the EU pair)')
 @allowed(['Standard_ZRS', 'Standard_GRS', 'Standard_LRS'])
@@ -462,9 +470,41 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   location: location
   properties: {
     sku: { name: 'PerGB2018' }
-    retentionInDays: logRetentionDays // DORA Art. 28 evidence: ≥ 1 year
+    // Interactive (queryable) window. Total retention — the DORA Art. 28
+    // evidence horizon — is set per table below as totalRetentionInDays, so
+    // the evidence is kept for the full year without paying interactive
+    // rates for eleven months nobody queries.
+    retentionInDays: logInteractiveRetentionDays
+    workspaceCapping: { dailyQuotaGb: logDailyQuotaGb }
   }
 }
+
+// Per-table retention split. The interactive window serves every shipped
+// query and alert (longest lookback 30 days); the remainder of
+// logRetentionDays lives in the archive tier at roughly a tenth of the cost
+// and is restorable for an audit or an investigation.
+//
+// These are the tables the platform's own evidence and detection depend on
+// (operations/MONITORING.md §2): agent and Function dependencies carry the
+// gen_ai.* attributes the token, cost and egress queries read; requests and
+// exceptions carry the delivery trail.
+var evidenceTables = [
+  'AppDependencies'
+  'AppRequests'
+  'AppExceptions'
+  'AppTraces'
+]
+
+resource evidenceTableRetention 'Microsoft.OperationalInsights/workspaces/tables@2023-09-01' = [
+  for t in evidenceTables: {
+    parent: logAnalytics
+    name: t
+    properties: {
+      retentionInDays: logInteractiveRetentionDays
+      totalRetentionInDays: logRetentionDays
+    }
+  }
+]
 
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   name: '${baseName}-appi'
@@ -474,7 +514,9 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: logAnalytics.id
-    RetentionInDays: logRetentionDays
+    // Workspace-based: the workspace tables above own the real retention.
+    // This value only mirrors the interactive window in the portal blade.
+    RetentionInDays: logInteractiveRetentionDays
   }
 }
 

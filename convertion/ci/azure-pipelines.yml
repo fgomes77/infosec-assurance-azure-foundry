@@ -97,6 +97,9 @@ stages:
           - script: python3 convertion/ci/tests/test_residency.py
             displayName: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'
 
+          - script: python3 convertion/ci/tests/test_workflow_efficiency.py
+            displayName: '[4b2] Workflow efficiency gate (bounded Foreach concurrency)'
+
           - script: python3 convertion/scripts/build_self_knowledge.py --check
             displayName: '[4c] Self-knowledge pack is in step with the kit'
 

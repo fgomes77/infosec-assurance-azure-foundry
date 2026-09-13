@@ -223,7 +223,13 @@
               }
             }
           }
-        }
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "repetitions": 2
+          }
+        },
+        "description": "Bounded to 2: without runtimeConfiguration a Foreach runs up to 20 branches in parallel, and each branch calls Jira Cloud. Jira's per-tenant rate limit answers the excess with 429s that the connector then retries, so unbounded parallelism is slower AND more expensive than two steady branches."
       }
     },
     "outputs": {}
