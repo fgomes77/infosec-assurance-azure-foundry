@@ -43,8 +43,10 @@ the registry is a shared delta — until it exists, edit both together.
 Tool support is a property of the MODEL, not of the tier label. `o3-mini`
 supports **no** OpenAPI, MCP, AI Search / `file_search`, SharePoint or Web
 Search tools, yet every advisory, analyzer and research agent above is
-pinned to `reasoning` AND carries the 11-tool read-only surface
-(`advisory_read_only_toolset` in `integrations/registry.json`). The
+pinned to `reasoning` AND carries the 11-tool read-only core surface
+(`advisory_read_only_toolset.core` in `integrations/registry.json`; the
+supplier-facing agents add `osint-proxy` and a couple of extras, listed there
+as `supplier_facing`). The
 `reasoning` deployment is therefore a tool-capable reasoning model
 (`o4-mini` of record; validate candidates on the dev comparison set before
 promotion). Pinning the tier back to `o3-mini` would leave those agents

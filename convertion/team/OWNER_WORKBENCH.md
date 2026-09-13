@@ -31,7 +31,8 @@ inventory is `build/console/catalog.json`, which the MCP `catalog` tool serves
 | Locally | `python3 scripts/build_console.py && open build/console/enx-console.html` |
 | From any MCP client | tool `catalog` (optionally `area=agents`, `area=develop`, …) |
 | For the team | store the page in SharePoint `Governance/Console/` after each platform release (`operations/LIFECYCLE.md`) |
-| In CI | `python3 scripts/build_console.py --check` fails the build when an agent, connection, workflow or query has no description |
+| In CI | `python3 scripts/build_console.py --check
+python3 scripts/audit_coverage.py` fails the build when an agent, connection, workflow or query has no description |
 
 That last row is the point of the check: an item nobody described is an item
 nobody can safely use, so the console treats a missing description as a defect

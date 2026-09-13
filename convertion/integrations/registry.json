@@ -596,8 +596,8 @@
     }
   },
   "advisory_read_only_toolset": {
-    "_comment": "Requirement g/h/i: EVERY information-providing (advisory/knowledge) system carries the full Euronext read surface - Confluence, Jira, CMDB, SharePoint, OneTrust, Defender (security monitoring), Entra IAM, SecurityScorecard (risk monitoring), IAF (governance/compliance/AET findings), ENX gateway MCP, sanitised web search. All READ-ONLY: non-GET stripped, no write_connections. apply_advisory_profile.py additionally appends agents/advisory_addendum.md (Word/Excel/PowerPoint/HTML file generation) and ensures code_interpreter. enx-tprm-control-center is deliberately NOT in this list: it is a router (light tier, no tools).",
-    "tools": [
+    "_comment": "Requirement g/h/i: every information-providing (advisory/knowledge) system carries the full Euronext READ surface — Confluence, Jira, CMDB, SharePoint, OneTrust, Defender (security monitoring), Entra IAM, SecurityScorecard (risk monitoring), IAF (governance/compliance/AET findings), the ENX gateway MCP and sanitised web search. All READ-ONLY: non-GET operations are stripped at attach time and no write_connections grant exists. Applied by scripts/apply_advisory_profile.py; enforced by scripts/audit_coverage.py, which fails the build if an agent listed here does not carry the core toolset — a declared reach the deployment does not have reads as access that exists, which is worse than no declaration.",
+    "core": [
       "confluence-cloud",
       "jira-cloud",
       "jira-assets-cmdb",
@@ -608,9 +608,23 @@
       "securityscorecard",
       "iaf-api",
       "enx-gateway-mcp",
-      "web-search",
-      "osint-proxy"
+      "web-search"
     ],
+    "_supplier_facing_note": "osint-proxy reads PUBLIC supplier pages (Trust Center, DPA, subprocessor lists). It belongs to the agents that assess a named third party, not to a framework advisor answering an ISO 27001 or DORA question — those already have sanitised web search for public material, and a narrower tool surface is both cheaper and easier to defend. The five framework advisors therefore carry the core eleven and nothing more, deliberately.",
+    "supplier_facing": {
+      "cyber-forum": [
+        "osint-proxy",
+        "azure-devops"
+      ],
+      "tpsrca-assessment-engine": [
+        "osint-proxy"
+      ],
+      "infosec-assurance-advisor": [
+        "osint-proxy",
+        "exchange-graph",
+        "azure-devops"
+      ]
+    },
     "agents": [
       "iso27001",
       "iso42001",

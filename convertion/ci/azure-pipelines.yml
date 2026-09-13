@@ -109,6 +109,9 @@ stages:
           - script: python3 convertion/scripts/build_console.py --check
             displayName: '[4c3] Console catalogue: every item is described'
 
+          - script: python3 convertion/scripts/audit_coverage.py
+            displayName: '[4c4] Cross-artefact coverage audit'
+
           - script: |
               set -euo pipefail
               python3 -m pip install --quiet pytest jsonschema requests

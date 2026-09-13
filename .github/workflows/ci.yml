@@ -125,6 +125,9 @@ jobs:
       - name: '[4c3] Console catalogue: every item is described'
         run: python3 convertion/scripts/build_console.py --check
 
+      - name: '[4c4] Cross-artefact coverage audit (the files agree with each other)'
+        run: python3 convertion/scripts/audit_coverage.py
+
       - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
         run: |
           python3 -m pytest convertion/functions/delivery/tests \

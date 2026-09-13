@@ -51,9 +51,16 @@ Application Insights (`../enterprise/series/08-guardrails-observability-evaluati
   management, GRC platforms, AET) reaches agents only through the ENX
   gateway MCP server or a new OpenAPI spec added under the same
   read-only-by-construction pattern.
-- The registry's `advisory_read_only_toolset` applies this full read
-  surface uniformly to EVERY information-providing system (framework
-  advisors, cyber-forum, tpsrca, control-center, advisor), and the
+- The registry's `advisory_read_only_toolset` applies the same **core**
+  eleven-tool read surface to EVERY information-providing system (framework
+  advisors, cyber-forum, tpsrca, advisor). `osint-proxy` is the one
+  deliberate exception: it reads public SUPPLIER pages, so it goes to the
+  agents that assess a named third party (cyber-forum, tpsrca, advisor) and
+  not to a framework advisor answering an ISO 27001 or DORA question, which
+  already has sanitised web search for public material. The split is declared
+  in the registry (`core` / `supplier_facing`) and enforced by
+  `scripts/audit_coverage.py`, because a declared reach the deployment does
+  not have reads as access that exists. The
   persona preamble carries the read-only + egress rules into every agent
   on the platform — the rules exist in the instructions layer, the tool
   layer, and the credential layer at once.
