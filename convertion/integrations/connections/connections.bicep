@@ -59,10 +59,10 @@ param azureDevOpsReaderToken string = ''  // Entra token/PAT of the Reader-only 
 @secure()
 param enxGatewayToken string = ''         // ENX gateway bearer, read-only tool scope (Key Vault secret {kv-secret-name-enx-gateway-token})
 
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: foundryAccountName
 }
-resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' existing = {
+resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' existing = {
   parent: foundry
   name: projectName
 }
@@ -80,7 +80,7 @@ var keyed = [
   { name: 'conn-enx-gateway', target: enxGatewayMcpUrl, header: 'Authorization', value: 'Bearer ${enxGatewayToken}', scope: 'ENX gateway MCP: allow-listed read tools only (readOnlyHint=true), require_approval waiver limited to that list - ../mcp/enx-gateway.json' }
 ]
 
-resource keyedConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = [for c in keyed: if (deployKeyedConnections) {
+resource keyedConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01' = [for c in keyed: if (deployKeyedConnections) {
   parent: project
   name: c.name
   properties: {
@@ -101,7 +101,7 @@ var graphMi = [
   { name: 'conn-exchange-graph', scope: 'Mail.Read + Exchange application access policy restricted to the assurance shared mailbox' }
 ]
 
-resource graphConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = [for g in graphMi: {
+resource graphConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01' = [for g in graphMi: {
   parent: project
   name: g.name
   properties: {
@@ -126,7 +126,7 @@ var delegated = [
   { name: 'conn-m365-personal', scope: 'Calendars.Read Mail.Read (delegated)' }
 ]
 
-resource delegatedConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = [for d in delegated: {
+resource delegatedConnections 'Microsoft.CognitiveServices/accounts/projects/connections@2025-06-01' = [for d in delegated: {
   parent: project
   name: d.name
   properties: {

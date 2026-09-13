@@ -9,7 +9,7 @@
 #   FOUNDRY_PROJECT_NAME KEY_VAULT_NAME, plus per-connection target URLs below.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-API="2025-04-01-preview"
+API="2025-06-01"
 BASE="https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID:?}/resourceGroups/${AZURE_RESOURCE_GROUP:?}/providers/Microsoft.CognitiveServices/accounts/${FOUNDRY_ACCOUNT_NAME:?}/projects/${FOUNDRY_PROJECT_NAME:?}/connections"
 VERIFY=0; [ "${1:-}" = "--verify" ] && VERIFY=1
 

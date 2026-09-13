@@ -1,5 +1,5 @@
 {
-  "_comment": "Template change-control workflow (requirement j). Fired by the template-manager agent's review package. Publishes the visual before/after preview to a review location, blocks on human approval (HttpWebhook, P7D), and ONLY on APPROVED runs scripts/update_templates.py (via an Azure Container App job / DevOps pipeline hook) to write the template back to the conversion source, bump templates/registry.json, and re-run convert->verify->create so every dependent agent, vector store, code_interpreter file and delivery renderer updates together. REJECTED or expiry -> nothing changes.",
+  "_comment": "Template change-control workflow (requirement j). Fired by the template-manager agent's review package. Publishes the visual before/after preview to a review location, blocks on human approval (HttpWebhook, P7D), and ONLY on APPROVED runs that ALSO pass output-verifier on a sample rendered with the proposed template (templates/samples via the delivery Function /render; the theme tokens, which have no renderer, are verified as source text) runs scripts/update_templates.py (via an Azure Container App job / DevOps pipeline hook) to write the template back to the conversion source, bump templates/registry.json, and re-run convert->verify->create so every dependent agent, vector store, code_interpreter file and delivery renderer updates together. REJECTED or expiry -> nothing changes.",
   "definition": {
     "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
     "contentVersion": "1.0.0.0",
@@ -11,6 +11,25 @@
       "deliveryFunctionKey": {
         "type": "securestring",
         "defaultValue": "{function-key-from-key-vault}"
+      },
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}",
+        "_comment": "Used only for the output-verifier turn on the rendered sample (governance/HUMAN_APPROVAL.md Layer 3, exception b)."
+      },
+      "apiVersion": {
+        "type": "string",
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1). Bind to the FOUNDRY_API_VERSION app setting."
+      },
+      "verifierAgentName": {
+        "type": "string",
+        "defaultValue": "output-verifier"
+      },
+      "verifierAgentVersion": {
+        "type": "string",
+        "defaultValue": "",
+        "_comment": "Promoted version of output-verifier (build/agent-versions.json, finding C19); empty runs the latest."
       },
       "sharepointDriveId": {
         "type": "string",
@@ -47,7 +66,8 @@
               "changeSummary",
               "previewHtml",
               "newTemplateBase64",
-              "requestedBy"
+              "requestedBy",
+              "sampleFormat"
             ],
             "properties": {
               "templateId": {
@@ -70,6 +90,18 @@
               },
               "requestedBy": {
                 "type": "string"
+              },
+              "sampleFormat": {
+                "type": "string",
+                "description": "Format of the sample render, from templates/registry.json `format` (html, docx, pptx, xlsx, pdf, png). Anything else (e.g. the json theme tokens) takes the source-text verification branch."
+              },
+              "sampleDataJson": {
+                "type": "string",
+                "description": "Contents of the template's registry `sample` file (templates/samples/<id>.json) - the contract the renderer consumes. Required for data-driven formats (docx/pptx/xlsx)."
+              },
+              "sampleHtml": {
+                "type": "string",
+                "description": "For html templates: templates/samples/<id>.json rendered with the NEW template by template-manager - the complete single-file HTML document the delivery Function re-renders and the verifier reads."
               }
             }
           }
@@ -149,45 +181,517 @@
           ]
         },
         "actions": {
-          "Apply_template_update": {
-            "_comment": "Triggers the job that runs: update_templates.py --template <id> --file <new> => writes source, bumps registry version, convert_skills.py, verify_conversion.py, create_agents.py --only <consumers>, stage_renderers.py. Atomic: any step failing rolls the source back.",
+          "Upload_approved_template": {
+            "_comment": "Stores the APPROVED template bytes next to the review page, so the artefact that was approved is retrievable from the review location independently of the Logic App run history (audit chain: review page -> approved content -> audit.log line). The apply job still receives the same bytes inline, so what was approved and what is applied cannot diverge.",
             "type": "Http",
             "inputs": {
               "method": "POST",
-              "uri": "@parameters('applyPipelineUrl')",
+              "uri": "@{parameters('deliveryFunctionBaseUrl')}/upload",
+              "queries": {
+                "code": "@parameters('deliveryFunctionKey')"
+              },
               "headers": {
                 "Content-Type": "application/json"
               },
               "body": {
-                "templateId": "@{triggerBody()?['templateId']}",
-                "newTemplateBase64": "@{triggerBody()?['newTemplateBase64']}",
-                "approvedBy": "@{body('Human_approval_gate')?['approver']}",
-                "approvalRunId": "@{workflow()?['run']?['name']}"
+                "driveId": "@{parameters('sharepointDriveId')}",
+                "folderId": "@{parameters('templateReviewRootItemId')}",
+                "fileName": "TemplateApproved_@{triggerBody()?['templateId']}_@{formatDateTime(utcNow(),'yyyy-MM-dd_HHmm')}.txt",
+                "contentBase64": "@{triggerBody()?['newTemplateBase64']}",
+                "share": false
               },
               "retryPolicy": {
                 "type": "exponential",
                 "count": 4,
-                "interval": "PT30S"
+                "interval": "PT10S"
               }
             },
             "runAfter": {}
           },
-          "Notify_applied": {
-            "type": "Http",
-            "inputs": {
-              "method": "POST",
-              "uri": "@parameters('teamsWebhookUrl')",
-              "headers": {
-                "Content-Type": "application/json"
-              },
-              "body": {
-                "text": "✅ Template @{triggerBody()?['templateId']} update APPROVED by @{body('Human_approval_gate')?['approver']} and propagation started. Review page: @{body('Publish_visual_review_page')?['shareUrl']}"
-              }
+          "If_sample_renderable": {
+            "_comment": "Templates with a renderer are verified on a RENDERED sample; the theme tokens (format json, no renderer) are verified on the proposed source text. Either way an output-verifier PASS is required before anything is written - governance/HUMAN_APPROVAL.md Layer 3 exception (b).",
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "equals": [
+                    "@contains(createArray('html','pdf','png','docx','pptx','xlsx'), toLower(coalesce(triggerBody()?['sampleFormat'],'')))",
+                    true
+                  ]
+                }
+              ]
             },
             "runAfter": {
-              "Apply_template_update": [
+              "Upload_approved_template": [
                 "Succeeded"
               ]
+            },
+            "actions": {
+              "Render_sample_with_new_template": {
+                "_comment": "Renders the registry `sample` dataset with the PROPOSED template through the delivery Function - the same renderer a real deliverable uses. A schema mismatch (400) or a failed quality gate (422) fails this action, so the run never reaches Apply_template_update.",
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/render",
+                  "queries": {
+                    "code": "@parameters('deliveryFunctionKey')"
+                  },
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": {
+                    "format": "@{toLower(coalesce(triggerBody()?['sampleFormat'],''))}",
+                    "template": "@{triggerBody()?['templateId']}",
+                    "fileName": "TemplateSample_@{triggerBody()?['templateId']}_@{formatDateTime(utcNow(),'yyyy-MM-dd_HHmm')}.@{toLower(coalesce(triggerBody()?['sampleFormat'],''))}",
+                    "content": "@{coalesce(triggerBody()?['sampleHtml'],'')}",
+                    "data": "@if(equals(toLower(coalesce(triggerBody()?['sampleFormat'],'')),'html'), null, json(coalesce(triggerBody()?['sampleDataJson'],'{}')))"
+                  },
+                  "retryPolicy": {
+                    "type": "exponential",
+                    "count": 4,
+                    "interval": "PT10S"
+                  }
+                },
+                "runAfter": {}
+              },
+              "Create_verifier_conversation_rendered": {
+                "_comment": "Separate conversation: the sample is verified out of the template-manager's context (agents/verifier_instructions.md).",
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://ai.azure.com"
+                  },
+                  "body": {
+                    "metadata": {
+                      "source": "output-verifier",
+                      "reportType": "template-sample",
+                      "templateId": "@{triggerBody()?['templateId']}",
+                      "runId": "@{workflow().run.name}"
+                    }
+                  },
+                  "retryPolicy": {
+                    "type": "exponential",
+                    "count": 4,
+                    "interval": "PT10S"
+                  }
+                },
+                "runAfter": {
+                  "Render_sample_with_new_template": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Run_sample_verifier_rendered": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://ai.azure.com"
+                  },
+                  "body": {
+                    "conversation": "@{body('Create_verifier_conversation_rendered')?['id']}",
+                    "agent_reference": "@if(empty(parameters('verifierAgentVersion')), createObject('type','agent_reference','name',parameters('verifierAgentName')), createObject('type','agent_reference','name',parameters('verifierAgentName'),'version',parameters('verifierAgentVersion')))",
+                    "input": "Deliverable type: rendered sample of template @{triggerBody()?['templateId']} (@{triggerBody()?['sampleFormat']}), produced from templates/samples with the PROPOSED template. Change summary: @{triggerBody()?['changeSummary']}. Impact: @{triggerBody()?['impactList']}. Delivery-Function quality gate: @{string(body('Render_sample_with_new_template')?['gate'])}. Verify per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Sample content: @{if(equals(toLower(coalesce(triggerBody()?['sampleFormat'],'')),'html'), coalesce(triggerBody()?['sampleHtml'],''), coalesce(triggerBody()?['sampleDataJson'],''))}",
+                    "background": true
+                  },
+                  "retryPolicy": {
+                    "type": "exponential",
+                    "count": 4,
+                    "interval": "PT10S"
+                  }
+                },
+                "runAfter": {
+                  "Create_verifier_conversation_rendered": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Until_sample_verifier_rendered": {
+                "type": "Until",
+                "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_sample_verifier_status_rendered')?['status'])",
+                "limit": {
+                  "count": 40,
+                  "timeout": "PT30M"
+                },
+                "runAfter": {
+                  "Run_sample_verifier_rendered": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Delay_10s_rendered": {
+                    "type": "Wait",
+                    "inputs": {
+                      "interval": {
+                        "count": 10,
+                        "unit": "Second"
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "Get_sample_verifier_status_rendered": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "GET",
+                      "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_sample_verifier_rendered')?['id']}?api-version=@{parameters('apiVersion')}",
+                      "authentication": {
+                        "type": "ManagedServiceIdentity",
+                        "audience": "https://ai.azure.com"
+                      }
+                    },
+                    "runAfter": {
+                      "Delay_10s_rendered": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                }
+              },
+              "Get_sample_verdict_rendered": {
+                "_comment": "Verdict text is `output_text` of the verifier response.",
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_sample_verifier_rendered')?['id']}?api-version=@{parameters('apiVersion')}",
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://ai.azure.com"
+                  }
+                },
+                "runAfter": {
+                  "Until_sample_verifier_rendered": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Sample_verdict_text_rendered": {
+                "type": "Compose",
+                "inputs": "@coalesce(body('Get_sample_verdict_rendered')?['output_text'], last(body('Get_sample_verdict_rendered')?['output'])?['content'][0]?['text'], '')",
+                "runAfter": {
+                  "Get_sample_verdict_rendered": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "If_sample_verified_rendered": {
+                "_comment": "Nothing is written unless the verifier PASSES the sample (governance/HUMAN_APPROVAL.md Layer 3, documented exception b). A FAIL leaves the template, the registry and every agent exactly as they were.",
+                "type": "If",
+                "expression": {
+                  "or": [
+                    {
+                      "startsWith": [
+                        "@trim(first(split(outputs('Sample_verdict_text_rendered'), '\n')))",
+                        "VERDICT: PASS"
+                      ]
+                    },
+                    {
+                      "equals": [
+                        "@trim(first(split(outputs('Sample_verdict_text_rendered'), '\n')))",
+                        "PASS"
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Sample_verdict_text_rendered": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Apply_template_update_rendered": {
+                    "_comment": "Triggers ci/azure-pipelines-apply-template.yml, whose parameter names these fields match one for one (approvalId, approverUpn, templateId, contentBase64 | contentUrl). That job runs update_templates.py --template <id> --file <the decoded bytes> --approved-by <approver> --approval-run <approvalId> => writes source, bumps registry version, convert_skills.py, verify_conversion.py, create_agents.py --only <consumers>, stage_renderers.py, then opens the PR. Atomic: any step failing rolls the source back, and update_templates.py REFUSES to run without --approval-run, so an out-of-band apply is impossible. contentItemId/contentWebUrl point at the archived copy in the review location for audit.",
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@parameters('applyPipelineUrl')",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "approvalId": "@{workflow()?['run']?['name']}",
+                        "approverUpn": "@{body('Human_approval_gate')?['approver']}",
+                        "templateId": "@{triggerBody()?['templateId']}",
+                        "contentBase64": "@{triggerBody()?['newTemplateBase64']}",
+                        "contentItemId": "@{body('Upload_approved_template')?['itemId']}",
+                        "contentWebUrl": "@{body('Upload_approved_template')?['webUrl']}",
+                        "sampleVerdict": "@{outputs('Sample_verdict_text_rendered')}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT30S"
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "Notify_applied_rendered": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@parameters('teamsWebhookUrl')",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "text": "✅ Template @{triggerBody()?['templateId']} update APPROVED by @{body('Human_approval_gate')?['approver']}, sample verified, propagation started. Review page: @{body('Publish_visual_review_page')?['shareUrl']}"
+                      }
+                    },
+                    "runAfter": {
+                      "Apply_template_update_rendered": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                },
+                "else": {
+                  "actions": {
+                    "Notify_sample_verifier_fail_rendered": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@parameters('teamsWebhookUrl')",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "text": "❌ Template @{triggerBody()?['templateId']} was approved by @{body('Human_approval_gate')?['approver']} but the rendered sample FAILED output-verifier - NOTHING was changed. Findings: @{outputs('Sample_verdict_text_rendered')}"
+                        }
+                      },
+                      "runAfter": {}
+                    }
+                  }
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Create_verifier_conversation_source": {
+                  "_comment": "Separate conversation: the sample is verified out of the template-manager's context (agents/verifier_instructions.md).",
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://ai.azure.com"
+                    },
+                    "body": {
+                      "metadata": {
+                        "source": "output-verifier",
+                        "reportType": "template-sample",
+                        "templateId": "@{triggerBody()?['templateId']}",
+                        "runId": "@{workflow().run.name}"
+                      }
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 4,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "runAfter": {}
+                },
+                "Run_sample_verifier_source": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://ai.azure.com"
+                    },
+                    "body": {
+                      "conversation": "@{body('Create_verifier_conversation_source')?['id']}",
+                      "agent_reference": "@if(empty(parameters('verifierAgentVersion')), createObject('type','agent_reference','name',parameters('verifierAgentName')), createObject('type','agent_reference','name',parameters('verifierAgentName'),'version',parameters('verifierAgentVersion')))",
+                      "input": "Deliverable type: template source under change control - @{triggerBody()?['templateId']} (format @{triggerBody()?['sampleFormat']}, no renderer, so there is no rendered artefact: the tokens/source text itself is the deliverable). Change summary: @{triggerBody()?['changeSummary']}. Impact: @{triggerBody()?['impactList']}. Verify per your charter - house style, completeness, no placeholder left: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Proposed content: @{base64ToString(triggerBody()?['newTemplateBase64'])}",
+                      "background": true
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 4,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "runAfter": {
+                    "Create_verifier_conversation_source": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Until_sample_verifier_source": {
+                  "type": "Until",
+                  "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_sample_verifier_status_source')?['status'])",
+                  "limit": {
+                    "count": 40,
+                    "timeout": "PT30M"
+                  },
+                  "runAfter": {
+                    "Run_sample_verifier_source": [
+                      "Succeeded"
+                    ]
+                  },
+                  "actions": {
+                    "Delay_10s_source": {
+                      "type": "Wait",
+                      "inputs": {
+                        "interval": {
+                          "count": 10,
+                          "unit": "Second"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Get_sample_verifier_status_source": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_sample_verifier_source')?['id']}?api-version=@{parameters('apiVersion')}",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://ai.azure.com"
+                        }
+                      },
+                      "runAfter": {
+                        "Delay_10s_source": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "Get_sample_verdict_source": {
+                  "_comment": "Verdict text is `output_text` of the verifier response.",
+                  "type": "Http",
+                  "inputs": {
+                    "method": "GET",
+                    "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_sample_verifier_source')?['id']}?api-version=@{parameters('apiVersion')}",
+                    "authentication": {
+                      "type": "ManagedServiceIdentity",
+                      "audience": "https://ai.azure.com"
+                    }
+                  },
+                  "runAfter": {
+                    "Until_sample_verifier_source": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "Sample_verdict_text_source": {
+                  "type": "Compose",
+                  "inputs": "@coalesce(body('Get_sample_verdict_source')?['output_text'], last(body('Get_sample_verdict_source')?['output'])?['content'][0]?['text'], '')",
+                  "runAfter": {
+                    "Get_sample_verdict_source": [
+                      "Succeeded"
+                    ]
+                  }
+                },
+                "If_sample_verified_source": {
+                  "_comment": "Nothing is written unless the verifier PASSES the sample (governance/HUMAN_APPROVAL.md Layer 3, documented exception b). A FAIL leaves the template, the registry and every agent exactly as they were.",
+                  "type": "If",
+                  "expression": {
+                    "or": [
+                      {
+                        "startsWith": [
+                          "@trim(first(split(outputs('Sample_verdict_text_source'), '\n')))",
+                          "VERDICT: PASS"
+                        ]
+                      },
+                      {
+                        "equals": [
+                          "@trim(first(split(outputs('Sample_verdict_text_source'), '\n')))",
+                          "PASS"
+                        ]
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Sample_verdict_text_source": [
+                      "Succeeded"
+                    ]
+                  },
+                  "actions": {
+                    "Apply_template_update_source": {
+                      "_comment": "Triggers ci/azure-pipelines-apply-template.yml, whose parameter names these fields match one for one (approvalId, approverUpn, templateId, contentBase64 | contentUrl). That job runs update_templates.py --template <id> --file <the decoded bytes> --approved-by <approver> --approval-run <approvalId> => writes source, bumps registry version, convert_skills.py, verify_conversion.py, create_agents.py --only <consumers>, stage_renderers.py, then opens the PR. Atomic: any step failing rolls the source back, and update_templates.py REFUSES to run without --approval-run, so an out-of-band apply is impossible. contentItemId/contentWebUrl point at the archived copy in the review location for audit.",
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@parameters('applyPipelineUrl')",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "approvalId": "@{workflow()?['run']?['name']}",
+                          "approverUpn": "@{body('Human_approval_gate')?['approver']}",
+                          "templateId": "@{triggerBody()?['templateId']}",
+                          "contentBase64": "@{triggerBody()?['newTemplateBase64']}",
+                          "contentItemId": "@{body('Upload_approved_template')?['itemId']}",
+                          "contentWebUrl": "@{body('Upload_approved_template')?['webUrl']}",
+                          "sampleVerdict": "@{outputs('Sample_verdict_text_source')}"
+                        },
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 4,
+                          "interval": "PT30S"
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Notify_applied_source": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@parameters('teamsWebhookUrl')",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "text": "✅ Template @{triggerBody()?['templateId']} update APPROVED by @{body('Human_approval_gate')?['approver']}, sample verified, propagation started. Review page: @{body('Publish_visual_review_page')?['shareUrl']}"
+                        }
+                      },
+                      "runAfter": {
+                        "Apply_template_update_source": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Notify_sample_verifier_fail_source": {
+                        "type": "Http",
+                        "inputs": {
+                          "method": "POST",
+                          "uri": "@parameters('teamsWebhookUrl')",
+                          "headers": {
+                            "Content-Type": "application/json"
+                          },
+                          "body": {
+                            "text": "❌ Template @{triggerBody()?['templateId']} was approved by @{body('Human_approval_gate')?['approver']} but the rendered sample FAILED output-verifier - NOTHING was changed. Findings: @{outputs('Sample_verdict_text_source')}"
+                          }
+                        },
+                        "runAfter": {}
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         },

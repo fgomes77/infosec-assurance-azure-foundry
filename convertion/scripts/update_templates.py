@@ -18,9 +18,15 @@ Steps (atomic: any failure rolls the source file back):
      `<agent>:<version>`, so the audit line is what links an approved
      template change to the versions now serving traffic.
 
+The approval is not optional and not implicit: a real apply REFUSES to run
+without `--approval-run`, the run id of the `template-update-approval`
+workflow that recorded the approval and the output-verifier PASS on a sample
+rendered with the proposed template. `--dry-run` writes nothing and needs no
+run id.
+
 Usage:
     python3 update_templates.py --template <id> --file <new-content-file> \
-        --approved-by "<name>" [--approval-run <logic-app-run-id>] [--dry-run]
+        --approved-by "<name>" --approval-run <logic-app-run-id> [--dry-run]
 """
 
 from __future__ import annotations
@@ -63,9 +69,23 @@ def main() -> int:
     ap.add_argument("--file", required=True,
                     help="file holding the approved new template content")
     ap.add_argument("--approved-by", required=True)
-    ap.add_argument("--approval-run", default="")
+    ap.add_argument("--approval-run", default="",
+                    help="run id of the template-update-approval workflow that "
+                         "recorded the approval - REQUIRED for a real apply")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    # Layer-3 control (governance/HUMAN_APPROVAL.md): the only legitimate
+    # caller is the template-update-approval workflow, which passes its own
+    # run id. Without it there is no recorded approval to audit against, so a
+    # real apply is refused - a --dry-run (which writes nothing) is not.
+    if not args.dry_run and not args.approval_run.strip():
+        sys.exit("--approval-run is required for a real apply: pass the "
+                 "template-update-approval run id that recorded the approval "
+                 "(governance/HUMAN_APPROVAL.md Layer 3). Use --dry-run to "
+                 "preview without writing.")
+    if any(c.isspace() for c in args.approval_run.strip()):
+        sys.exit("--approval-run must be a single run id, with no whitespace")
 
     reg = json.loads(REGISTRY.read_text(encoding="utf-8"))
     entry = next((t for t in reg["templates"] if t["id"] == args.template), None)

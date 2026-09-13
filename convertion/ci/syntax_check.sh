@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Offline syntax gate for the kit: python, json, yaml, javascript, bicep,
-# shell. Shared by .github/workflows/ci.yml and ci/azure-pipelines.yml so the
+# Offline syntax gate for the kit: python, json, yaml, toml, javascript, bicep,
+# shell (bash -n + shellcheck). Shared by .github/workflows/ci.yml and ci/azure-pipelines.yml so the
 # two pipelines can never diverge, and runnable by hand before a PR:
 #
 #   convertion/ci/syntax_check.sh              # everything it can check
 #   SKIP_BICEP=1 convertion/ci/syntax_check.sh # no bicep CLI on this machine
+#   REQUIRE_SHELLCHECK=1 ...                   # fail instead of skipping the lint
 #
 # Read-only: it compiles/parses, never writes (py_compile caches go to a temp
 # dir, bicep builds to stdout). Scope is convertion/ plus the pipeline YAML —
@@ -88,6 +89,27 @@ while IFS= read -r f; do
   bash -n "$f" || { note "!! $f"; fail=1; }
 done < <(files sh)
 note "$n file(s)"
+
+# bash -n only proves the file parses. shellcheck is the actual lint (unquoted
+# expansions, lost exit codes, `set -e` traps) and is a HARD gate wherever it
+# exists: both CI runners install it (.github/workflows/ci.yml toolchain step,
+# ci/azure-pipelines.yml), so a PR cannot go green on a shellcheck finding by
+# running somewhere without it. Locally it degrades to a note — install with
+# `sudo apt-get install shellcheck` (0.9.0) or `brew install shellcheck`.
+# Severity floor: warning (error+warning fail; info/style are advisory). A
+# deliberate exception is an inline `# shellcheck disable=SCxxxx` with a reason,
+# never a lowered severity here.
+step "shell (shellcheck)"
+if command -v shellcheck >/dev/null 2>&1; then
+  n=0; sc=()
+  while IFS= read -r f; do n=$((n + 1)); sc+=("$f"); done < <(files sh)
+  shellcheck --severity=warning --external-sources "${sc[@]}" || { note "!! shellcheck findings above"; fail=1; }
+  note "$n file(s)"
+elif [ "${REQUIRE_SHELLCHECK:-}" = "1" ]; then
+  note "shellcheck REQUIRED but not installed — gate FAILED"; fail=1
+else
+  note "shellcheck not installed — lint SKIPPED (bash -n only); CI installs it"
+fi
 
 step "bicep (build --stdout)"
 if [ "${SKIP_BICEP:-}" = "1" ]; then

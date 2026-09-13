@@ -39,13 +39,13 @@ var hasMcp = !empty(mcpPrincipalId)
 var hasDocIntel = !empty(docIntelName)
 var hasAcr = !empty(registryName)
 
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = { name: foundryAccountName }
-resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' existing = { parent: foundry, name: projectName }
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = { name: foundryAccountName }
+resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' existing = { parent: foundry, name: projectName }
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = { name: keyVaultName }
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = { name: storageAccountName }
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' existing = { parent: storage, name: 'default' }
 resource deliverables 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' existing = { parent: blobService, name: 'deliverables' }
-resource docIntel 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = if (hasDocIntel) { name: docIntelName }
+resource docIntel 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = if (hasDocIntel) { name: docIntelName }
 resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = if (hasAcr) { name: registryName }
 resource fnStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = if (hasFn) { name: functionRuntimeStorageAccountName }
 resource laStorage 'Microsoft.Storage/storageAccounts@2023-05-01' existing = if (hasLa) { name: logicAppRuntimeStorageAccountName }

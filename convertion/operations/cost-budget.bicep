@@ -72,7 +72,7 @@ param weeklyReportViewId string = '${resourceGroup().id}/providers/Microsoft.Cos
 param weeklyReportStartDate string = '{yyyy-MM-dd}'
 
 // ---------------------------------------------------------------- existing resources
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: foundryAccountName
 }
 

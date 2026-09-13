@@ -90,11 +90,11 @@ param candidateCapacity int = 10
 // parameters (UPGRADE_CHECKLIST.md) followed by a deployment under the deploy SP.
 var upgradeOption = 'NoAutoUpgrade'
 
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: foundryAccountName
 }
 
-resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: chatModelName
   sku: { name: deploymentSku, capacity: chatCapacity }
@@ -105,7 +105,7 @@ resource chatDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-0
   }
 }
 
-resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: reasoningModelName
   dependsOn: [chatDeployment] // deployments must be created serially
@@ -117,7 +117,7 @@ resource reasoningDeployment 'Microsoft.CognitiveServices/accounts/deployments@2
   }
 }
 
-resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: lightModelName
   dependsOn: [reasoningDeployment]
@@ -129,7 +129,7 @@ resource lightDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-
   }
 }
 
-resource candidateDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (enableCandidateDeployment && !empty(candidateModelName) && !empty(candidateModelVersion)) {
+resource candidateDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = if (enableCandidateDeployment && !empty(candidateModelName) && !empty(candidateModelVersion)) {
   parent: foundry
   name: candidateDeploymentName
   dependsOn: [lightDeployment]

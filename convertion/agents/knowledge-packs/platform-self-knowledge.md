@@ -4,12 +4,15 @@
 Azure AI Foundry)** and runs the Agents v2 runtime (conversations and
 responses; the classic threads/runs API retires 2027-03-31). It replaces
 the claude.ai `product-self-knowledge` skill: Anthropic product content
-is EXCLUDED because this deployment does not use Anthropic models — not
-because they are unavailable. Correction of an earlier statement in this
-kit: **Claude models ARE offered on Microsoft Foundry**; they are
-excluded here by the EU data-residency rule (no EU data zone for them at
-the time of writing), a decision to be re-checked against the model
-region-availability and retirement pages each quarter. The transferable
+(claude.ai features, Claude Code, the Anthropic API) is EXCLUDED as
+**out of scope** — self-knowledge here means knowledge of THIS platform,
+and that is true whichever model a tier runs, so the exclusion does not
+depend on the model choice. Separately, and correcting an earlier
+statement in this kit: **Claude models ARE offered on Microsoft
+Foundry**; they are unused here by the EU data-residency rule (no EU data
+zone for them at the time of writing), a decision re-checked against the
+model region-availability and retirement pages each quarter — it would
+not re-admit Anthropic product documentation into this pack. The transferable
 rule is kept — never answer questions about THIS platform's capabilities
 from memory; retrieve this file. The four
 tables below are **generated** by `scripts/build_self_knowledge.py` at
@@ -65,7 +68,7 @@ and that file as the record, so the quarterly re-check updates one place.*
 
 ## Agent inventory (see build/manifest.json for the deployed set)
 
-<!-- generated:agent-inventory — scripts/build_self_knowledge.py from build/manifest.json, integrations/registry.json, workflows/pipelines.json; regenerated 2026-09-12; do not edit by hand -->
+<!-- generated:agent-inventory — scripts/build_self_knowledge.py from build/manifest.json, integrations/registry.json, workflows/pipelines.json; regenerated 2026-09-13; do not edit by hand -->
 
 | Agent (exact name) | Purpose | Tier | Enterprise tools | Pipeline |
 |---|---|---|---|---|
@@ -77,7 +80,6 @@ and that file as the record, so the quarterly re-check updates one place.*
 | `ciso-reporting` | Generates the three Euronext Group CISO Governance Meeting deliverables from a verified OneTrust Infosec Form (v14) assessment — an interactive HTML d… | chat | 3 | cyber-forum-pptx |
 | `cyber-forum` | Answers open-ended cybersecurity, GRC, and third-party-risk questions for the ENX Information Security Assurance team — a conversational Q&A and threa… | reasoning | 13 | cyber-forum-brief |
 | `deepsearch-protocol` | Executes the Supplier Security DeepSearch Protocol V17.02.11 — a full OSINT-based third-party security assessment that produces a professional HTML da… | reasoning | 8 | deepsearch-report |
-| `docx` | Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx) or Word templates (.dotx)… | light | 1 | — |
 | `dora` | Expert DORA (Regulation (EU) 2022/2554 — Digital Operational Resilience Act) compliance advisor for EU financial entities… | reasoning | 11 | — |
 | `dpia` | Analyzes OneTrust third-party assessment PDF reports and generates InfoSec TPA Reports in DOCX format for DPO team review… | chat | 3 | dpia-dpo-report |
 | `enx-tprm-control-center` | Entry point and router for the ENX TPRM toolset. Use ONLY when the user explicitly says "open ENX menu", "ENX control center", "ENX menu", "TPRM menu"… | light | 0 | — |
@@ -86,26 +88,23 @@ and that file as the record, so the quarterly re-check updates one place.*
 | `iso42001` | Expert ISO 42001 AI Management System (AIMS) compliance advisor. Use this skill whenever a user asks about ISO/IEC 42001:2023, AI governance, AI manag… | reasoning | 11 | — |
 | `nis2` | EU NIS2 Directive (Directive (EU) 2022/2555) compliance advisor for essential and important entities — entity classification, Art… | reasoning | 11 | — |
 | `onetrust-form-b` | Assists with completing the OneTrust Non-Critical Form B supplier assessment questionnaire — drafts evidence-led responses for each question, validate… | chat | 2 | — |
-| `pdf` | Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging… | light | 1 | — |
 | `pdf-full-coverage-analyzer` | Exhaustive, accuracy-grade PDF analysis: process documents of any size in deterministic chunks and guarantee every line is read, every detail preserve… | reasoning | 0 | — |
-| `pptx` | Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both… | light | 1 | — |
 | `tprm-slide-generator` | Full end-to-end TPRM (Third-Party Risk Management) executive summary slide generator… Also answers requests phrased for 'pptx-executive-summary-ciso'. | chat | 1 | — |
 | `tpsrca-assessment-engine` | Comprehensive assessment engine for TPSRCA with 12 specialized agents for risk calculation (inherent/residual), score aggregation, data confidence val… | reasoning | 12 | — |
 | `whisperx-transcribe-diarize` | Transcribe audio or video files locally on macOS (Apple Silicon M1/M2/M3) with speaker diarization and word-level timestamps using WhisperX, pyannote.… | chat | 0 | transcript-summary |
-| `xlsx` | Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an ex… | light | 1 | — |
 | `ciso-global-report` | Global CISO 9-slide PPTX briefing on one supplier/service assessment: contract owner, impacted ENX entities, service+supplier description, risk & cont… | reasoning | 3 | ciso-global-pptx |
 | `pentest-report-analyzer` | Penetration test report analysis: full normalised findings register, scope/currency adequacy, Euronext relevance, reliance verdict. | reasoning | 0 | pentest-report-summary |
 | `soc-report-analyzer` | SOC 1/2/3 (Type 1/2) report analysis: opinion, scope, period, every exception, CUEC mapping, subservice carve-outs, reliance verdict. | reasoning | 0 | soc-report-summary |
 | `template-manager` | Controlled template change process: inventory, analyse, edit, visual before/after review, approval-gated propagation… | chat | 2 | — |
 | `tpa-evidence-analyzer` | Analyses the SharePoint TPA/Active evidence tree for a supplier/service: per-file content id, scope, emission date, validity period, findings; consoli… | reasoning | 2 | tpa-evidence-analysis |
 
-29 agents. Names are the hand-off targets: reply `ROUTE: <agent-name>` with the name exactly as spelled above. Alias twins are not deployed separately; a platform-specific example agent is never routed to.
+25 agents. Names are the hand-off targets: reply `ROUTE: <agent-name>` with the name exactly as spelled above. Alias twins are not deployed separately; a platform-specific example agent is never routed to.
 
 <!-- /generated:agent-inventory -->
 
 ## Delivery pipelines (workflows/pipelines.json)
 
-<!-- generated:delivery-pipelines — scripts/build_self_knowledge.py from workflows/pipelines.json, templates/registry.json; regenerated 2026-09-12; do not edit by hand -->
+<!-- generated:delivery-pipelines — scripts/build_self_knowledge.py from workflows/pipelines.json, templates/registry.json; regenerated 2026-09-13; do not edit by hand -->
 
 | Pipeline | Req. | Producing agent | Report type | Format | Approval kind | Library root |
 |---|---|---|---|---|---|---|
@@ -128,7 +127,7 @@ Every pipeline stores under `Reports/<Supplier>/<Service>/` (`dpoRoot` → `Repo
 
 ## Templates of record (templates/registry.json)
 
-<!-- generated:templates — scripts/build_self_knowledge.py from templates/registry.json; regenerated 2026-09-12; do not edit by hand -->
+<!-- generated:templates — scripts/build_self_knowledge.py from templates/registry.json; regenerated 2026-09-13; do not edit by hand -->
 
 | Template | Version | What it produces | Consuming agents |
 |---|---|---|---|
@@ -152,7 +151,7 @@ Templates change only through `template-manager` → recorded approval → `scri
 
 ## Approval gates (governance/HUMAN_APPROVAL.md)
 
-<!-- generated:approval-gates — scripts/build_self_knowledge.py from governance/HUMAN_APPROVAL.md, workflows/pipelines.json; regenerated 2026-09-12; do not edit by hand -->
+<!-- generated:approval-gates — scripts/build_self_knowledge.py from governance/HUMAN_APPROVAL.md, workflows/pipelines.json; regenerated 2026-09-13; do not edit by hand -->
 
 1. Layer 1 — Technical: agents hold read-only tools
 2. Layer 2 — Behavioural: a draft-then-approve protocol in every agent

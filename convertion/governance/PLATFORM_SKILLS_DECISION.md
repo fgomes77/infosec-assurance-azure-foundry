@@ -26,7 +26,7 @@ Modes: **AGENT** (converted to a Foundry agent), **KNOWLEDGE-PACK**
 | file-reading | no | KNOWLEDGE-PACK | Foundry file intake differs (file_search / code_interpreter / Function extract) | `agents/knowledge-packs/file-intake-foundry.md` |
 | pdf-reading | no | KNOWLEDGE-PACK | rasterise-and-read → Document Intelligence / `/api/extract_pdf` (`MODEL_ROUTING.md` §Vision) | `agents/knowledge-packs/pdf-reading-foundry.md` |
 | frontend-design | no | KNOWLEDGE-PACK | HTML dashboards are template-governed; only the accessible-colour/layout rules are kept | `agents/knowledge-packs/enx-html-design-guide.md` |
-| product-self-knowledge | no | KNOWLEDGE-PACK | rewritten as platform self-knowledge for Foundry/Copilot users | `agents/knowledge-packs/platform-self-knowledge.md` |
+| product-self-knowledge | no | KNOWLEDGE-PACK | Rewritten as platform self-knowledge for Foundry/Copilot users. **Rationale re-decided 2026-09-12:** the Anthropic product content is out of **scope** — a self-knowledge pack must describe the platform the user is on (Foundry, Agents v2, this kit's agents/pipelines/approval gates), and that holds whichever model a tier runs. The earlier "no Claude models on Azure" rationale is withdrawn as factually wrong (Claude models are offered on Foundry; unused here for EU residency, re-checked quarterly — `CLAUDE_ON_FOUNDRY.md`). Retained rule: never answer capability questions from memory | `agents/knowledge-packs/platform-self-knowledge.md` |
 
 ## 2. `platform-skills/examples/` (33)
 
@@ -64,7 +64,7 @@ Modes: **AGENT** (converted to a Foundry agent), **KNOWLEDGE-PACK**
 | paint | no | EXCLUDED | consumer creative | — |
 | prescription-refill | no | EXCLUDED | consumer health task | — |
 | return-refund | no | EXCLUDED | consumer task | — |
-| setup-writing-style | no | SUPERSEDED | ENX writing style is fixed in `agents/knowledge-packs/enx-writing-style.md` | knowledge pack |
+| setup-writing-style | no | SUPERSEDED | **Harvesting mechanism EXCLUDED, house style INCLUDED.** The skill learns a voice by reading the user's sent mail / Slack / Drive and storing a per-user style file; reading a team member's mailbox is a personal-data processing activity with no documented lawful basis, purpose or RoPA entry here (GDPR Art. 5(1)(a)/(b), 6, 30 — `DATA_PROTECTION_GUARDRAILS.md` §3), Foundry has no per-user skill store, and the shared memory bans PII (`MEMORY_POLICY.md`). ENX writing style is therefore **fixed, not learned**: `agents/knowledge-packs/enx-writing-style.md`, plus the skill's "paste samples in the conversation" mode, which processes only what the user chooses to paste. Same decision in prose: `../agents/README.md` §Decisions recorded here | knowledge pack |
 
 ## 3. Harness skills (Claude Code environment, listed in `CAPABILITIES.md`)
 

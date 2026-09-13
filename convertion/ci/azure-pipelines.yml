@@ -67,6 +67,11 @@ stages:
               curl -sSLf "https://github.com/Azure/bicep/releases/download/v$(bicepVersion)/bicep-linux-x64" -o "$(Agent.TempDirectory)/bicep"
               sudo install -m 0755 "$(Agent.TempDirectory)/bicep" /usr/local/bin/bicep
               bicep --version
+              # shellcheck is the shell lint of step [4]; present on the hosted
+              # ubuntu image, installed from apt otherwise, so REQUIRE_SHELLCHECK=1
+              # there is a hard gate and never a silent skip.
+              command -v shellcheck >/dev/null 2>&1 || { sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
+              shellcheck --version | head -2
             displayName: Toolchain (no Azure SDK — the gates run without Azure)
 
           - script: python3 convertion/scripts/convert_skills.py
@@ -85,7 +90,9 @@ stages:
             displayName: '[3] Verify kit consistency'
 
           - script: convertion/ci/syntax_check.sh
-            displayName: '[4] Syntax gate (python, json, yaml, js, bicep, shell)'
+            displayName: '[4] Syntax gate (python, json, yaml, js, bicep, shell + shellcheck)'
+            env:
+              REQUIRE_SHELLCHECK: '1'   # the lint may not silently skip on an agent
 
           - script: python3 convertion/ci/tests/test_residency.py
             displayName: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'

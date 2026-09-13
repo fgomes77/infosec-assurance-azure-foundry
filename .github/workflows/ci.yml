@@ -63,6 +63,12 @@ jobs:
             -o "${RUNNER_TEMP}/bicep"
           sudo install -m 0755 "${RUNNER_TEMP}/bicep" /usr/local/bin/bicep
           bicep --version
+          # shellcheck: the shell lint of step [4]. Present on the hosted image;
+          # installed from apt if a future image drops it, so REQUIRE_SHELLCHECK=1
+          # below can be a hard gate instead of a skip.
+          command -v shellcheck >/dev/null 2>&1 || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
+          shellcheck --version | head -2
 
       - name: '[1] Convert skills from the claude.ai export'
         # The gate builds the FULL set so the fidelity check covers every agent.
@@ -79,7 +85,9 @@ jobs:
       - name: '[3] Verify kit consistency (secrets, syntax, cross-refs)'
         run: python3 convertion/scripts/verify_kit.py
 
-      - name: '[4] Syntax gate (python, json, yaml, javascript, bicep, shell)'
+      - name: '[4] Syntax gate (python, json, yaml, javascript, bicep, shell + shellcheck)'
+        env:
+          REQUIRE_SHELLCHECK: '1'   # the lint may not silently skip on a runner
         run: convertion/ci/syntax_check.sh
 
       - name: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'

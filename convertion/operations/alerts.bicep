@@ -102,7 +102,7 @@ resource workspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' existin
   name: logAnalyticsName
 }
 
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: foundryAccountName
 }
 

@@ -253,7 +253,7 @@ overallScore}`.
 
 | claude.ai / Claude Code feature | Decision |
 |---|---|
-| PR babysitting / PR-steward, DevOps PR-activity hooks | **Excluded** — no code-repository write workflow exists at ENX for the assurance persona; `watch-until` covers "watch a ticket/assessment until it changes". |
+| PR babysitting / PR-steward, DevOps PR-activity hooks (the Claude Code Remote `subscribe_pr_activity` surface and the PR-steward loop, `claude-account-export/CAPABILITIES.md` rows "Claude Code Remote" and "dynamic loops, PR babysitting/steward workflows") | **Excluded** — harness-only: they exist to drive a coding agent's own pull requests, and no code-repository write workflow exists at ENX for the assurance persona (the kit's own PRs are governed by `../operations/CHANGE_MANAGEMENT.md` + CODEOWNERS, by people). `watch-until` covers "watch a ticket/assessment until it changes"; no Logic App is generated for this row. |
 | Session orchestration `send_message` between live sessions, Remote Control | **Excluded** — connected agents (synchronous hand-offs) + `agent-fanout` cover the need; no live-session bus is deployed. |
 | Push/e-mail completion notifications | Teams-only (`teamsWebhookUrl`); e-mail sending would require an approval-gated mail action (`MAIL_SEND`), not implemented by design. |
 | `morning` action buttons (`claude.ai/new` deep links) | **Removed** — would send Euronext context to the web. |

@@ -117,9 +117,9 @@ param headerName string = 'Authorization'
 @secure()
 param headerValue string
 
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = { name: foundryAccountName }
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = { name: foundryAccountName }
 
-resource connection 'Microsoft.CognitiveServices/accounts/connections@2025-04-01-preview' = {
+resource connection 'Microsoft.CognitiveServices/accounts/connections@2025-06-01' = {
   parent: foundry
   name: connectionName
   properties: {

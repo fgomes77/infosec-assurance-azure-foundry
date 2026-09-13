@@ -59,7 +59,7 @@ echo ">> [3] Foundry connections (names + auth type; never values)"
 ACCOUNT=$(az cognitiveservices account list -g "$RG" --query "[?kind=='AIServices'].name | [0]" -o tsv)
 if [ -n "$ACCOUNT" ]; then
   az rest --method get \
-    --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT}/connections?api-version=2025-04-01-preview" \
+    --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.CognitiveServices/accounts/${ACCOUNT}/connections?api-version=2025-06-01" \
     --query "value[].{name:name,category:properties.category,auth:properties.authType}" -o table \
     | tee "$OUT/foundry-connections.txt"
 fi

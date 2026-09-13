@@ -51,13 +51,22 @@ A template change is a **methodology change**, not a content edit:
 
 1. `template-update-approval.json` raises the gate (expiry **P7D**, owner tier —
    deputy when the owner is the proposer; `governance/HUMAN_APPROVAL.md`).
-2. On approval, `scripts/update_templates.py --approved-by … --approval-run …`
+2. On approval — and only then — the workflow re-renders this template's
+   `sample` (`samples/<id>.json`) with the **proposed** template through the
+   delivery Function `/render` and runs `output-verifier` on the result. A
+   schema mismatch (400), a failed quality gate (422) or anything but
+   `VERDICT: PASS` stops the run and changes nothing. The theme tokens
+   (`enx-theme`, no renderer) are verified as source text instead. This is why
+   the review package must carry `sampleFormat`, `sampleDataJson` and — for
+   HTML templates — `sampleHtml`.
+3. Then `scripts/update_templates.py --approved-by … --approval-run …` (it
+   **refuses to run without `--approval-run`**)
    writes the source, re-runs convert → verify → `create_*.py --only <consumers>`
    → `stage_renderers.py`, bumps `version` and `last_approved`, records
    `promoted_agent_versions`, and appends a line to `templates/audit.log`.
-3. Consumers update **together** — a template can never be live in one consumer
+4. Consumers update **together** — a template can never be live in one consumer
    and stale in another (`operations/LIFECYCLE.md` §4).
-4. Rollback = switching the agents back to the `promoted_agent_versions` of the
+5. Rollback = switching the agents back to the `promoted_agent_versions` of the
    previous entry, not redeploying: promoted agent versions are immutable.
 
 ## Pending

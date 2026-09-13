@@ -98,11 +98,19 @@ before calling back `{decision, approver}`.
 
 Documented exceptions inside Layer 3: (a) the template workflow uploads the
 before/after **review page** to the review location BEFORE approval — review
-material, not a deliverable of record; (b) the post-approval propagation
-must also pass `output-verifier` on a rendered sample from
-`templates/samples` before `Apply_template_update`, and `update_templates.py`
-must refuse to run without `--approval-run` (both shared deltas until
-implemented).
+material, not a deliverable of record; (b) approval alone does not propagate
+a template. **Implemented:** after the approval callback,
+`template-update-approval.json` renders the template's registry `sample`
+(`templates/samples/<id>.json`) with the *proposed* template through the
+delivery Function `/render` — so a schema mismatch (400) or a failed quality
+gate (422) stops the run — and then runs `output-verifier` on that rendered
+sample; `Apply_template_update_*` executes only on `VERDICT: PASS`, and a
+FAIL notifies Teams and changes nothing. The theme tokens (`enx-theme`,
+format `json`, no renderer) take the parallel branch and are verified as
+source text. `scripts/update_templates.py` **refuses to run without
+`--approval-run`** (the approval workflow's run id, which it also writes to
+`templates/audit.log`), so an apply outside the approved run is not possible
+— `--dry-run`, which writes nothing, is exempt.
 
 ## Scope notes
 
@@ -110,6 +118,18 @@ implemented).
   hold read-only tools and the draft protocol). `save_memory` is itself the
   human approval act — a person (or their client, on their instruction)
   persists a note; agents cannot call it.
+- **Scheduling a follow-up is not a submission.** The MCP tool
+  `schedule_followup` (and the `scheduled-followup` Logic App behind it,
+  contract `../integrations/openapi/followup-scheduler.yaml`) re-opens an
+  existing conversation at a future time: the agent answers in that
+  conversation and the requester is notified on Teams. Nothing is stored in
+  SharePoint, Jira, OneTrust or any other system of record, so no Layer-3
+  gate applies — anything the follow-up produces becomes a deliverable only
+  through the delivery pipeline, with `output-verifier` PASS and approval as
+  usual. An agent cannot schedule: the spec's only operation is a POST, the
+  Layer-1 rule strips non-GET operations, and the registry entry is
+  `enabled: false` so attaching it fails the deploy. The caller is a named
+  human and `requestedBy` comes from their identity.
 - **Copilot surface:** the same agents answer in Copilot, so Layers 1–2
   apply unchanged; Copilot adds no write path.
 - **Continuous evaluation, red-team scans and `learning_loop.py` proposals**

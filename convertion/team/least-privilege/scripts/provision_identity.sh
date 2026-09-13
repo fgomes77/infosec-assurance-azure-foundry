@@ -25,6 +25,7 @@ RBAC_BICEP="$HERE/../../rbac.bicep"
 ENV_FILE="$HERE/../../../setup/.env"
 MODE="${1:---plan}"
 
+# shellcheck source=/dev/null  # runtime .env, git-ignored (setup/.env.example is the shape)
 [ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a
 RG="${AZURE_RESOURCE_GROUP:-rg-infosec-foundry}"
 

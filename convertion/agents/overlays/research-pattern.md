@@ -33,5 +33,8 @@ egress and read-only rules of this environment.)
 - Reusable references (a paper, an authority guideline, a standard
   clause mapping) are stored for the team by emitting a `MEMORY:` block
   tagged `citation` (`scripts/memory_store.py add --tag citation`), never
-  as a personal library: the shared store `vs-assurance-memory` replaces
-  per-user paper libraries.
+  as a personal library: the team's shared memory replaces per-user paper
+  libraries (Azure AI Search index `MEMORY_INDEX_NAME` with
+  `MEMORY_BACKEND=search-index`, the `vs-assurance-memory` store while the
+  transition default is in force — one vector store per agent, finding C3,
+  so no agent carries the memory store itself).

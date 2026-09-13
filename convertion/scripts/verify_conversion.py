@@ -17,8 +17,18 @@ Checks:
   3. COMPLETE   - no source file is missing from the build (and none
                   extra); every upload has an accepted extension
                   (file_search text types; code/ holds ONLY the zip);
-                  packaged .py members compile and every
+                  packaged .py members compile, their MODULE-LEVEL imports
+                  resolve against the stdlib, the Function requirements.txt
+                  pins and the package's own modules, and every
                   require(path.join(__dirname, "<rel>")) resolves.
+                  Limit, deliberately: this is static resolution, not an
+                  import smoke — nothing here executes an import, and lazy
+                  imports inside a function/try (the pdf-coverage scripts'
+                  fitz/pypdf/pytesseract behind a poppler/tesseract CLI
+                  fallback) are out of scope by design. The executing proof
+                  is the delivery image build, whose last layer runs
+                  `python3 -c "import playwright, docx, pptx, openpyxl,
+                  fitz, pdfplumber"` (functions/delivery/Dockerfile).
   4. RULES      - instructions.md contains the full SKILL.md body (all
                   rules/requirements, contiguous), the persona preamble,
                   the Foundry environment overlay, the document addendum
@@ -57,6 +67,7 @@ Run convert_skills.py first (same flags, e.g. --include-examples).
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import py_compile
@@ -109,11 +120,89 @@ def source_dir(spec: dict) -> Path:
     return root / spec["name"]
 
 
+# ------------------------------------------------- staged-package imports
+# Module-level imports of a staged .py member must resolve in the delivery
+# Function image, which installs exactly functions/delivery/requirements.txt on
+# top of the stdlib. py_compile (below) proves a member PARSES; it never
+# executes an import, so it cannot see a missing dependency — this map plus
+# check_imports is the offline stand-in for the import smoke a container could
+# run. Lazy imports inside a function/try are deliberately NOT checked: the
+# staged pdf-coverage scripts import fitz/pypdf/pytesseract/PIL that way behind
+# a CLI fallback (poppler/tesseract binaries in the Dockerfile), which is the
+# documented degradation path, not a missing pin.
+DIST_MODULES = {            # distribution in requirements.txt -> module it provides
+    "pymupdf": {"fitz", "pymupdf"}, "pillow": {"PIL"},
+    "python-docx": {"docx"}, "python-pptx": {"pptx"},
+    "pyyaml": {"yaml"}, "beautifulsoup4": {"bs4"},
+    "azure-functions": {"azure"}, "azure-identity": {"azure"},
+    "dnspython": {"dns"}, "python-dateutil": {"dateutil"},
+}
+# A staged package runs in one of the two Function images, so the pin may be in
+# either requirements file (the office scripts need defusedxml/lxml, which are
+# office-tools' pins by the image split documented in functions/delivery/Dockerfile).
+RUNTIME_REQS = (CONV / "functions" / "delivery" / "requirements.txt",
+                CONV / "functions" / "office-tools" / "requirements.txt")
+
+
+def _installed_modules() -> set[str]:
+    mods: set[str] = set()
+    for req in RUNTIME_REQS:
+        if not req.is_file():
+            continue
+        for line in req.read_text(encoding="utf-8").splitlines():
+            line = line.split("#")[0].strip()
+            if not line or line.startswith("-"):
+                continue
+            dist = re.split(r"[=<>!~\[;]", line)[0].strip().lower()
+            mods |= DIST_MODULES.get(dist, {dist.replace("-", "_")})
+    return mods
+
+
+def _local_names(members: dict[str, bytes]) -> set[str]:
+    """Names importable from inside the package: module stems AND the package
+    directories they live in (scripts run with their own directory on sys.path,
+    so `office`, `helpers`, `validators` are local imports, not dependencies)."""
+    names: set[str] = set()
+    for m in members:
+        if not m.endswith(".py"):
+            continue
+        p = Path(m)
+        names.add(p.stem)
+        names |= set(p.parts[:-1])
+    return names
+
+
+def check_imports(name: str, member: str, data: bytes, siblings: set[str],
+                  problems: list[str]) -> None:
+    """Module-level imports of a staged member resolve in the delivery image."""
+    try:
+        tree = ast.parse(data)
+    except SyntaxError:
+        return                                   # py_compile reports it
+    allowed = sys.stdlib_module_names | _installed_modules() | siblings | {"__future__"}
+    for node in tree.body:                       # top level only — lazy imports are fine
+        names = []
+        if isinstance(node, ast.Import):
+            names = [a.name.split(".")[0] for a in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names = [node.module.split(".")[0]]
+        for mod in names:
+            if mod not in allowed:
+                problems.append(
+                    f"{name}: {member} imports {mod!r} at module level, which is "
+                    f"neither stdlib, a package pinned in a Function "
+                    f"requirements.txt, nor another package member — it would "
+                    f"ImportError in the runtime image")
+
+
 def check_package(name: str, zpath: Path, src: Path, problems: list[str]) -> int:
-    """Zip members byte-identical to source, .py compiles, require() resolves."""
+    """Zip members byte-identical to source, .py compiles AND its module-level
+    imports resolve against functions/delivery/requirements.txt, require()
+    resolves."""
     n = 0
     with zipfile.ZipFile(zpath) as z:
         members = {zi.filename: z.read(zi) for zi in z.infolist()}
+    siblings = _local_names(members)
     for member, data in members.items():
         if member.startswith("foundry/"):
             adapter = HERE / "adapters" / Path(member).name
@@ -136,6 +225,7 @@ def check_package(name: str, zpath: Path, src: Path, problems: list[str]) -> int
                 problems.append(f"{name}: {member} does not compile: {e.msg[:80]}")
             finally:
                 Path(t.name).unlink(missing_ok=True)
+            check_imports(name, member, data, siblings, problems)
         if member.endswith((".js", ".cjs", ".mjs")):
             for rel in REQUIRE_RE.findall(data.decode("utf-8", "replace")):
                 target = _norm(f"{Path(member).parent.as_posix()}/{rel}")

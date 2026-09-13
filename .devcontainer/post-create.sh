@@ -42,6 +42,12 @@ if ! command -v gitleaks >/dev/null 2>&1; then
     || echo "   note: gitleaks install failed — the CI job still scans every PR"
 fi
 
+echo ">> shellcheck (the shell lint of convertion/ci/syntax_check.sh, as in CI)"
+if ! command -v shellcheck >/dev/null 2>&1; then
+  sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck \
+    || echo "   note: shellcheck install failed — the syntax gate then runs bash -n only; CI still lints"
+fi
+
 echo ">> pre-commit hooks (local mirror of the CI gates)"
 python3 -m pip install --quiet pre-commit \
   && (cd "$ROOT" && pre-commit install && pre-commit install --hook-type pre-push) \

@@ -9,6 +9,7 @@ to any MCP client (Claude Desktop/Code, the ENX gateway, internal tools):
     list_agents()                               discover what is deployed
     save_memory(note)                           persist a durable team-memory note
     search_memory(query)                        ask the advisor what memory holds
+    schedule_followup(...)                      re-open a conversation later
 
 Runtime (finding C1). Every data-plane call goes through
 `../scripts/_foundry_runtime.py`, the same adapter the deploy scripts use:
@@ -34,9 +35,13 @@ PROJECT_ENDPOINT env var. See README.md for Azure Container Apps hosting.
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -196,6 +201,85 @@ def search_memory(query: str) -> dict:
                 "the matching notes with their timestamps; do not answer "
                 "from general knowledge.",
                 None)
+
+
+MAX_FOLLOWUP_DAYS = 90      # Logic Apps Wait limit (scheduled-followup.json)
+
+
+@mcp.tool()
+def schedule_followup(conversation_id: str, agent_ref: str, fire_at: str,
+                      prompt: str, requested_by: str = "") -> str:
+    """Schedule ONE follow-up run of a deployed agent inside an existing
+    conversation, at a future time (max 90 days ahead) — the platform
+    replacement for a one-shot "remind me / re-check this later" Routine.
+
+    `conversation_id` is the value a previous ask_* call returned;
+    `agent_ref` is `<agent-name>:<version>` (list_agents `ref`) or a bare
+    name for the latest version; `fire_at` is an RFC3339 UTC timestamp.
+    When it fires, the agent answers IN that conversation and the requester
+    is notified on Teams — nothing is written to SharePoint, Jira, OneTrust
+    or any other system of record, which is why scheduling needs no approval
+    gate (governance/HUMAN_APPROVAL.md). A deliverable still goes through
+    the delivery pipeline, the output-verifier and a human approval.
+
+    Contract: integrations/openapi/followup-scheduler.yaml; workflow:
+    workflows/scheduled-followup.json. The trigger URL (with its shared
+    access signature) is FOLLOWUP_SCHEDULER_URL in setup/.env / Key Vault —
+    absent, this tool says so instead of pretending to have scheduled.
+    """
+    url = os.environ.get("FOLLOWUP_SCHEDULER_URL", "").strip()
+    if not url:
+        return ("not scheduled: FOLLOWUP_SCHEDULER_URL is not set (setup/.env "
+                "— the scheduled-followup Logic App trigger URL from Key "
+                "Vault). Nothing was scheduled.")
+    if not url.lower().startswith("https://"):
+        return "not scheduled: FOLLOWUP_SCHEDULER_URL must be https"
+    stamp = fire_at.strip().replace("Z", "+00:00")
+    try:
+        when = dt.datetime.fromisoformat(stamp)
+    except ValueError:
+        return (f"not scheduled: fire_at {fire_at!r} is not an RFC3339 "
+                f"timestamp (e.g. 2026-12-01T09:00:00Z)")
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.timezone.utc)
+    now = dt.datetime.now(dt.timezone.utc)
+    if when <= now:
+        return f"not scheduled: fire_at {fire_at!r} is in the past"
+    if (when - now).days > MAX_FOLLOWUP_DAYS:
+        return (f"not scheduled: fire_at is more than {MAX_FOLLOWUP_DAYS} "
+                f"days ahead (Logic Apps Wait limit)")
+    if not conversation_id.strip() or not agent_ref.strip():
+        return "not scheduled: conversation_id and agent_ref are required"
+    if not prompt.strip():
+        return "not scheduled: prompt is required (what should the agent do?)"
+    who = requested_by.strip() or os.environ.get("MEMORY_AUTHOR_UPN", "")
+    if not who:
+        return ("not scheduled: requested_by is required (the UPN the Teams "
+                "notification goes to; set MEMORY_AUTHOR_UPN in setup/.env "
+                "for a single-user client)")
+    body = json.dumps({
+        "conversationId": conversation_id.strip(),
+        "agentRef": agent_ref.strip(),
+        "fireAt": when.astimezone(dt.timezone.utc)
+                      .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "prompt": prompt.strip(),
+        "requestedBy": who,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body, method="POST",
+        headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:   # noqa: S310
+            payload = json.loads(resp.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        return (f"not scheduled: the scheduler returned HTTP {exc.code} "
+                f"({exc.reason})")
+    except Exception as exc:    # noqa: BLE001 - network/DNS/timeout
+        return f"not scheduled: {exc}"
+    ref = payload.get("followupId", "(no id returned)")
+    return (f"scheduled as {ref} for {payload.get('fireAt', fire_at)} on "
+            f"{agent_ref} in conversation {conversation_id} — the answer "
+            f"appears in that conversation and as a Teams notification")
 
 
 if __name__ == "__main__":

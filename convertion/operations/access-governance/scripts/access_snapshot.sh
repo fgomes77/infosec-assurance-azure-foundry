@@ -15,6 +15,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="$HERE/../../../setup/.env"
+# shellcheck source=/dev/null  # runtime .env, git-ignored (setup/.env.example is the shape)
 [ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a
 
 RG="${AZURE_RESOURCE_GROUP:-rg-infosec-foundry}"
@@ -75,7 +76,7 @@ fi
 AIF=$(az cognitiveservices account list -g "$RG" --query "[?kind=='AIServices'].name | [0]" -o tsv 2>/dev/null || true)
 if [ -n "$AIF" ]; then
   az rest --method get \
-    --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/$AIF/connections?api-version=2025-04-01-preview" \
+    --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.CognitiveServices/accounts/$AIF/connections?api-version=2025-06-01" \
     --query "value[].{name:name,category:properties.category,authType:properties.authType,shared:properties.isSharedToAll}" \
     -o json > "$OUT/foundry-connections.json" 2>/dev/null || true
 fi

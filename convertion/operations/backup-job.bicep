@@ -65,11 +65,11 @@ var storageAccountName = toLower(replace('${baseName}sa', '-', ''))
 var createEnvironment = empty(containerAppsEnvironmentId)
 
 // ------------------------------------------------------------ existing resources
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: '${baseName}-aif'
 }
 
-resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' existing = {
+resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' existing = {
   parent: foundry
   name: projectName
 }

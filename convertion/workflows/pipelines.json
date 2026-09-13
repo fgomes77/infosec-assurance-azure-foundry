@@ -39,7 +39,7 @@
       "renderFormat": "pptx",
       "renderTemplate": "ciso-reporting",
       "libraryRoot": "reportsRoot",
-      "notes": "Requirement c: OT PDF(s) -> Infosec Cyber Forum deck for CISOs/stakeholders. DECISION: the deck IS the verified 8-slide Group CISO Governance template (ciso-reporting); no separate Cyber Forum slide template exists in the export. Threat-intel context for the forum comes from the separate cyber-forum-brief pipeline (DOCX) attached alongside the deck - no merge of the two contracts (keeps the byte-verified template untouched).",
+      "notes": "Requirement c: OT PDF(s) -> Infosec Cyber Forum deck for CISOs/stakeholders. DECISION: the deck IS the verified 8-slide Group CISO Governance template (ciso-reporting); no separate Cyber Forum slide template exists in the export. Threat-intel context for the forum comes from the separate cyber-forum-brief pipeline (DOCX) attached alongside the deck - no merge of the two contracts (keeps the byte-verified template untouched). NAMING DECISION: the pipeline id stays `cyber-forum-pptx` and is NOT renamed to `ciso-governance-pptx` even though the deck is the Group CISO Governance template - the id is the join key of three files (templates/registry.json `ciso-reporting-deck`.pipelines, team/approval-policy.json REPORT_DELIVERY.pipelines, and build/logicapps/<id>/ which names the deployed Logic App), and it is the requirement-c label the users know (team/USER_QUICKSTART.md section c, agents/orchestrator_instructions.md row c). Renaming would rename a deployed resource and break the approval routing for no functional gain; the deck's identity is stated in this note instead.",
       "approvalKind": "REPORT_CYBERFORUM",
       "portfolioStatusOnStore": "Complete"
     },

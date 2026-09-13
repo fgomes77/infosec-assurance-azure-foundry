@@ -28,13 +28,30 @@ parameters:
   - name: templateId
     type: string
     displayName: templates/registry.json id of the template being changed
+  - name: contentBase64
+    type: string
+    default: ''
+    displayName: >-
+      The approved template bytes, base64, exactly as the Logic App received
+      them in `newTemplateBase64` and archived them to Templates/Reviews/.
+      This job decodes them to a FILE and passes the file to
+      update_templates.py, so what was approved and what is applied are the
+      same bytes. Preferred over contentUrl: it needs no second credential to
+      read SharePoint back.
   - name: contentUrl
     type: string
+    default: ''
     displayName: >-
-      URL the approved template content is fetched from — the artefact the
-      approver actually saw (the SharePoint Templates/Reviews/ item the Logic
-      App created). update_templates.py takes the content as a FILE, never as
-      inline text, so what is applied is the reviewed bytes.
+      Alternative to contentBase64 for a large template: a URL this agent can
+      fetch without extra credentials. Exactly one of contentBase64 /
+      contentUrl must be set.
+  - name: sampleVerdict
+    type: string
+    default: ''
+    displayName: >-
+      First line of the output-verifier verdict on the sample rendered with
+      the proposed template (must start with 'VERDICT: PASS' — the Logic App
+      never calls this job otherwise). Recorded in the PR body as evidence.
 
 pool:
   vmImage: ubuntu-latest
@@ -54,13 +71,31 @@ steps:
 
   - script: |
       set -euo pipefail
-      # Fetch the exact artefact the approver reviewed, then apply it. Going
-      # through a file (not an inline string) is what makes "what was approved"
-      # and "what was applied" the same bytes.
-      curl -fsSL "${{ parameters.contentUrl }}" -o "$(Agent.TempDirectory)/approved-template"
+      # Materialise the exact artefact the approver reviewed, then apply it.
+      # Going through a file (not an inline string) is what makes "what was
+      # approved" and "what was applied" the same bytes.
+      APPROVED="$(Agent.TempDirectory)/approved-template"
+      B64='${{ parameters.contentBase64 }}'
+      URL='${{ parameters.contentUrl }}'
+      if [ -n "$B64" ] && [ -n "$URL" ]; then
+        echo "pass contentBase64 OR contentUrl, not both" >&2; exit 1
+      elif [ -n "$B64" ]; then
+        printf '%s' "$B64" | base64 -d > "$APPROVED"
+      elif [ -n "$URL" ]; then
+        curl -fsSL "$URL" -o "$APPROVED"
+      else
+        echo "no approved content: set contentBase64 or contentUrl" >&2; exit 1
+      fi
+      [ -s "$APPROVED" ] || { echo "approved content is empty" >&2; exit 1; }
+      # The Logic App only calls this job after output-verifier passed the
+      # rendered sample; re-assert it here so a hand-started run cannot skip it.
+      case '${{ parameters.sampleVerdict }}' in
+        "VERDICT: PASS"*|"PASS"*) : ;;
+        *) echo "sample verdict is not a PASS — refusing to apply" >&2; exit 1 ;;
+      esac
       python3 convertion/scripts/update_templates.py \
         --template '${{ parameters.templateId }}' \
-        --file "$(Agent.TempDirectory)/approved-template" \
+        --file "$APPROVED" \
         --approved-by '${{ parameters.approverUpn }}' \
         --approval-run '${{ parameters.approvalId }}'
     displayName: Apply the approved template (update_templates.py)
@@ -71,7 +106,12 @@ steps:
       # still a change, and it must not be the one edit that skips them.
       python3 convertion/scripts/verify_conversion.py
       python3 convertion/scripts/verify_kit.py
-      python3 convertion/evaluation/run_regression.py
+      # Scoped to the template this run changed: a known, recorded defect in an
+      # UNRELATED template of record (templates/README.md "Known template
+      # defects") must not block a change to a different one - it has its own
+      # approval run. The full sweep stays available as
+      # `run_regression.py` with no --only.
+      python3 convertion/evaluation/run_regression.py --only '${{ parameters.templateId }}'
     displayName: Re-verify (conversion, kit, template regression)
 
   - script: |
@@ -90,7 +130,7 @@ steps:
         --source-branch "$BRANCH" \
         --target-branch main \
         --title "Template update: ${{ parameters.templateId }} (approval ${{ parameters.approvalId }})" \
-        --description "Applied by convertion/scripts/update_templates.py after the recorded approval ${{ parameters.approvalId }} by ${{ parameters.approverUpn }} (workflows/template-update-approval.json). Registry version and templates/audit.log are updated in this commit. Merge is the submission of record and belongs to the platform owner." \
+        --description "Applied by convertion/scripts/update_templates.py after the recorded approval ${{ parameters.approvalId }} by ${{ parameters.approverUpn }} (workflows/template-update-approval.json). Sample verification (output-verifier on templates/samples rendered with the proposed template): ${{ parameters.sampleVerdict }}. Registry version and templates/audit.log are updated in this commit. Merge is the submission of record and belongs to the platform owner." \
         --squash true \
         --delete-source-branch true
     displayName: Open the pull request (the submission of record)

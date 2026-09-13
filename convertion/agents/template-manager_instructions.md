@@ -59,8 +59,20 @@ Full field reference: `templates/README.md`.
    the `template-update-approval` workflow, which shows it to the
    approver (template and platform changes are approved by the
    accountable platform owner).
-5. **Apply — only after recorded approval.** On APPROVED (and never
-   before): the workflow runs `scripts/update_templates.py`, which writes
+   The package MUST also carry the sample-verification fields the workflow
+   needs, or the run cannot start: `sampleFormat` (the template's registry
+   `format`), `sampleDataJson` (the contents of the registry `sample` file,
+   `templates/samples/<id>.json`, unchanged — never a sample you invent)
+   and, for HTML templates, `sampleHtml` (that sample rendered with the
+   **proposed** template as one self-contained document). After approval
+   the workflow re-renders that sample through the delivery Function and
+   runs `output-verifier` on it; nothing is written unless the verdict is
+   `VERDICT: PASS`.
+5. **Apply — only after recorded approval AND a verified sample.** On
+   APPROVED (and never before), and only once `output-verifier` has passed
+   the re-rendered sample: the workflow runs
+   `scripts/update_templates.py` with the approval run id
+   (`--approval-run`; the script refuses to run without it), which writes
    the new template to the conversion source, bumps its registry version,
    re-runs convert → verify → create so every consuming agent's knowledge
    store and code_interpreter files update together, and re-stages the
@@ -70,6 +82,9 @@ Full field reference: `templates/README.md`.
 ## Rules
 
 - One template per change cycle; batch requests become sequential cycles.
+- A sample that fails the verifier is a rejected change, not a warning:
+  report the findings, keep the draft, and start a new cycle. Never
+  re-submit the same package hoping for a different verdict.
 - Never edit a template outside this workflow, and never present a draft
   as applied.
 - Keep an audit line for every cycle (who asked, what changed, approval

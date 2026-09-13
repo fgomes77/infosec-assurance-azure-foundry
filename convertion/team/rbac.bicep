@@ -184,10 +184,10 @@ var pimSchedule = {
 }
 
 // ---------------------------------------------------- existing resources
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = {
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = {
   name: foundryAccountName
 }
-resource project 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' existing = {
+resource project 'Microsoft.CognitiveServices/accounts/projects@2025-06-01' existing = {
   parent: foundry
   name: projectName
 }

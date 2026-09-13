@@ -1,0 +1,142 @@
+# Purpose: the request contract of the scheduled-follow-up Logic App
+#   (workflows/scheduled-followup.json) - the platform replacement for the
+#   claude.ai "send_later" / one-shot Routine used to re-open an engagement
+#   later ("re-check this supplier's remediation in 30 days"). The workflow
+#   answers IN the existing Foundry conversation and notifies the requester
+#   on Teams; it writes to no system of record, which is why scheduling is a
+#   documented non-submission in governance/HUMAN_APPROVAL.md.
+#
+# NOT AN AGENT TOOL - deliberately. This operation is a POST, and the
+#   Layer-1 read-only rule of record (integrations/README.md, enforced by
+#   scripts/attach_integrations.py) strips every non-GET operation from a
+#   spec before it reaches an agent. Attaching this spec would therefore
+#   hand an agent a tool with no operations left in it - an agent that looks
+#   able to schedule and is not. The registry entry is consequently
+#   `"enabled": false`, so an attempt to list it on an agent FAILS the
+#   deploy instead of degrading silently (attach_integrations.py refuses a
+#   disabled connection). The five read-only query POSTs of
+#   READ_ONLY_POST_OPS are not widened for this: scheduling creates a run,
+#   it is not a query.
+#
+# Who calls it: a named human, through the MCP tool `schedule_followup`
+#   (mcp-server/server.py, env FOLLOWUP_SCHEDULER_URL) or a direct call from
+#   an operations runbook. `requestedBy` is taken from the caller's token by
+#   the MCP server, never from free text typed by an agent.
+#
+# Auth: the Logic Apps Standard shared-access signature is part of the
+#   trigger URL and lives in Key Vault / setup/.env (FOLLOWUP_SCHEDULER_URL);
+#   never in this file. Residency: the Logic App, the Foundry project and the
+#   conversation all stay in the EU region.
+openapi: 3.0.3
+info:
+  title: ENX scheduled follow-up - one-shot re-open of a Foundry conversation
+  description: >-
+    Schedule one follow-up run of a published agent inside an EXISTING
+    Foundry conversation at a future time (max 90 days ahead, the Logic Apps
+    Wait limit). The call returns immediately with a follow-up id; the answer
+    appears in the conversation and as a Teams notification when it fires.
+    Nothing is stored in SharePoint, Jira, OneTrust or any other system of
+    record, and no report is produced - a deliverable still needs the
+    delivery pipeline, the output-verifier and a human approval.
+  version: "1.0"
+servers:
+  - url: https://{logicAppHost}/api/scheduled-followup/triggers
+    description: Logic Apps Standard workflow scheduled-followup
+    variables:
+      logicAppHost:
+        default: '{baseName}-la.azurewebsites.net'
+        description: Logic Apps Standard host of the workload resource group
+security:
+  - sasQuery: []
+paths:
+  /Followup_requested/invoke:
+    post:
+      operationId: scheduleFollowup
+      summary: Schedule a one-shot follow-up in an existing conversation
+      description: >-
+        Body fields match the trigger schema of
+        workflows/scheduled-followup.json one for one. The workflow responds
+        202 before it waits, so the caller never holds the connection open
+        for the delay.
+      parameters:
+        - name: api-version
+          in: query
+          required: true
+          schema:
+            type: string
+            default: "2022-05-01"
+          description: Logic Apps Standard trigger API version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FollowupRequest'
+      responses:
+        '202':
+          description: Accepted - the follow-up is scheduled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FollowupAccepted'
+        '400':
+          description: Malformed body - a required field is missing or fireAt is not RFC3339.
+        '401':
+          description: Missing or invalid shared-access signature.
+components:
+  securitySchemes:
+    sasQuery:
+      type: apiKey
+      in: query
+      name: sig
+      description: >-
+        Logic Apps Standard shared-access signature, supplied as part of
+        FOLLOWUP_SCHEDULER_URL (Key Vault). Never stored in this repository.
+  schemas:
+    FollowupRequest:
+      type: object
+      required: [conversationId, agentRef, fireAt, prompt, requestedBy]
+      properties:
+        conversationId:
+          type: string
+          description: >-
+            Foundry conversation of the engagement to re-open. The
+            conversations/responses runtime replaced the classic thread
+            object (finding C1).
+          example: conv_{id}
+        threadId:
+          type: string
+          deprecated: true
+          description: Deprecated alias of conversationId, accepted for one release.
+        agentRef:
+          type: string
+          description: >-
+            `<agent-name>:<version>` of the agent to run - the promoted
+            version from build/agent-versions.json (finding C19). A bare
+            name runs the latest version and is flagged by
+            scripts/verify_deployment.py.
+          example: infosec-assurance-advisor:{version}
+        fireAt:
+          type: string
+          format: date-time
+          description: RFC3339 UTC timestamp, at most 90 days ahead (Logic Apps Wait limit).
+          example: '2026-12-01T09:00:00Z'
+        prompt:
+          type: string
+          description: What the agent should do when it fires, written as an instruction.
+        requestedBy:
+          type: string
+          description: >-
+            UPN of the requesting team member, taken from the caller's token
+            by the MCP server - never free text. The Teams notification goes
+            to this person.
+          example: '{upn:owner}'
+    FollowupAccepted:
+      type: object
+      properties:
+        followupId:
+          type: string
+          description: Logic App run name - the handle used in operations/RUNBOOK entries.
+        fireAt:
+          type: string
+          format: date-time

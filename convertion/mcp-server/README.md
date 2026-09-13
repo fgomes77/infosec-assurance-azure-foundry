@@ -3,7 +3,8 @@
 Exposes the Foundry agent environment as MCP tools so any MCP client —
 Claude Desktop / Claude Code, the ENX gateway, or internal tooling — can
 drive it: `ask_orchestrator`, `ask_agent`, `list_agents`, `save_memory`,
-`search_memory`. Context persists via the returned `conversation_id`
+`search_memory`, `schedule_followup`. Context persists via the returned
+`conversation_id`
 (`thread_id` remains as a deprecated alias of the same value); durable team
 memory follows `MEMORY_BACKEND` — the `vs-assurance-memory` store or the
 Azure AI Search memory index (finding C3).
@@ -75,5 +76,17 @@ ENX gateway) as a remote MCP server.
 - `save_memory` writes to a shared store — restrict the hosted endpoint to
   the assurance team and keep notes free of special-category personal data
   (the tool description instructs models accordingly).
+- `schedule_followup` is the only tool that reaches a platform surface
+  outside Foundry: it POSTs the trigger of the `scheduled-followup` Logic
+  App (contract: `../integrations/openapi/followup-scheduler.yaml`). It
+  needs `FOLLOWUP_SCHEDULER_URL` (the trigger URL including its shared
+  access signature, from Key Vault); without it the tool reports that
+  nothing was scheduled instead of failing silently. The scheduled run only
+  re-opens a conversation and notifies the requester — it stores nothing in
+  any system of record, which is why it needs no approval gate
+  (`../governance/HUMAN_APPROVAL.md`). It is deliberately NOT an agent tool:
+  the read-only rule strips non-GET operations, so the registry entry
+  `followup-scheduler` is `enabled: false` and attaching it fails the
+  deploy.
 - Log/trace via Foundry's built-in tracing; the MCP layer adds no storage
   of its own.

@@ -16,7 +16,7 @@ of step 01 injected at creation.
 | Fact | Status / source |
 |---|---|
 | Resource model: one Foundry resource + child projects (`accounts/projects`); Agent Service GA and the Foundry API exist only for Foundry projects (not hub-based) | [GA] https://learn.microsoft.com/en-us/azure/foundry/what-is-foundry (2026-08-27); https://learn.microsoft.com/en-us/azure/foundry-classic/how-to/migrate-project (2026-09-11) |
-| Bicep api-versions for `accounts`, `projects`, `deployments`, `connections`: `2025-04-01-preview` (kit), stable `2025-06-01`, `2025-09-01`, `2025-12-01`, … | [GA] https://learn.microsoft.com/en-us/azure/templates/microsoft.cognitiveservices/accounts/projects (2026-07-20) — keep the kit's version until `what-if` on a stable version shows no diff (Tier C change) |
+| Bicep api-versions for `accounts`, `projects`, `deployments`, `connections`: **`2025-06-01` (stable) everywhere in the kit**; later stable versions `2025-09-01`, `2025-12-01`, … | [GA] https://learn.microsoft.com/en-us/azure/templates/microsoft.cognitiveservices/accounts/projects (2026-07-20) — the preview→stable move was made after `bicep build` showed the compiled ARM identical apart from the api-version string in every affected file; confirm with `what-if` before the first deployment, and treat any later bump the same way (Tier C change) |
 | Deployment SKUs: `DataZoneStandard` keeps processing inside the EU Data Zone (follows the EU Data Boundary, may include EFTA); `GlobalStandard` processes anywhere; data at rest stays in the resource region for all types | [GA] https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/deployment-types (2026-08-12) |
 | EU Data Zone availability in `swedencentral` (and FR/DE/IT/PL/ES/…): `gpt-4o 2024-11-20`, `gpt-4o-mini`, `o3-mini`, `o4-mini`, `gpt-4.1`, `gpt-5`, `gpt-5-mini` | [GA] https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability (2026-09-04) |
 | Tool support by model: `o3-mini` — OpenAPI **No**, MCP **No**, Azure AI Search **No**, SharePoint **No**, Web Search **No**; `gpt-4o-mini` lacks Azure AI Search | [GA] https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model (2026-09-07) |
@@ -81,9 +81,9 @@ param modelVersion string = '2024-11-20'
 param capacity int = 50
 param raiPolicyName string = 'infosec-security-analysis'
 
-resource foundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' existing = { name: foundryAccountName }
+resource foundry 'Microsoft.CognitiveServices/accounts@2025-06-01' existing = { name: foundryAccountName }
 
-resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-06-01' = {
   parent: foundry
   name: deploymentName
   sku: { name: 'DataZoneStandard', capacity: capacity }

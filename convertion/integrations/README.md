@@ -48,6 +48,24 @@ human approval**; and the gateway bearer is held by the project connection
 (`attach_integrations.py --dry-run` lists kept POSTs; `verify_conversion.py`
 audits them).
 
+## Platform surfaces that are NOT agent tools
+
+`followup-scheduler` (`openapi/followup-scheduler.yaml`) is the request
+contract of the `scheduled-followup` Logic App — the one-shot "re-open this
+conversation in 30 days" replacement for a claude.ai Routine. Its single
+operation is a POST, so the read-only rule above would strip it and leave an
+agent holding a tool with no operations. It is therefore registered with
+`"enabled": false`: `attach_integrations.py` refuses a disabled connection,
+so listing it on an agent **fails the deploy** instead of degrading
+silently. The team schedules follow-ups through the MCP tool
+`schedule_followup` (`mcp-server/server.py`), where the caller is a named
+human and `requestedBy` comes from their identity, not from model output.
+The scheduled run answers in the conversation and notifies the requester; it
+writes to no system of record, which is why it is a documented
+non-submission in `../governance/HUMAN_APPROVAL.md`. The five query POSTs of
+`READ_ONLY_POST_OPS` are not widened for it — scheduling creates a run, it
+is not a query.
+
 ## Model tiers
 
 `registry.json` assigns each agent one of three tiers (governance/
