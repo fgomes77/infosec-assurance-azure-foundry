@@ -1,4 +1,4 @@
-# User Quickstart — Systems a–j for the InfoSec Assurance Team
+# User Quickstart — Systems a–t for the InfoSec Assurance Team
 
 For the five assurance users (`TEAM_MODEL.md` §1). Everyone has the same
 persona, tools and model tiers (`../agents/persona_system_prompt.md` is
@@ -93,6 +93,66 @@ Trigger body for the report pipelines (Teams form fields map 1:1;
 - **Inputs:** template id from `../templates/registry.json`, your change request; threshold changes need an explicit methodology confirmation.
 - **Output:** review page under `Templates/Reviews/`; on approval `../scripts/update_templates.py` propagates the new version to every consuming agent and renderer (audit line saved to memory).
 - **Approval:** Tier **C** — owner only; if the proposer is the owner, the deputy approves. Gate expires after 7 days.
+
+### k — Supplier intake triage & tiering (`supplier-intake-triage`, agent `supplier-intake-triage`)
+- **Invoke:** start here for any new, renewed or re-scoped engagement — ask the agent, or trigger the pipeline from the Teams form.
+- **Inputs:** Supplier, Service, requester and Contract Owner, purpose, data categories, hosting/regions, connectivity and supplier access, whether a critical or important function is supported. Say what you do not know — the report lists it as missing rather than guessing.
+- **Output:** DOCX `IntakeTriage_<Supplier>_<Service>_<date>.docx` → `Reports/<Supplier>/<Service>/`, with the tier, the DORA critical-or-important-function verdict, the evidence set to request and the follow-up systems to run.
+- **Approval:** Tier **A**.
+
+### l — Contract security & resilience clause review (`contract-security-review`, agent `contract-security-review`)
+- **Invoke:** upload the MSA/DPA/security schedule/SLA/exit schedule to your thread and ask for the clause review; trigger the pipeline on the verified draft.
+- **Inputs:** the contract documents, plus the intake decision (the Art. 30(3) requirements apply only where a critical or important function is supported).
+- **Output:** DOCX with the clause coverage matrix (PRESENT / PARTIAL / ABSENT per requirement, with the quoted clause), gaps by severity and proposed wording for Legal.
+- **Approval:** Tier **B** — it leaves the team for Legal/Procurement.
+
+### m — DORA Register of Information (`dora-register-of-information`, agent `dora-register-builder`)
+- **Invoke:** per new arrangement, or as a full-register validation before the reporting date. Supplier/Service default to `Register`/`Full-Register`.
+- **Inputs:** the reporting reference date and the scope; sources are read internally (RoI history, portfolio list, CMDB, contract reviews).
+- **Output:** XLSX with one sheet per ITS table plus a **Validation** sheet listing every rule breach and its owner.
+- **Approval:** Tier **B**. The owner submits to the competent authority — the platform never submits.
+
+### n — Concentration & fourth-party analysis (`concentration-risk-analysis`, agent `concentration-risk-analyzer`)
+- **Invoke:** on portfolio review, on a Tier 1 onboarding, or when a fourth party appears in two unrelated chains.
+- **Inputs:** scope (portfolio / business line / function / supplier chain). Supplier/Service default to `Portfolio`/`Concentration`.
+- **Output:** XLSX: chains, concentration by dimension, impact vs recovery objectives, substitutability, treatment plan, and the unknown chain nodes to request.
+- **Approval:** Tier **B**.
+
+### o — Third-Party Assurance Radar (`continuous-monitoring-radar`, agent `continuous-monitoring-radar`)
+- **Invoke:** weekly (or before a portfolio review). Supplier/Service default to `Portfolio`/`Radar`.
+- **Inputs:** as-at date and horizon (default 90 days).
+- **Output:** single-file HTML radar → `Reports/Portfolio/Radar/`: evidence expiring, assessments due, rating drift, overdue findings, expiring acceptances, watch items — each row with its source and a prioritised action.
+- **Approval:** Tier **A**.
+
+### p — Supplier incident impact & notification duties (`supplier-incident-assessment`, agent `supplier-incident-assessor`)
+- **Invoke:** immediately on a supplier incident notification, outage or breach report — before the facts are complete.
+- **Inputs:** the supplier's notification/advisory/RFO, plus every timestamp you can evidence (the **awareness** timestamp starts the regulatory clocks).
+- **Output:** DOCX: timeline, ENX impact, and the notification-duty table (DORA Art. 19, NIS2 Art. 23, GDPR Art. 33/34, contractual) with deadlines and owners. The platform assesses; CISO/DPO/Compliance/Legal decide and notify.
+- **Approval:** Tier **B**, and time-critical — escalate the gate in `{teams:infosec-assurance-approvals}` rather than waiting.
+
+### q — Exit strategy & offboarding assurance (`exit-offboarding-assurance`, agent `exit-offboarding-assurance`)
+- **Invoke:** `PLAN` mode for any service supporting a critical or important function (DORA Art. 28(8) requires a tested exit strategy); `OFFBOARD` mode at termination.
+- **Inputs:** mode, the contract's exit clauses, the concentration analysis (substitutability), and for OFFBOARD the termination notice and date.
+- **Output:** DOCX: PLAN — triggers, options, transition plan, data exit, continuity, test record, readiness verdict; OFFBOARD — the evidenced checklist with outstanding items and surviving obligations.
+- **Approval:** Tier **B**.
+
+### r — Findings, remediation & acceptance register (`findings-remediation-register`, agent `findings-remediation-register`)
+- **Invoke:** `BUILD` after a batch of assessments, `UPDATE` for the status refresh, `REVIEW` for the periodic review. Supplier/Service default to `Portfolio`/`Findings`.
+- **Inputs:** scope, mode, as-at date. Findings are read from the stored reports and their tracking issues — never re-typed.
+- **Output:** XLSX: register, overdue, acceptances with expiry, closed-with-evidence, trends. An expired acceptance comes back as OPEN.
+- **Approval:** Tier **A**.
+
+### s — ISMS audit & management-review packs (`isms-audit-pack`, agent `isms-audit-pack`)
+- **Invoke:** for the internal audit programme, before a management review, or on a supervisory/external-audit request. Supplier/Service are the `Advisory/<Pack-type>/<Scope>/` segments.
+- **Inputs:** pack type (`SOA`, `AUDIT_PLAN`, `AUDIT_REPORT`, `MGMT_REVIEW`, `EVIDENCE_INDEX`), scope and period.
+- **Output:** DOCX pack → `Advisory/…`, every conformity statement carrying its evidence reference.
+- **Approval:** Tier **B**.
+
+### t — Regulatory & standards change watch (`regulatory-change-watch`, agent `regulatory-change-watch`)
+- **Invoke:** monthly, or when a new RTS/ITS or standard revision lands.
+- **Inputs:** period and horizon; the watch list is the default unless you narrow it.
+- **Output:** DOCX briefing → `Advisory/Regulatory/Change-Watch/`: what changed, applicability, **which platform artefacts must change**, gaps, actions dated backwards from the application date, and a confidence rating per item.
+- **Approval:** Tier **A**. Any platform change it proposes still goes through `../operations/CHANGE_MANAGEMENT.md`.
 
 ## 3. If something goes wrong
 

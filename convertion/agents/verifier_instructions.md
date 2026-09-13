@@ -121,6 +121,84 @@ assessment data.
   threshold change explicitly flagged as a methodology change.
 - **Transcript (DOCX):** speaker-labelled summary, decisions, actions
   with owners; personal data limited to participant names/roles.
+- **IntakeTriage (DOCX):** supplier type named from the ENX taxonomy;
+  the critical-or-important-function question answered Yes / No / Cannot
+  determine with the criterion applied; criticality tier with the driving
+  criterion; per-domain inherent profile; the required assurance set and
+  the obligations triggered, each with an owner; a "Information still
+  missing" table listing every field not obtained — a report with no
+  missing-field table AND no statement that nothing is missing FAILS; no
+  numeric score presented without naming the engine run that produced it.
+- **ContractReview (DOCX):** every requirement row carries a status ∈
+  {PRESENT, PARTIAL, ABSENT, NOT APPLICABLE} with either a quoted clause
+  reference or an explicit "not found in the documents provided"; DORA
+  Art. 30(3) rows appear only with the critical-or-important-function
+  verdict they rely on stated; every gap has a severity and proposed
+  wording marked as a drafting suggestion for Legal; the draft states no
+  legal conclusion on enforceability; overall verdict ∈ {ACCEPTABLE,
+  ACCEPTABLE WITH CONDITIONS, NOT ACCEPTABLE}.
+- **DORARegister (XLSX):** one sheet per ITS table plus a **Validation**
+  sheet and a **Sources** sheet; no fabricated value — an unsourced field
+  is empty and appears in Validation as MISSING; identification codes
+  either a well-formed LEI or a permitted alternative with its code type;
+  country codes ISO 3166-1 alpha-2, currencies ISO 4217; every service
+  flagged as supporting a critical or important function has a function
+  record with a criticality assessment date and RTO/RPO; the draft states
+  the ITS version applied and never claims the register was submitted.
+- **ConcentrationRisk (XLSX):** chains carry every node with its evidence
+  source, unverified nodes marked UNVERIFIED and repeated in Gaps; each
+  concentration rating shows its components (criticality, exposure,
+  substitutability); no ENX supplier or service name appears in any cited
+  web query.
+- **MonitoringRadar (HTML):** single self-contained file, no external
+  references; `data-radar-asof="<YYYY-MM-DD>"` on `<body>` matching the
+  stated as-at date; all six lanes present (evidence expiry, assessments
+  due, rating drift, open findings, expiring acceptances, watch items)
+  even when empty; every row carries its source; statuses consistent with
+  the as-at date (an item dated past the as-at date shown as CURRENT
+  FAILS); items with an undeterminable date listed as UNKNOWN, not
+  dropped.
+- **IncidentAssessment (DOCX):** timeline table with a timestamp, time
+  zone and source per event, including an explicit ENX **awareness**
+  timestamp (or a stated unverified earliest defensible time); the
+  notification-duty table covers DORA Art. 19, NIS2 Art. 23 and GDPR
+  Art. 33/34 each with trigger test, conclusion ∈ {DUE, NOT DUE, TO BE
+  CONFIRMED}, deadline computed from awareness, and owner; confirmed and
+  suspected facts distinguished throughout; the supplier's own
+  classification reproduced and never downgraded silently; the draft
+  states that the determination of record rests with CISO/DPO/Compliance/
+  Legal and that nothing has been notified.
+- **ExitAssurance (DOCX):** mode stated (PLAN or OFFBOARD); PLAN carries
+  triggers, an options comparison, a transition plan whose duration is
+  compared against the contractual transition period, data exit,
+  continuity, the test record and a verdict ∈ {READY, READY WITH GAPS,
+  NOT READY} — READY with no identified alternative provider FAILS;
+  OFFBOARD carries every checklist item with a status and an evidence
+  reference, items without evidence shown OPEN, and deletion claims
+  backed by a certificate or written confirmation covering subcontractors
+  and backups.
+- **RemediationRegister (XLSX):** every row has a stable finding id,
+  source artefact with path and date, severity with its driver, control
+  reference, owner, due date and status; CLOSED rows carry a closure
+  evidence reference (a CLOSED row without one FAILS); every ACCEPTED row
+  carries an accepting authority, compensating controls and an **expiry
+  date**, and an acceptance expired at the as-at date is shown OPEN;
+  proposed due dates marked PROPOSED; source gaps listed on the Sources
+  sheet.
+- **ISMSAuditPack (DOCX):** pack type stated; every conformity statement
+  carries an evidence reference with location and date, otherwise
+  INSUFFICIENT EVIDENCE; the pack states on its face that it is prepared
+  material and that the conformity determination, audit sign-off and
+  management review are the accountable functions' acts; where the
+  audited process is performed by this platform, the independence
+  conflict is stated.
+- **RegChangeWatch (DOCX):** every item cites an official public source
+  with body, document reference and date accessed, and carries a status
+  (consultation / adopted / in force / applies from) and a confidence ∈
+  {HIGH, MEDIUM, LOW} — a draft or consultation presented as settled
+  law FAILS; every change with ENX applicability names the platform
+  artefacts that must change, by path; actions carry dates worked back
+  from the application date; no Euronext identifier in any cited query.
 - **Jira finding DRAFT / Form B answer set:** required fields
   (title, description, severity, owner, due date / every question
   answered with an allowed option and evidence reference); framed as a

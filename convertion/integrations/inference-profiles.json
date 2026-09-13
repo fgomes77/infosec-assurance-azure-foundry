@@ -98,6 +98,8 @@
     "doc-coauthoring": "report",
     "internal-comms": "report",
     "tpsrca-report": "report",
+    "exit-offboarding-assurance": "report",
+    "isms-audit-pack": "report",
 
     "deepsearch-protocol": "analysis",
     "ai-deepsearch-osint-gathering-report": "analysis",
@@ -109,6 +111,13 @@
     "tpsrca-assessment-engine": "analysis",
     "tpsrca-calc": "analysis",
     "tpsrca-analysis": "analysis",
+    "supplier-intake-triage": "analysis",
+    "contract-security-review": "analysis",
+    "dora-register-builder": "analysis",
+    "concentration-risk-analyzer": "analysis",
+    "continuous-monitoring-radar": "analysis",
+    "supplier-incident-assessor": "analysis",
+    "findings-remediation-register": "analysis",
 
     "cyber-forum": "advisory",
     "infosec-assurance-advisor": "advisory",
@@ -119,6 +128,7 @@
     "eu-ai-act": "advisory",
     "learn": "advisory",
     "mcp-builder": "advisory",
+    "regulatory-change-watch": "advisory",
 
     "output-verifier": "verifier"
   },

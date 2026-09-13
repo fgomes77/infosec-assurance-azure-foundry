@@ -138,6 +138,119 @@
       "libraryRoot": "reportsRoot",
       "approvalKind": "REPORT_EVIDENCE",
       "notes": "Fed by workflows/speech-transcription.json (Azure AI Speech batch transcription + diarization, EU region). The workflow hands over the normalised `transcript` contract (templates/transcript.schema.json); the knowledge-only whisperx agent fills ONLY summary[], actions[] and notes[] and returns the contract otherwise unchanged, so every turn stays verbatim. renderTemplate was 'evidence-summary' until the dedicated renderer existed - it is now 'transcript', which emits md + html + docx from one payload (/api/render returns all three in files[]); the DOCX is the file of record under Reports/<Supplier>/<Service>/."
+    },
+    "supplier-intake-triage": {
+      "requirement": "k",
+      "agent": "supplier-intake-triage",
+      "reportType": "IntakeTriage",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_INTAKE",
+      "notes": "Requirement k: the first lifecycle gate. Classifies supplier type, ICT-service criticality (DORA Art. 3(21)-(22) critical-or-important-function test), inherent risk profile and the assurance depth that follows, and names the follow-up systems to run (contract review, RoI entry, DPIA, EU AI Act screening). Tier A: it decides effort, not a commitment - the tiering itself is re-confirmed by the assessments it triggers.",
+      "portfolioStatusOnStore": "Intake"
+    },
+    "contract-security-review": {
+      "requirement": "l",
+      "agent": "contract-security-review",
+      "reportType": "ContractReview",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_CONTRACT",
+      "notes": "Requirement l: clause-by-clause coverage of DORA Art. 30(2)/(3), Art. 29 subcontracting, GDPR Art. 28(3) + SCCs 2021/914, NIS2 Art. 21(2)(d), ENX security minimums, incident clocks, resilience and exit. Output feeds Legal/Procurement negotiation; the agent proposes wording and never states a legal conclusion. Tier B - it is read outside the team."
+    },
+    "dora-register-of-information": {
+      "requirement": "m",
+      "agent": "dora-register-builder",
+      "reportType": "DORARegister",
+      "renderFormat": "xlsx",
+      "renderTemplate": "xlsx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_DORA_REGISTER",
+      "notes": "Requirement m: DORA Art. 28(3) Register of Information - one sheet per ITS table plus a Validation sheet listing every rule breach (missing mandatory field, bad LEI/ISO code, broken subcontracting rank chain, CIF service without RTO/RPO or exit plan). Supplier/Service segments are 'Register'/'<reporting reference date>' for a full-register run. Tier B: it is submitted by the accountable owner to the competent authority - the pipeline never submits.",
+      "supplierNameFallback": "Register",
+      "serviceNameFallback": "Full-Register"
+    },
+    "concentration-risk-analysis": {
+      "requirement": "n",
+      "agent": "concentration-risk-analyzer",
+      "reportType": "ConcentrationRisk",
+      "renderFormat": "xlsx",
+      "renderTemplate": "xlsx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_CONCENTRATION",
+      "notes": "Requirement n: DORA Art. 29 concentration risk plus the fourth-party chain - provider, fourth-party, geography, technology and entity dimensions, impact of failure against ENX recovery objectives, substitutability, and treatment options. Portfolio-scoped runs store under Reports/Portfolio/<scope>/. Tier B: concentration conclusions drive architecture and sourcing decisions.",
+      "supplierNameFallback": "Portfolio",
+      "serviceNameFallback": "Concentration"
+    },
+    "continuous-monitoring-radar": {
+      "requirement": "o",
+      "agent": "continuous-monitoring-radar",
+      "reportType": "MonitoringRadar",
+      "renderFormat": "html",
+      "renderTemplate": "",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_MONITORING",
+      "notes": "Requirement o: the standing ongoing-monitoring view between assessments (DORA Art. 28(1)(b), ISO/IEC 27001:2022 A.5.22) - evidence expiry, assessments due, external rating drift, overdue findings, expiring risk acceptances, undispositioned watch items. The agent emits the finished single-file HTML per agents/knowledge-packs/enx-html-design-guide.md with data-radar-asof on <body>; statuses are recomputed against the as-at date and never reused from the evidence cache. NOTE: SharePoint serves .html as a download, not inline - see sharepoint/README.md.",
+      "supplierNameFallback": "Portfolio",
+      "serviceNameFallback": "Radar"
+    },
+    "supplier-incident-assessment": {
+      "requirement": "p",
+      "agent": "supplier-incident-assessor",
+      "reportType": "IncidentAssessment",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_INCIDENT",
+      "notes": "Requirement p: impact of a supplier incident on Euronext plus the notification-duty assessment with deadlines computed from the evidenced awareness timestamp (DORA Art. 18/19 major-incident classification, NIS2 Art. 23 24h/72h/1-month, GDPR Art. 33/34, contractual and client duties). The determination of record stays with CISO/DPO/Compliance/Legal - nothing here notifies anyone. Tier B and time-critical: the approval gate is the escalation, so route it to the senior approvers immediately."
+    },
+    "exit-offboarding-assurance": {
+      "requirement": "q",
+      "agent": "exit-offboarding-assurance",
+      "reportType": "ExitAssurance",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_EXIT",
+      "notes": "Requirement q: DORA Art. 28(8) exit strategy (PLAN mode - triggers, options, transition plan against the contractual transition period, data exit, continuity, test record, readiness verdict) or the evidenced offboarding checklist (OFFBOARD mode - access revocation, data return and certified deletion including subcontractors and backups, registers updated, surviving obligations). Mode is passed in the trigger body. Tier B."
+    },
+    "findings-remediation-register": {
+      "requirement": "r",
+      "agent": "findings-remediation-register",
+      "reportType": "RemediationRegister",
+      "renderFormat": "xlsx",
+      "renderTemplate": "xlsx-generic",
+      "libraryRoot": "reportsRoot",
+      "approvalKind": "REPORT_REMEDIATION",
+      "notes": "Requirement r: the consolidated findings, remediation and risk-acceptance register - every finding from the evidence/SOC/pentest/DeepSearch/contract/concentration/incident systems normalised to one row with severity, control reference, owner, due date, status and closure evidence; every acceptance with expiry, authority and compensating controls. An expired acceptance reverts to OPEN. Portfolio runs store under Reports/Portfolio/Findings/. Tier A - it is the team's own working register.",
+      "supplierNameFallback": "Portfolio",
+      "serviceNameFallback": "Findings"
+    },
+    "isms-audit-pack": {
+      "requirement": "s",
+      "agent": "isms-audit-pack",
+      "reportType": "ISMSAuditPack",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "advisoryRoot",
+      "approvalKind": "REPORT_ISMS_AUDIT",
+      "notes": "Requirement s: ISO/IEC 27001:2022 governance packs for the third-party scope - SOA extract (cl. 6.1.3 / A.5.19-A.5.23), internal audit plan and report (cl. 9.2), management review input pack (cl. 9.3), or the audit evidence index for an external audit or supervisory request. Pack type is passed in the trigger body; supplierName/serviceName are the Advisory/<Pack-type>/<Scope>/ segments. Tier B: audit material leaves the team.",
+      "supplierNameFallback": "ISMS",
+      "serviceNameFallback": "Audit-Pack"
+    },
+    "regulatory-change-watch": {
+      "requirement": "t",
+      "agent": "regulatory-change-watch",
+      "reportType": "RegChangeWatch",
+      "renderFormat": "docx",
+      "renderTemplate": "docx-generic",
+      "libraryRoot": "advisoryRoot",
+      "approvalKind": "REPORT_REGWATCH",
+      "notes": "Requirement t: regulatory and standards horizon scanning (DORA RTS/ITS, NIS2 transpositions, GDPR/EDPB, EU AI Act timeline, ISO/NIST/CIS/CSA/PCI/ISAE, ESA outsourcing guidelines) with, for each change, the ENX applicability, the named platform artefacts that must change, the gap assessment and an action plan worked backwards from the application date. Public official sources only - no ENX identifier ever enters a query. Tier A: it informs, and every change it proposes runs through its own change process.",
+      "supplierNameFallback": "Regulatory",
+      "serviceNameFallback": "Change-Watch"
     }
   }
 }

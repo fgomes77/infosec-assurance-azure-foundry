@@ -64,10 +64,21 @@
         "InfoSecTPA-DPO": "B",
         "CyberForum": "B",
         "CISOGlobal": "B",
-        "CISOExecSummary": "B"
+        "CISOExecSummary": "B",
+
+      "IntakeTriage": "A",
+      "ContractReview": "B",
+      "DORARegister": "B",
+      "ConcentrationRisk": "B",
+      "MonitoringRadar": "A",
+      "IncidentAssessment": "B",
+      "ExitAssurance": "B",
+      "RemediationRegister": "A",
+      "ISMSAuditPack": "B",
+      "RegChangeWatch": "A"
       },
       "unknown_reportType": "B",
-      "pipelines": ["deepsearch-report", "ai-deepsearch-report", "scheduled-deepsearch", "tpa-evidence-analysis", "soc-report-summary", "pentest-report-summary", "cyber-forum-brief", "transcript-summary", "advisory-file-delivery", "dpia-dpo-report", "onetrust-assessment-intake", "cyber-forum-pptx", "ciso-global-pptx", "ciso-exec-summary"]
+      "pipelines": ["deepsearch-report", "ai-deepsearch-report", "scheduled-deepsearch", "tpa-evidence-analysis", "soc-report-summary", "pentest-report-summary", "cyber-forum-brief", "transcript-summary", "advisory-file-delivery", "dpia-dpo-report", "onetrust-assessment-intake", "cyber-forum-pptx", "ciso-global-pptx", "ciso-exec-summary", "supplier-intake-triage", "contract-security-review", "dora-register-of-information", "concentration-risk-analysis", "continuous-monitoring-radar", "supplier-incident-assessment", "exit-offboarding-assurance", "findings-remediation-register", "isms-audit-pack", "regulatory-change-watch"]
     },
     "JIRA_CREATE":     { "tier": "A", "requirement": "-", "pipelines": ["defender-incident-brief", "scheduled-deepsearch"] },
     "IAF_SUBMIT":      { "tier": "A", "requirement": "-", "pipelines": ["jira-finding-sync"] },

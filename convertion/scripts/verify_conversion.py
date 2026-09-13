@@ -105,9 +105,10 @@ FRESHNESS_MARKERS = {
     "pptx": ("instructions.md", "secondaryValAxis"),
     "xlsx": ("instructions.md", "_xlfn."),
 }
-DELIVERY_AGENTS = ("ciso-global-report", "tpa-evidence-analyzer",
-                   "soc-report-analyzer", "pentest-report-analyzer",
-                   "template-manager")
+# The Foundry-only delivery and TPRM-lifecycle agents are whatever
+# create_delivery_agents.AGENTS declares - read from there, never listed
+# again here, so a new system cannot be added without its charter being
+# built, persona/gate-checked and hash-frozen by this gate.
 
 
 def sha(p: Path) -> str:
@@ -644,7 +645,7 @@ def main() -> int:
         built = {co.ADVISOR: co.advisor_instructions(),
                  co.VERIFIER: co.verifier_instructions(),
                  co.ORCHESTRATOR: co.orchestrator_instructions()}
-        for name in DELIVERY_AGENTS:
+        for name in cda.AGENTS:
             built[name] = cda.build_instructions(name)
         for name, text in built.items():
             if "Principal Security Assurance Consultant" not in text:

@@ -593,6 +593,150 @@
       "guardrail_policy": "infosec-security-analysis",
       "example": true,
       "_comment": "Routine replaced by workflows/morning-brief.json (Logic App gathers calendar/mail/chats and calls the agent); the agent itself only formats. Delegated OBO when invoked interactively."
+    },
+    "supplier-intake-triage": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "jira-cloud",
+        "confluence-cloud",
+        "onetrust",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "evidence-cache",
+        "web-search"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement k (intake gate). Reads the TPA evidence tree and the CMDB to ground entity/contract-owner and to detect an assessment that already exists; OneTrust for a registered assessment; web-search for public supplier context on public terms only."
+    },
+    "contract-security-review": {
+      "tools": [
+        "sharepoint-graph",
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "onetrust",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement l (contract clause review). No web tool by design: contract text is Euronext Confidential and never grounds a public search."
+    },
+    "dora-register-builder": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "onetrust",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "evidence-cache"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement m (DORA Art. 28(3) Register of Information). Sources are internal only - register content is Confidential and must never reach a web-facing tool."
+    },
+    "concentration-risk-analyzer": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy",
+        "web-search",
+        "evidence-cache"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement n (DORA Art. 29 concentration + fourth-party chain). osint-proxy/web-search read PUBLIC sub-processor and Trust Center pages on public terms only - no ENX identifier ever enters a query (guardrails 1)."
+    },
+    "continuous-monitoring-radar": {
+      "tools": [
+        "sharepoint-graph",
+        "evidence-cache",
+        "securityscorecard",
+        "iaf-api",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement o (ongoing monitoring, DORA Art. 28(1)(b) / ISO 27001 A.5.22). evidence-cache supplies already-extracted emission dates and validity periods; every time-dependent status is recomputed against the as-at date, never reused."
+    },
+    "supplier-incident-assessor": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "defender-graph",
+        "onetrust",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy",
+        "web-search"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement p (supplier incident impact + DORA Art. 19 / NIS2 Art. 23 / GDPR Art. 33 notification clocks). defender-graph checks for ENX-side indicators; public advisories are read on public terms only."
+    },
+    "exit-offboarding-assurance": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "jira-cloud",
+        "confluence-cloud",
+        "entra-iam-graph",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement q (DORA Art. 28(8) exit strategies + offboarding assurance). entra-iam-graph evidences supplier access revocation read-only."
+    },
+    "findings-remediation-register": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-cloud",
+        "iaf-api",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "enx-gateway-mcp",
+        "evidence-cache"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement r (findings, remediation and risk-acceptance register with expiry). jira-cloud and iaf-api are the tracking systems of record; the register never changes a status without their evidence."
+    },
+    "isms-audit-pack": {
+      "tools": [
+        "confluence-cloud",
+        "sharepoint-graph",
+        "jira-cloud",
+        "iaf-api",
+        "jira-assets-cmdb",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement s (ISO/IEC 27001:2022 cl. 6.1.3/9.2/9.3 packs + audit evidence index). Confluence holds the ISMS policies, prior audits and minutes."
+    },
+    "regulatory-change-watch": {
+      "tools": [
+        "web-search",
+        "osint-proxy",
+        "confluence-cloud",
+        "sharepoint-graph",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement t (regulatory and standards horizon scanning). Public official sources only; internal grounding for impact comes from Confluence/SharePoint and never leaves for the web."
     }
   },
   "advisory_read_only_toolset": {

@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Create/update the delivery-layer agents (requirements d, d2, e, f, j):
+"""Create/update the delivery-layer agents (requirements d, d2, e, f, j
+and the TPRM lifecycle systems k-t):
 
   ciso-global-report, tpa-evidence-analyzer, soc-report-analyzer,
-  pentest-report-analyzer, template-manager
+  pentest-report-analyzer, template-manager,
+  supplier-intake-triage (k), contract-security-review (l),
+  dora-register-builder (m), concentration-risk-analyzer (n),
+  continuous-monitoring-radar (o), supplier-incident-assessor (p),
+  exit-offboarding-assurance (q), findings-remediation-register (r),
+  isms-audit-pack (s), regulatory-change-watch (t)
 
 Run AFTER create_agents.py and BEFORE attach_integrations.py (their tools
 and model tiers come from integrations/registry.json) and
 create_orchestrator.py (so the orchestrator connects to them too).
 
-These five agents are options 6-10 of the control-center menu
+The first five are options 6-10 of the control-center menu
 (agents/overlays/enx-tprm-control-center.md), so they are ROUTE targets of
 `enx-tprm-control-center`. Because they only exist once this script has
 run, the router is wired in a later pass: `create_agents.py --rewire`
@@ -36,6 +42,16 @@ byte-consistent with the previous environment):
                              rendering)
   all analyzers           -> knowledge packs file-intake / pdf-reading /
                              enx-writing-style; research-pattern overlay
+  k-t lifecycle systems   -> the framework knowledge each one reasons from
+                             (DORA/NIS2 converted stores, advisor packs
+                             gdpr-art28, cloud-ict, iso22301, iso27005,
+                             iso27002, cis, csa-ccm, tpa-evidence-playbook)
+                             plus governance/RISK_THRESHOLDS.md wherever the
+                             system assigns a severity or a tier, so no
+                             threshold is re-invented per agent. They render
+                             through the EXISTING generic renderers
+                             (docx-generic / xlsx-generic) or emit HTML
+                             directly - no new renderer, no new approval path.
 
 Idempotent by name: on the GA runtime each run saves a new immutable
 version `<name>:<n>` recorded in build/agent-versions.json (finding C19);
@@ -135,6 +151,151 @@ AGENTS: dict[str, dict] = {
         "knowledge": ["build/agents/pdf-full-coverage-analyzer/knowledge/*",
                       _ADV + "pentest-standards-owasp-ptes-cvss.md",
                       _ADV + "cis-controls-v8-1.md"] + _PACKS,
+        "overlay": True,
+    },
+    # ---- TPRM lifecycle systems (requirements k-t) -------------------
+    # Same governed path as the five above: charter + persona + approval
+    # gate, a knowledge store of the verified methodology packs, the
+    # read-only enterprise toolset from integrations/registry.json, and a
+    # pipeline in workflows/pipelines.json rendering through an EXISTING
+    # renderer (docx-generic / xlsx-generic / direct HTML) - no new
+    # renderer, so the verifier + approval + SharePoint path is unchanged.
+    "supplier-intake-triage": {
+        "model": REASONING_MODEL,
+        "description": "Lifecycle gate 1: supplier/service intake triage and "
+                       "tiering - supplier type, DORA critical-or-important-"
+                       "function test, inherent risk profile, the assurance "
+                       "depth and evidence set that follow, and the "
+                       "obligations triggered.",
+        "knowledge": [_ADV + "tpsrca-supplier-types.md",
+                      _ADV + "cloud-ict-service-assurance.md",
+                      _ADV + "gdpr-art28-sccs.md",
+                      _ADV + "iso27005-risk-management.md",
+                      "build/agents/tpsrca-assessment-engine/knowledge/*",
+                      "governance/RISK_THRESHOLDS.md"] + _PACKS,
+        "overlay": True,
+    },
+    "contract-security-review": {
+        "model": REASONING_MODEL,
+        "description": "Contract, DPA and schedule review clause by clause "
+                       "against DORA Art. 30(2)/(3) and Art. 29, GDPR "
+                       "Art. 28(3) + SCCs, NIS2 Art. 21(2)(d), ENX security "
+                       "minimums, incident clocks, resilience and exit - with "
+                       "proposed wording for Legal.",
+        "knowledge": [_ADV + "gdpr-art28-sccs.md",
+                      _ADV + "cloud-ict-service-assurance.md",
+                      _ADV + "iso22301-business-continuity.md",
+                      "build/agents/dora/knowledge/*",
+                      "build/agents/nis2/knowledge/*"] + _PACKS,
+        "overlay": True,
+    },
+    "dora-register-builder": {
+        "model": REASONING_MODEL,
+        "description": "DORA Art. 28(3) Register of Information: builds the "
+                       "ITS tables (entities, arrangements, providers, "
+                       "services, functions, subcontracting chain, data "
+                       "locations, exit) and validates every rule breach "
+                       "before the owner submits it.",
+        "knowledge": ["build/agents/dora/knowledge/*",
+                      _ADV + "cloud-ict-service-assurance.md",
+                      _ADV + "tpsrca-supplier-types.md"] + _PACKS,
+        "overlay": True,
+    },
+    "concentration-risk-analyzer": {
+        "model": REASONING_MODEL,
+        "description": "DORA Art. 29 concentration and fourth-party chain "
+                       "analysis: provider / fourth-party / geography / "
+                       "technology / entity exposure, impact of failure "
+                       "against ENX recovery objectives, substitutability "
+                       "and treatment options.",
+        "knowledge": ["build/agents/dora/knowledge/*",
+                      _ADV + "iso22301-business-continuity.md",
+                      _ADV + "cloud-ict-service-assurance.md",
+                      _ADV + "iso27005-risk-management.md",
+                      "governance/RISK_THRESHOLDS.md"] + _PACKS,
+        "overlay": True,
+    },
+    "continuous-monitoring-radar": {
+        "model": REASONING_MODEL,
+        "description": "Third-Party Assurance Radar (HTML): evidence expiry, "
+                       "assessments due, external rating drift, overdue "
+                       "findings, expiring risk acceptances and "
+                       "undispositioned watch items, recomputed against an "
+                       "as-at date.",
+        "knowledge": [_ADV + "tpa-evidence-review-playbook.md",
+                      _ADV + "soc-isae-assurance-reports.md",
+                      _ADV + "csa-ccm-caiq-star.md",
+                      _ADV + "iso27002-control-attributes.md",
+                      "agents/knowledge-packs/enx-html-design-guide.md",
+                      "governance/RISK_THRESHOLDS.md"] + _PACKS,
+        "overlay": True,
+    },
+    "supplier-incident-assessor": {
+        "model": REASONING_MODEL,
+        "description": "Supplier incident impact on Euronext plus the "
+                       "notification-duty assessment with deadlines computed "
+                       "from the evidenced awareness timestamp (DORA "
+                       "Art. 18/19, NIS2 Art. 23, GDPR Art. 33/34) - "
+                       "assessment only, it never notifies.",
+        "knowledge": ["build/agents/dora/knowledge/*",
+                      "build/agents/nis2/knowledge/*",
+                      _ADV + "gdpr-art28-sccs.md",
+                      _ADV + "iso22301-business-continuity.md",
+                      _ADV + "nist-csf-2-0.md",
+                      "governance/RISK_THRESHOLDS.md"] + _PACKS,
+        "overlay": True,
+    },
+    "exit-offboarding-assurance": {
+        "model": REASONING_MODEL,
+        "description": "DORA Art. 28(8) exit strategy (triggers, options, "
+                       "transition plan, data exit, continuity, test record, "
+                       "readiness verdict) and the evidenced offboarding "
+                       "checklist at termination.",
+        "knowledge": ["build/agents/dora/knowledge/*",
+                      _ADV + "iso22301-business-continuity.md",
+                      _ADV + "cloud-ict-service-assurance.md",
+                      _ADV + "gdpr-art28-sccs.md"] + _PACKS,
+        "overlay": True,
+    },
+    "findings-remediation-register": {
+        "model": REASONING_MODEL,
+        "description": "Consolidated findings, remediation and risk-"
+                       "acceptance register: every finding normalised with "
+                       "severity, control reference, owner, due date, status "
+                       "and closure evidence; every acceptance with an "
+                       "expiry that reverts it to OPEN.",
+        "knowledge": [_ADV + "iso27005-risk-management.md",
+                      _ADV + "iso27002-control-attributes.md",
+                      _ADV + "cis-controls-v8-1.md",
+                      _ADV + "pentest-standards-owasp-ptes-cvss.md",
+                      "governance/RISK_THRESHOLDS.md"] + _PACKS,
+        "overlay": True,
+    },
+    "isms-audit-pack": {
+        "model": REASONING_MODEL,
+        "description": "ISO/IEC 27001:2022 governance packs for the third-"
+                       "party scope: SoA extract, internal audit plan and "
+                       "report (cl. 9.2), management review input pack "
+                       "(cl. 9.3), and the audit evidence index.",
+        "knowledge": [_ADV + "iso27002-control-attributes.md",
+                      _ADV + "governance-frameworks-compendium.md",
+                      _ADV + "iso27005-risk-management.md",
+                      _ADV + "iso20000-service-management.md",
+                      "build/agents/iso27001/knowledge/*"] + _PACKS,
+        "overlay": True,
+    },
+    "regulatory-change-watch": {
+        "model": REASONING_MODEL,
+        "description": "Regulatory and standards horizon scanning with, per "
+                       "change, the ENX applicability, the named platform "
+                       "artefacts that must change, the gap assessment and "
+                       "an action plan worked backwards from the application "
+                       "date.",
+        "knowledge": [_ADV + "governance-frameworks-compendium.md",
+                      _ADV + "nist-csf-2-0.md",
+                      "build/agents/eu-ai-act/knowledge/*",
+                      "build/agents/dora/knowledge/*",
+                      "build/agents/nis2/knowledge/*"] + _PACKS,
         "overlay": True,
     },
     "template-manager": {

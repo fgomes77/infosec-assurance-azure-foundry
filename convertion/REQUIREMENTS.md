@@ -1,7 +1,13 @@
-# Delivery-Layer Requirements — Traceability (a–j)
+# Delivery-Layer Requirements — Traceability (a–t)
 
 This file maps each business requirement to the components that implement
-it on **Microsoft Foundry (formerly Azure AI Foundry)**. The base
+it on **Microsoft Foundry (formerly Azure AI Foundry)**. Requirements a–j
+are the delivery and advisory systems of the original scope; **k–t** are the
+third-party risk lifecycle systems that cover the rest of what the InfoSec
+Assurance / TPRM role does — intake and tiering, contracting, the DORA
+register, concentration and the fourth-party chain, ongoing monitoring,
+supplier incidents and notification duties, exit and offboarding, findings
+and acceptances, ISMS audit evidence, and regulatory change. The base
 conversion (22 converted agents by default — 35 with
 `--include-examples` — plus orchestrator, advisor, verifier, integrations
 and governance) is documented in `README.md` / `MAPPING.md` /
@@ -48,10 +54,39 @@ target path is created when absent.
 | **d2** | Third-party evidence analysis: scan `Infosec Assurance/GRC/TPA/Active` SharePoint tree for a supplier/service, analyse every evidence file (ISO certs, SOC 1/2/3 type 1/2, pentests, vulnerability reports, CAIQ, PDFs, images), report per-file content id, scope, emission date, validity period, findings | **New agent** `tpa-evidence-analyzer` (`agents/tpa-evidence-analyzer_instructions.md`) + SharePoint Graph read tools + `pdf-full-coverage-analyzer` method for large files → pipeline `tpa-evidence-analysis` → render `docx` → `ensure_folder` → upload |
 | **e** | SOC report upload → findings summary report, stored under Supplier/Service | **New agent** `soc-report-analyzer` (`agents/soc-report-analyzer_instructions.md`) → pipeline `soc-report-summary` → render `docx` → `ensure_folder` → upload |
 | **f** | Pentest report upload → findings summary report, stored under Supplier/Service | **New agent** `pentest-report-analyzer` (`agents/pentest-report-analyzer_instructions.md`) → pipeline `pentest-report-summary` → render `docx` → `ensure_folder` → upload |
+| **k** | Supplier intake triage & tiering: what the service is, how critical, what assurance depth follows | **New agent** `supplier-intake-triage` → pipeline `supplier-intake-triage` → `docx-generic` → `Reports/<Supplier>/<Service>/`. Applies `tpsrca-supplier-types.md` for the supplier type, the DORA Art. 3(21)–(22) critical-or-important-function test, and `governance/RISK_THRESHOLDS.md` for the tier; outputs the evidence set to request and the follow-up systems (l, m, DPIA, EU AI Act screening) |
+| **l** | Contract security, resilience, data-protection and exit clause review | **New agent** `contract-security-review` → pipeline `contract-security-review` → `docx-generic`. Clause-by-clause coverage of **DORA Art. 30(2)/(3)** and Art. 29 subcontracting, **GDPR Art. 28(3)** + SCCs 2021/914, **NIS2 Art. 21(2)(d)**, ENX security minimums, incident clocks, RTO/RPO and exit; PRESENT/PARTIAL/ABSENT with the quoted clause and proposed wording for Legal (never a legal conclusion) |
+| **m** | DORA Register of Information | **New agent** `dora-register-builder` → pipeline `dora-register-of-information` → `xlsx-generic`. One sheet per ITS table (entities, arrangements, providers, services, functions, subcontracting ranks, data locations, exit) plus a **Validation** sheet of every rule breach; the accountable owner submits — the platform never does |
+| **n** | ICT concentration and fourth-party chain risk (DORA Art. 29) | **New agent** `concentration-risk-analyzer` → pipeline `concentration-risk-analysis` → `xlsx-generic`. Chain reconstruction to rank *n*, concentration by provider/fourth party/geography/technology/entity, impact against ENX recovery objectives, substitutability and treatment options |
+| **o** | Ongoing monitoring between assessments (DORA Art. 28(1)(b), ISO/IEC 27001:2022 A.5.22) | **New agent** `continuous-monitoring-radar` → pipeline `continuous-monitoring-radar` → single-file HTML. Evidence expiry, assessments due, external rating drift, overdue findings, expiring acceptances, watch items; reads the **evidence cache** for extracted validity facts and recomputes every time-dependent status against the as-at date |
+| **p** | Supplier incident impact and Euronext's notification duties | **New agent** `supplier-incident-assessor` → pipeline `supplier-incident-assessment` → `docx-generic`. Evidenced timeline, ENX impact, and the duty table — **DORA Art. 18/19** major-incident classification and reporting, **NIS2 Art. 23** 24h/72h/1-month, **GDPR Art. 33/34**, contractual and client duties — with deadlines computed from the awareness timestamp. Assessment only: CISO/DPO/Compliance/Legal decide and notify |
+| **q** | Exit strategy (DORA Art. 28(8)) and offboarding assurance | **New agent** `exit-offboarding-assurance` → pipeline `exit-offboarding-assurance` → `docx-generic`. PLAN: triggers, options, transition plan inside the contractual transition period, data exit, continuity, test record, readiness verdict. OFFBOARD: the evidenced checklist — access revocation, data return, certified deletion including subcontractors and backups, registers updated, surviving obligations |
+| **r** | Findings, remediation and risk-acceptance register | **New agent** `findings-remediation-register` → pipeline `findings-remediation-register` → `xlsx-generic`. Every finding from a–f and k–q normalised with severity, control reference (ISO 27001 Annex A / CIS v8.1 / DORA / GDPR), owner, due date, status and closure evidence; every acceptance with an expiry that reverts it to OPEN |
+| **s** | ISMS audit and management-review evidence for the third-party scope | **New agent** `isms-audit-pack` → pipeline `isms-audit-pack` → `docx-generic` under the advisory library. SoA extract (cl. 6.1.3, A.5.19–A.5.23), internal audit plan and report (cl. 9.2), management review input pack (cl. 9.3), audit evidence index |
+| **t** | Regulatory and standards change watch | **New agent** `regulatory-change-watch` → pipeline `regulatory-change-watch` → `docx-generic` under the advisory library. Per change: applicability to ENX, **the named platform artefacts that must change**, gap assessment, actions dated backwards from the application date, and a confidence rating. Public official sources only |
 | **g** | Per-framework advisory systems (every persona framework + gaps) with XLSX/DOCX/PPTX/HTML file generation | Existing advisor agents `iso27001`, `iso42001`, `dora`, `nis2`, `eu-ai-act` + advisor knowledge packs (ISO 27002/27005, NIST CSF 2.0, CIS v8.1, GDPR Art. 28/SCCs, ITIL/COBIT/COSO/TOGAF/PMBOK/ISO 20000 compendium). Gap coverage (ISO 22301, PCI DSS, SOC/SSAE, CSA CCM/CAIQ) is provided by `infosec-assurance-advisor` with web grounding. **Advisory profile** (`scripts/apply_advisory_profile.py` + the registry's `advisory_read_only_toolset`): every advisory agent runs on the `reasoning` tier, carries the full read-only enterprise toolset, and generates Word/Excel/PowerPoint/HTML files itself via code_interpreter (`agents/advisory_addendum.md`), with orchestrator hand-off to `docx`/`pptx`/`xlsx` agents and the render function as alternates |
 | **h** | TPRM end-to-end knowledge system with file generation | `infosec-assurance-advisor` (combined knowledge store covers all 18 TPRM skills) + `enx-tprm-control-center` router + `tpsrca-assessment-engine`; same advisory profile and file-generation paths as (g) |
 | **i** | Persona system with read-only Confluence, Jira, SharePoint, OneTrust, security/risk/vuln/IAM/GRC tooling, ENX gateway MCP, and web search that leaks no Euronext data | The registry's `advisory_read_only_toolset` attaches to `infosec-assurance-advisor` AND every information-providing agent: `confluence-cloud` (read-only spec), `jira-cloud`, `jira-assets-cmdb`, `sharepoint-graph`, `onetrust`, `defender-graph` (security monitoring), `entra-iam-graph` (**new read-only IAM spec**), `securityscorecard` (risk monitoring), `iaf-api` (governance/compliance/AET findings), `enx-gateway-mcp` (governed route to further Euronext security/risk/vulnerability/compliance/AET tooling), `web-search`. Read-only is **enforced structurally**: `attach_integrations.py` strips every non-GET operation unless the connection is in the agent's `write_connections` (none has any). The full detailed persona — including the read-only and web-egress rules — lives in `agents/persona_system_prompt.md` and is prepended to **every** agent on the platform. Egress protection: `governance/DATA_PROTECTION_GUARDRAILS.md` (design: sanitise-then-search, never block reasoning) |
 | **j** | Template management: user picks a template, sees all templates, edits, visual before/after review, approval-gated propagation; plus efficiency/model economy | **New agent** `template-manager` (`agents/template-manager_instructions.md`) + template inventory `templates/registry.json` + `workflows/template-update-approval.json` (visual diff page → human approval gate → propagation) + `scripts/update_templates.py` (writes the approved template back to the export source, re-runs convert→verify→create so every dependent agent, vector store and code_interpreter asset updates consistently). Model economy: `governance/MODEL_ROUTING.md` + the `model_tier` map in `integrations/registry.json` (three tiers: `light` for extraction/rendering, `chat` for standard generation, `reasoning` for analysis) |
+
+### How k–t fit together
+
+`k` decides the depth → `l` makes the obligations contractual → `m` records
+the arrangement where DORA requires it → `n` tests what the portfolio has
+become → `a`, `d2`, `e`, `f` gather and analyse evidence → `r` is where every
+finding from all of them lives until it is closed or explicitly accepted with
+an expiry → `o` is the standing view of what has gone stale, drifted or run
+overdue → `p` handles the day the supplier fails → `q` ends the relationship
+with evidence → `s` proves the process to an auditor and `t` keeps it current
+against the regulation. Each is a separate deliverable with its own approval
+tier; none of them writes to a system of record — every output is a report
+stored under the same governed SharePoint path as a–f.
+
+The lifecycle systems add **no new renderer, approval path or write
+identity**: they render through the existing `docx-generic` / `xlsx-generic`
+house-style renderers (or emit HTML directly), pass the same
+`output-verifier`, and are stored by the same delivery Function managed
+identity.
 
 ## Invocation summary
 
@@ -62,6 +97,9 @@ target path is created when absent.
 | d2 | HTTP trigger with `supplierName` (+ optional `serviceName`); the agent enumerates the TPA Active tree itself |
 | g, h, i | Conversational — orchestrator or the specific advisor agent |
 | j | Conversational with `template-manager`, which fires the approval workflow |
+| k, l, p, q | HTTP trigger (or conversational, then trigger on the verified draft) with `supplierName`, `serviceName` and the uploaded documents; q and s also pass a mode / pack type in the trigger body |
+| m, n, o, r | HTTP trigger, usually scheduled or on portfolio review; Supplier/Service fall back to `Register`/`Portfolio`/`ISMS` segments per `workflows/pipelines.json` |
+| s, t | Conversational or HTTP trigger; stored under the advisory library `Advisory/<Topic>/<Subtopic>/` |
 
 Per-user quickstart (how each of the five assurance users invokes a–j, required
 Supplier + Service names, output path, approval tier): `team/USER_QUICKSTART.md`.

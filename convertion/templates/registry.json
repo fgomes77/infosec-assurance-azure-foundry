@@ -207,7 +207,10 @@
         "infosec-assurance-advisor"
       ],
       "pipelines": [
-        "advisory-file-delivery"
+        "advisory-file-delivery",
+        "concentration-risk-analysis",
+        "dora-register-of-information",
+        "findings-remediation-register"
       ],
       "renderer": "functions/delivery/renderers/xlsx-generic/render.py",
       "version": "1.0",
@@ -226,7 +229,13 @@
         "cyber-forum"
       ],
       "pipelines": [
-        "advisory-file-delivery"
+        "advisory-file-delivery",
+        "contract-security-review",
+        "exit-offboarding-assurance",
+        "isms-audit-pack",
+        "regulatory-change-watch",
+        "supplier-incident-assessment",
+        "supplier-intake-triage"
       ],
       "renderer": "functions/delivery/renderers/docx-generic/render.py",
       "version": "1.0",

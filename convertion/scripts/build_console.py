@@ -45,7 +45,7 @@ HERE = Path(__file__).resolve().parent
 CONV = HERE.parent
 BUILD = CONV / "build"
 
-# Systems a–j as the user stated them (REQUIREMENTS.md is the record). The
+# Systems a–t as the user stated them (REQUIREMENTS.md is the record). The
 # console repeats the ASK, not a paraphrase, so a user recognises their own
 # request in it.
 SYSTEMS = [
@@ -86,6 +86,46 @@ SYSTEMS = [
     ("j", "Template change control",
      "List, choose, edit, see the before/after, approve — then it propagates.",
      "template-update-approval"),
+    ("k", "Supplier intake and tiering",
+     "The first gate: what the service is, whether it supports a critical or important "
+     "function, the tier, and the assurance depth and evidence set that follow.",
+     "supplier-intake-triage"),
+    ("l", "Contract clause review",
+     "DORA Art. 30, GDPR Art. 28 and SCCs, NIS2 supply chain, incident clocks, audit "
+     "rights, resilience and exit — present, partial or absent, with wording for Legal.",
+     "contract-security-review"),
+    ("m", "DORA Register of Information",
+     "The ITS tables built from the arrangements on file, and a validation sheet naming "
+     "every breach before the owner submits it.",
+     "dora-register-of-information"),
+    ("n", "Concentration and fourth parties",
+     "Who the portfolio really depends on: the chain to rank n, the hidden shared "
+     "fourth party, what stops if it fails, and whether it can be replaced.",
+     "concentration-risk-analysis"),
+    ("o", "Assurance radar",
+     "What needs attention this week: evidence expiring, assessments due, ratings "
+     "drifting, findings overdue, acceptances about to lapse.",
+     "continuous-monitoring-radar"),
+    ("p", "Supplier incident assessment",
+     "Impact on Euronext and the notification duties with their deadlines — DORA "
+     "Art. 19, NIS2 Art. 23, GDPR Art. 33 — timed from the evidenced awareness moment.",
+     "supplier-incident-assessment"),
+    ("q", "Exit and offboarding",
+     "The tested exit strategy DORA requires, and the evidenced checklist when the "
+     "relationship actually ends.",
+     "exit-offboarding-assurance"),
+    ("r", "Findings and acceptances",
+     "Every finding from every system in one register, with owners, due dates, closure "
+     "evidence, and acceptances that expire instead of quietly becoming permanent.",
+     "findings-remediation-register"),
+    ("s", "ISMS audit and review packs",
+     "Statement of Applicability, internal audit plan and report, management review "
+     "inputs, and the evidence index an auditor will ask for.",
+     "isms-audit-pack"),
+    ("t", "Regulatory change watch",
+     "What changed, whether it applies to Euronext, which artefacts of this platform "
+     "must change, and by when.",
+     "regulatory-change-watch"),
 ]
 
 # How the owner develops each kind of change. Every row is a real command in
@@ -390,7 +430,7 @@ def section(anchor, title, sub, body) -> str:
 def render(cat: dict) -> str:
     nav = "".join(
         f'<a href="#{a}">{esc(t)}</a>' for a, t in [
-            ("systems", "Systems a–j"), ("develop", "Develop"),
+            ("systems", "Systems a–t"), ("develop", "Develop"),
             ("agents", "Agents"), ("pipelines", "Pipelines"),
             ("workflows", "Workflows"), ("connections", "Connections"),
             ("templates", "Templates"), ("queries", "Dashboards"),
@@ -480,7 +520,7 @@ so it cannot describe an agent the platform does not have, and a new agent
 appears here the moment it is registered. Everything it names is read-only or
 gated: launching a pipeline still requires the verifier to pass and a person to
 approve.</div>
-{section("systems", "The ten systems (a–j)",
+{section("systems", "The twenty systems (a–t)",
          "What the team asked for, and the pipeline that delivers it. "
          "Full record: <span class='mono'>REQUIREMENTS.md</span>.",
          f'<div class="cards">{cards}</div>')}
