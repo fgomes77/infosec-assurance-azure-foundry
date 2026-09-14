@@ -1,0 +1,8 @@
+{
+  "runtime": "python",
+  "entry": "scripts/extract_speaker_clips.py",
+  "formats": [],
+  "outputs": "none",
+  "endpoint": "POST /api/speaker_clips (function_app.py) - not a render template",
+  "source": "byte-verified claude-account-export/skills/whisperx-transcribe-diarize/scripts/extract_speaker_clips.py (ffmpeg in the Dockerfile). Transcription itself runs on Azure AI Speech via workflows/speech-transcription.json; chunked_pipeline.sh, install.sh, check_env.sh and transcribe_diarize.py (local GPU WhisperX) are NOT applicable on this platform."
+}

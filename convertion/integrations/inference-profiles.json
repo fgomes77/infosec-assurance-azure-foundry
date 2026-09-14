@@ -1,0 +1,169 @@
+{
+  "_comment": "Inference profiles — the request-time half of requirement j ('the most adequate LLM for each task, low token consumption, accuracy preserved'). governance/MODEL_ROUTING.md picks WHICH model runs an agent; this file sets HOW it runs: sampling determinism, reasoning effort, output ceilings and retrieval width. Applied by scripts/inference_profiles.py at agent-save time (create_agents.py, create_delivery_agents.py, apply_advisory_profile.py, create_orchestrator.py) and at request time (_foundry_runtime.Runtime.ask). Changing a profile is a Tier-B change (operations/CHANGE_MANAGEMENT.md): re-run the golden set before it serves traffic, because every value here can move accuracy as well as cost.",
+  "version": "1.0.0",
+  "updated": "2026-09-13",
+
+  "_model_families": "A parameter is legal per MODEL FAMILY, not per tier. o-series reasoning models reject temperature/top_p and take reasoning_effort instead; the gpt-4o family is the reverse. inference_profiles.py drops nothing silently: an illegal parameter for the resolved model is an error, so a tier switch cannot quietly change how an agent samples.",
+  "model_families": {
+    "gpt-4o": {
+      "matches": ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
+      "supports": ["temperature", "top_p", "max_output_tokens", "parallel_tool_calls"],
+      "rejects": ["reasoning_effort"]
+    },
+    "o-series": {
+      "matches": ["o4-mini", "o3-mini", "o3", "gpt-5-mini", "gpt-5"],
+      "supports": ["reasoning_effort", "max_output_tokens", "parallel_tool_calls"],
+      "rejects": ["temperature", "top_p"],
+      "_note": "Reasoning models sample at a fixed temperature; sending temperature/top_p is rejected by the service. Effort is the lever: 'low' ends the reasoning pass sooner (fewer reasoning tokens, lower latency), 'high' spends more of it."
+    }
+  },
+
+  "_classes": "Six behavioural classes. The class — not the tier — decides the parameters, so an agent keeps its settings when its tier model changes.",
+  "classes": {
+    "router": {
+      "purpose": "Menu routing and hand-off only; emits a ROUTE line or a short menu.",
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_output_tokens": 512,
+      "parallel_tool_calls": false,
+      "reasoning_effort": "low",
+      "retrieval": {"max_num_results": 3, "score_threshold": 0.5}
+    },
+    "file-transform": {
+      "purpose": "Deterministic transformation into a fixed schema or a rendered file; the template carries the quality.",
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_output_tokens": 4096,
+      "parallel_tool_calls": true,
+      "reasoning_effort": "low",
+      "retrieval": {"max_num_results": 5, "score_threshold": 0.5}
+    },
+    "report": {
+      "purpose": "Templated deliverables (DPIA, CISO decks, TPRM slides, Form B drafts) against verified extraction rules.",
+      "temperature": 0.1,
+      "top_p": 0.95,
+      "max_output_tokens": 16384,
+      "parallel_tool_calls": true,
+      "reasoning_effort": "medium",
+      "retrieval": {"max_num_results": 8, "score_threshold": 0.45}
+    },
+    "analysis": {
+      "purpose": "Evidence, SOC, pentest, OSINT and scoring work — every number traceable, every finding sourced.",
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_output_tokens": 32768,
+      "parallel_tool_calls": true,
+      "reasoning_effort": "high",
+      "retrieval": {"max_num_results": 12, "score_threshold": 0.4}
+    },
+    "advisory": {
+      "purpose": "User-facing framework and TPRM advice (requirements g/h/i). Quality of reasoning IS the product.",
+      "temperature": 0.2,
+      "top_p": 0.95,
+      "max_output_tokens": 32768,
+      "parallel_tool_calls": true,
+      "reasoning_effort": "high",
+      "retrieval": {"max_num_results": 12, "score_threshold": 0.4}
+    },
+    "verifier": {
+      "purpose": "Deterministic rule check emitting VERDICT: PASS|FAIL plus reasons. Must never rewrite the deliverable.",
+      "temperature": 0.0,
+      "top_p": 1.0,
+      "max_output_tokens": 2048,
+      "parallel_tool_calls": false,
+      "reasoning_effort": "medium",
+      "retrieval": {"max_num_results": 6, "score_threshold": 0.5}
+    }
+  },
+
+  "_agent_class": "Explicit per agent — no heuristic. An agent absent here fails scripts/inference_profiles.py --check, so a newly created agent cannot ship without a deliberate class.",
+  "agent_class": {
+    "enx-tprm-control-center": "router",
+    "infosec-assurance-orchestrator": "router",
+
+    "docx": "file-transform",
+    "pdf": "file-transform",
+    "pptx": "file-transform",
+    "xlsx": "file-transform",
+    "morning": "file-transform",
+    "whisperx-transcribe-diarize": "file-transform",
+
+    "dpia": "report",
+    "ciso-reporting": "report",
+    "ciso-executive-summary": "report",
+    "tprm-slide-generator": "report",
+    "pptx-executive-summary-ciso": "report",
+    "onetrust-form-b": "report",
+    "template-manager": "report",
+    "doc-coauthoring": "report",
+    "internal-comms": "report",
+    "tpsrca-report": "report",
+    "exit-offboarding-assurance": "report",
+    "isms-audit-pack": "report",
+
+    "deepsearch-protocol": "analysis",
+    "ai-deepsearch-osint-gathering-report": "analysis",
+    "ciso-global-report": "analysis",
+    "tpa-evidence-analyzer": "analysis",
+    "soc-report-analyzer": "analysis",
+    "pentest-report-analyzer": "analysis",
+    "pdf-full-coverage-analyzer": "analysis",
+    "tpsrca-assessment-engine": "analysis",
+    "tpsrca-calc": "analysis",
+    "tpsrca-analysis": "analysis",
+    "supplier-intake-triage": "analysis",
+    "contract-security-review": "analysis",
+    "dora-register-builder": "analysis",
+    "concentration-risk-analyzer": "analysis",
+    "continuous-monitoring-radar": "analysis",
+    "supplier-incident-assessor": "analysis",
+    "findings-remediation-register": "analysis",
+
+    "cyber-forum": "advisory",
+    "infosec-assurance-advisor": "advisory",
+    "iso27001": "advisory",
+    "iso42001": "advisory",
+    "dora": "advisory",
+    "nis2": "advisory",
+    "eu-ai-act": "advisory",
+    "learn": "advisory",
+    "mcp-builder": "advisory",
+    "regulatory-change-watch": "advisory",
+
+    "output-verifier": "verifier"
+  },
+
+  "_overrides": "Per-agent deviations from the class, each with the reason it exists. Anything not named here takes the class value unchanged.",
+  "overrides": {
+    "tpsrca-calc": {
+      "max_output_tokens": 8192,
+      "_reason": "Emits the calculation_engine.py result block only — scores, weights and the audit trail. The wide analysis ceiling would only buy prose the renderer discards."
+    },
+    "pdf-full-coverage-analyzer": {
+      "retrieval": {"max_num_results": 20, "score_threshold": 0.3},
+      "_reason": "Full-coverage chunking must not lose a passage to a retrieval cut-off; recall outranks token economy for this agent by charter."
+    },
+    "template-manager": {
+      "temperature": 0.0,
+      "_reason": "Template edits are shown to the approver as a visual before/after diff. Any sampling variance reads as an unexplained change in the review."
+    },
+    "learn": {
+      "max_output_tokens": 8192,
+      "_reason": "Explanatory answers, not deliverables; the advisory ceiling is four times what any teaching answer needs."
+    }
+  },
+
+  "_caching": "Prompt caching is free efficiency when the prefix is stable. Rules enforced by scripts/tests/test_inference_profiles.py: (1) agent instructions carry the persona and the charter ONLY — never a date, run id, supplier name or any per-run value, which would break the prefix on every call; (2) the persona block is assembled FIRST so the long static prefix is shared across every agent sharing it; (3) volatile content travels in the user message. Hit rate is measured by operations/kql/prompt-cache-hit-rate.kql and reviewed monthly with the tier-tuning loop (governance/MODEL_ROUTING.md §Token-economy rules 7).",
+  "caching": {
+    "min_prefix_tokens": 1024,
+    "target_hit_rate": 0.6,
+    "instructions_must_be_static": true
+  },
+
+  "_accuracy_floor": "None of these values may be relaxed to save tokens on an agent whose output is a report of record. max_output_tokens is a runaway guard sized from the deliverable's JSON schema, not a budget: a truncated response is a FAIL at the verifier, never a shipped deliverable. If an agent truncates, raise the ceiling and investigate the prompt — do not lower the schema.",
+  "accuracy_floor": {
+    "truncation_is_failure": true,
+    "golden_set_before_change": true,
+    "change_tier": "B"
+  }
+}

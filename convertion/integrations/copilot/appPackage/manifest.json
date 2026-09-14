@@ -1,0 +1,31 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/vDevPreview/MicrosoftTeams.schema.json",
+  "manifestVersion": "devPreview",
+  "version": "1.0.0",
+  "id": "{teams-app-id-guid}",
+  "developer": {
+    "name": "Euronext InfoSec Assurance",
+    "websiteUrl": "https://{infosec-assurance-sharepoint-site-url}",
+    "privacyUrl": "https://{infosec-assurance-sharepoint-site-url}/privacy",
+    "termsOfUseUrl": "https://{infosec-assurance-sharepoint-site-url}/terms"
+  },
+  "name": { "short": "ENX InfoSec Assurance", "full": "ENX InfoSec Assurance - advisors and governed reports" },
+  "description": {
+    "short": "Assurance advisors + governed TPRM reports",
+    "full": "AI advisors for DORA/NIS2/EU AI Act/ISO 27001/ISO 42001 and the cyber forum, plus governed report requests. Read-only enterprise access; verifier and human approval before anything is stored."
+  },
+  "icons": { "color": "color.png", "outline": "outline.png" },
+  "accentColor": "#008D7F",
+  "copilotAgents": {
+    "declarativeAgents": [
+      { "id": "enxAssurance", "file": "declarativeAgent.json" }
+    ]
+  },
+  "webApplicationInfo": {
+    "id": "{copilot-wrapper-app-id}",
+    "resource": "api://{copilot-wrapper-app-id}"
+  },
+  "permissions": ["identity"],
+  "validDomains": ["{copilot-wrapper-function}.azurewebsites.net"],
+  "_comment": "Publish to the org catalogue scoped to security group sg-infosec-foundry-users only (not org-wide). Replace {braces} placeholders in Teams Toolkit; add color.png (192x192) and outline.png (32x32) before packaging."
+}

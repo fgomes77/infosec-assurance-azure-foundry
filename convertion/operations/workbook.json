@@ -1,0 +1,370 @@
+{
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json",
+  "version": "Notebook/1.0",
+  "_comment": "Azure Workbook `{baseName}-ops` — operations/MONITORING.md §5. Import: Azure Monitor > Workbooks > New > Advanced editor > paste; set the Workspace parameter to {baseName}-logs. Every tile is bound to the two parameters: `{Workspace}` (resource picker) and `{TimeRange}` (substituted as `{TimeRange:seconds}s` inside the KQL, so one picker drives every section); the two trend tiles keep their declared 7 d / 30 d window and say so in the title, and the approval-SLA tiles never look back less than the 7 d window of the alert rule. Sections: Health, Quality, Oversight, Data protection, Delivery pipelines, Privileged access, Cost. Re-export here after each change (Low-risk change; LIFECYCLE.md V15). No hostnames, ids or secrets: the workspace is a parameter.",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# InfoSec Assurance Foundry — operations workbook `{baseName}-ops`\n\nSource of record: `operations/MONITORING.md` §5 (sections) and `operations/kql/*.kql` (queries — the same text as the alert rules in `operations/alerts.bicep`). Read-only over the Log Analytics workspace `{baseName}-logs`; requires `Log Analytics Reader` (owner standing role, ledger L6; readers group L15). Controls: ISO 27001:2022 A.8.15, A.8.16; DORA Art. 10(1); EU AI Act Art. 26(5); ISO 42001 A.6.2.6.\n\nTwo parameters drive every section: **Workspace** (the Log Analytics workspace resource — `{baseName}-logs`) and **TimeRange**, substituted into each query as `{TimeRange:seconds}s`. Exceptions, stated in the tile titles: the verifier 7-day trend and the 30-day token chart keep their declared window, and the approval-SLA tiles never look back less than the 7 d window of the `approval-sla` alert rule, so a 1 h selection still shows every breached gate."
+      },
+      "name": "text--infosec-assurance-foundry-operations-wo"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "workspace",
+            "version": "KqlParameterItem/1.0",
+            "name": "Workspace",
+            "label": "Log Analytics workspace",
+            "type": 5,
+            "isRequired": true,
+            "typeSettings": {
+              "resourceTypeFilter": {
+                "microsoft.operationalinsights/workspaces": true
+              },
+              "additionalResourceOptions": []
+            }
+          },
+          {
+            "id": "timerange",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 86400000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 2592000000
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "name": "parameters"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Health — runs, latency, throttling (RUNBOOK H1–H3)"
+      },
+      "name": "text--health-runs-latency-throttling-runbook-"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lookback = {TimeRange:seconds}s;\nlet p95LatencyBudgetMs = 300000;          // 5 min per run — reasoning-tier deliverables\nlet dailyTokenBudget   = 5000000;         // per agent per day; revisit monthly\nlet priceIn  = dynamic({\"gpt-4o-mini\": 0.15, \"gpt-4o\": 2.50, \"o4-mini\": 1.10, \"o3-mini\": 1.10});\nlet priceOut = dynamic({\"gpt-4o-mini\": 0.60, \"gpt-4o\": 10.00, \"o4-mini\": 4.40, \"o3-mini\": 4.40});\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where isnotempty(Properties[\"gen_ai.agent.name\"]) or isnotempty(Properties[\"gen_ai.request.model\"])\n| extend agentName = coalesce(tostring(Properties[\"gen_ai.agent.name\"]), \"(unattributed)\"),\n         model     = coalesce(tostring(Properties[\"gen_ai.request.model\"]), \"(unknown)\"),\n         inTok     = tolong(Properties[\"gen_ai.usage.input_tokens\"]),\n         outTok    = tolong(Properties[\"gen_ai.usage.output_tokens\"]),\n         isRun     = Name has \"process_thread_run\" or Name has \"invoke_agent\" or Name has \"create_run\"\n| summarize runs         = countif(isRun),\n            p50Ms        = percentile(iff(isRun, DurationMs, real(null)), 50),\n            p95Ms        = percentile(iff(isRun, DurationMs, real(null)), 95),\n            inputTokens  = sum(inTok),\n            outputTokens = sum(outTok)\n          by agentName, model\n| extend totalTokens = inputTokens + outputTokens\n| extend estCostEur = round((todouble(inputTokens)  / 1000000.0) * todouble(priceIn[model])\n                          + (todouble(outputTokens) / 1000000.0) * todouble(priceOut[model]), 2)\n| extend breach = case(p95Ms > p95LatencyBudgetMs, \"latency-p95\",\n                       totalTokens > dailyTokenBudget, \"token-budget\",\n                       \"\")\n| project agentName, model, runs, p50Ms = round(p50Ms, 0), p95Ms = round(p95Ms, 0),\n          inputTokens, outputTokens, totalTokens, estCostEur, breach\n| order by totalTokens desc",
+        "size": 0,
+        "title": "Runs, p50/p95 latency and tokens per agent (latency-and-tokens.kql, full table)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-runs-p50-p95-latency-and-tokens-per-agen"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppRequests\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where AppRoleName has \"fn-delivery\"\n| summarize requests = count(), failed = countif(Success == false), p95Ms = percentile(DurationMs, 95) by Name\n| extend successRate = round(1.0 - todouble(failed) / todouble(requests), 3)\n| order by requests desc",
+        "size": 0,
+        "title": "Delivery Function requests: success rate and p95 (AppRequests)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-delivery-function-requests-success-rate-"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppDependencies\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where isnotempty(Properties[\"gen_ai.request.model\"])\n| extend model = tostring(Properties[\"gen_ai.request.model\"])\n| summarize calls = count(), throttled = countif(ResultCode == \"429\") by model\n| extend throttledShare = round(todouble(throttled) / todouble(calls), 3)",
+        "size": 0,
+        "title": "429 / throttling share per model (AppDependencies)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-429-throttling-share-per-model-appdepend"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Quality — verifier and approvals (RUNBOOK M1; KPIS Q1)"
+      },
+      "name": "text--quality-verifier-and-approvals-runbook-"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lookback = {TimeRange:seconds}s;\nlet failRateThreshold = 0.30;\nlet minVerdicts = 5;\nLogicAppWorkflowRuntime\n| where TimeGenerated > ago(lookback)\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowActionCompleted\"\n| where ActionName in (\"Notify_verifier_fail\", \"Human_approval_gate\")\n| summarize fails  = countif(ActionName == \"Notify_verifier_fail\"),\n            passes = countif(ActionName == \"Human_approval_gate\"),\n            lastFailRun = maxif(RunId, ActionName == \"Notify_verifier_fail\")\n          by WorkflowName\n| extend verdicts = fails + passes\n| extend failRate = iff(verdicts > 0, todouble(fails) / todouble(verdicts), 0.0)\n| project WorkflowName, verdicts, passes, fails, failRate = round(failRate, 2), lastFailRun\n| order by failRate desc",
+        "size": 0,
+        "title": "Verifier PASS / FAIL per pipeline (verifier-fail-rate.kql, every pipeline)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-verifier-pass-fail-per-pipeline-verifier"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LogicAppWorkflowRuntime\n| where TimeGenerated > ago(7d)\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowActionCompleted\"\n| where ActionName in (\"Notify_verifier_fail\", \"Human_approval_gate\")\n| summarize fails = countif(ActionName == \"Notify_verifier_fail\"), passes = countif(ActionName == \"Human_approval_gate\") by bin(TimeGenerated, 1d), WorkflowName\n| extend failRate = iff(fails + passes > 0, todouble(fails) / todouble(fails + passes), 0.0)\n| project TimeGenerated, WorkflowName, failRate",
+        "size": 0,
+        "title": "Verifier FAIL rate 7-day trend (fixed 7 d window)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "timechart"
+      },
+      "name": "query-verifier-fail-rate-7-day-trend"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Oversight — human approval gates (HUMAN_APPROVAL.md Layer 3; KPIS R4, R6). Approvals per tier and the approver ≠ requester check come from the `{list:ApprovalDecisions}` export (team/approval-policy.json `record`), not from the workspace."
+      },
+      "name": "text--oversight-human-approval-gates-human_ap"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lookback = iff({TimeRange:seconds}s > 7d, {TimeRange:seconds}s, 7d);   // dashboard honours the picker but never below the alert window\nlet slaHours = 48;                     // 2 business days approximated; weekends reviewed manually\nlet gates = LogicAppWorkflowRuntime\n| where TimeGenerated > ago(lookback)\n| where ActionName == \"Human_approval_gate\" or ActionName startswith \"Wait_for_approval_\";\nlet started = gates\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowActionStarted\"\n| project WorkflowName, RunId, ActionName, StartedAt = TimeGenerated;\nlet completed = gates\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowActionCompleted\"\n| project RunId, ActionName, EndedAt = TimeGenerated, Status;\nstarted\n| join kind=leftouter completed on RunId, ActionName\n| extend waitedHours = datetime_diff('hour', coalesce(EndedAt, now()), StartedAt)\n| extend state = case(isempty(Status), \"pending\",\n                      Status =~ \"TimedOut\", \"expired\",\n                      Status =~ \"Succeeded\", \"decided\",\n                      Status)\n| where (state == \"pending\" and waitedHours > slaHours) or state == \"expired\"\n| project WorkflowName, RunId, ActionName, StartedAt, state, waitedHours\n| order by waitedHours desc",
+        "size": 0,
+        "title": "Pending gates beyond SLA and expired gates (approval-sla.kql)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-pending-gates-beyond-sla-and-expired-gat"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let gates = LogicAppWorkflowRuntime\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where ActionName == \"Human_approval_gate\" or ActionName startswith \"Wait_for_approval_\";\nlet started = gates | where OperationName =~ \"Microsoft.Logic/workflows/workflowActionStarted\" | project WorkflowName, RunId, ActionName, StartedAt = TimeGenerated;\nlet completed = gates | where OperationName =~ \"Microsoft.Logic/workflows/workflowActionCompleted\" | project RunId, ActionName;\nstarted\n| join kind=leftanti completed on RunId, ActionName\n| extend ageHours = datetime_diff('hour', now(), StartedAt)\n| project WorkflowName, RunId, ActionName, StartedAt, ageHours\n| order by ageHours desc",
+        "size": 0,
+        "title": "Open gates with age (all, not only breached)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-open-gates-with-age-all-not-only-breache"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Data protection — egress detector and content filters (DATA_PROTECTION_GUARDRAILS.md §1; RUNBOOK FM-03). Expected: zero rows."
+      },
+      "name": "text--data-protection-egress-detector-and-con"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lookback = {TimeRange:seconds}s;\nlet internalMarkers = dynamic([\"ENX-\", \"{internal-domain-suffix}\", \"{project-codename}\", \"{internal-ip-prefix}\"]);\nlet assessmentIdRegex = @\"\\b(OT|TPA|IAF|INFOSEC)-\\d{3,}\\b\";\nlet employeeNames = toscalar(datatable(name:string)[\"{name:watchlist-entry-1}\", \"{name:watchlist-entry-2}\"] | summarize make_list(name));\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| extend toolName   = tostring(Properties[\"gen_ai.tool.name\"]),\n         agentName  = tostring(Properties[\"gen_ai.agent.name\"]),\n         threadId   = tostring(Properties[\"gen_ai.thread.id\"]),\n         runId      = tostring(Properties[\"gen_ai.thread.run.id\"]),\n         toolInput  = tostring(Properties[\"gen_ai.tool.call.arguments\"]),\n         eventText  = tostring(Properties[\"gen_ai.event.content\"])\n| where toolName has \"bing\" or Name has \"bing\" or Name has \"web_search\"\n| extend query = coalesce(toolInput, eventText, Data)\n| where isnotempty(query)\n| extend hitMarker       = query has_any (internalMarkers),\n         hitAssessmentId = query matches regex assessmentIdRegex,\n         hitName         = query has_any (employeeNames)\n| where hitMarker or hitAssessmentId or hitName\n| project TimeGenerated, agentName, threadId, runId, toolName,\n          querySample = substring(query, 0, 300),\n          hitMarker, hitAssessmentId, hitName, OperationId, AppRoleName\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Bing queries carrying internal markers (egress-detection.kql) — must be empty",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-bing-queries-carrying-internal-markers-e"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppDependencies\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where isnotempty(Properties[\"gen_ai.tool.name\"])\n| extend toolName = tostring(Properties[\"gen_ai.tool.name\"]), agentName = tostring(Properties[\"gen_ai.agent.name\"])\n| summarize calls = count(), failed = countif(Success == false) by toolName, agentName\n| order by calls desc",
+        "size": 0,
+        "title": "Tool calls per connection (AppDependencies by gen_ai.tool.name)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-tool-calls-per-connection-appdependencie"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Delivery pipelines — failed and timed-out runs (RUNBOOK FM-19, FM-21; alert `pipeline-run-failed`). Same signal as `../infra/kql/pipeline-failures.kql` and the `kqlPipelineFailed` rule in `alerts.bicep`; the workbook drops the alert's fixed 1 h window for the `TimeRange` parameter. Expected: zero rows outside a known incident."
+      },
+      "name": "text--delivery-pipelines-failed-and-timed-out"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LogicAppWorkflowRuntime\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowRunCompleted\"\n| where Status in (\"Failed\", \"TimedOut\", \"Cancelled\")\n| project TimeGenerated, WorkflowName, RunId, Status, Error = column_ifexists(\"Error\", \"\")\n| order by TimeGenerated desc",
+        "size": 0,
+        "title": "Pipeline runs Failed / TimedOut / Cancelled (pipeline-failures.kql) — one row per run",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-pipeline-runs-failed-timedout-cancelled"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LogicAppWorkflowRuntime\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowRunCompleted\"\n| summarize runs = count(),\n            succeeded = countif(Status == \"Succeeded\"),\n            failed    = countif(Status in (\"Failed\", \"TimedOut\", \"Cancelled\")),\n            lastRun   = max(TimeGenerated)\n          by WorkflowName\n| extend successRate = iff(runs > 0, round(todouble(succeeded) / todouble(runs), 3), 0.0)\n| project WorkflowName, runs, succeeded, failed, successRate, lastRun\n| order by failed desc, runs desc",
+        "size": 0,
+        "title": "Run outcome per pipeline: success rate and failure count",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-run-outcome-per-pipeline-success-rate-an"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "LogicAppWorkflowRuntime\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where OperationName =~ \"Microsoft.Logic/workflows/workflowActionCompleted\"\n| where Status in (\"Failed\", \"TimedOut\")\n| summarize failures = count(), lastFailure = max(TimeGenerated), runs = dcount(RunId) by WorkflowName, ActionName\n| order by failures desc",
+        "size": 0,
+        "title": "Failing action per pipeline (where a run breaks: render, upload, gate, verifier)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-failing-action-per-pipeline-where-a-run-"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Privileged access — ARM writes, PIM windows, Key Vault reads (TEAM_MODEL.md §12.3; BREAK_GLASS.md §4; RUNBOOK H7). Every write must reconcile with a PIM activation or the deploy service principal."
+      },
+      "name": "text--privileged-access-arm-writes-pim-window"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureActivity\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where ResourceGroup =~ \"rg-infosec-foundry\"\n| where OperationNameValue endswith \"/write\" or OperationNameValue endswith \"/delete\" or OperationNameValue endswith \"/action\"\n| where ActivityStatusValue in (\"Success\", \"Succeeded\")\n| summarize writes = count(), operations = make_set(OperationNameValue, 20), lastWrite = max(TimeGenerated) by Caller\n| order by writes desc",
+        "size": 0,
+        "title": "ARM writes in the resource group by caller (AzureActivity)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-arm-writes-in-the-resource-group-by-call"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AzureDiagnostics\n| where TimeGenerated > ago({TimeRange:seconds}s)\n| where ResourceProvider == \"MICROSOFT.KEYVAULT\" and OperationName == \"SecretGet\"\n| where identity_claim_upn_s != \"\"\n| summarize reads = count(), secrets = make_set(id_s, 20), lastRead = max(TimeGenerated) by upn = identity_claim_upn_s\n| order by reads desc",
+        "size": 0,
+        "title": "Key Vault SecretGet by human identity (AzureDiagnostics) — expected only inside a PIM window",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-key-vault-secretget-by-human-identity-az"
+    },
+    {
+      "type": 1,
+      "content": {
+        "json": "## Cost — tokens and estimated EUR per agent and tier (TOKEN_ECONOMY_PLAYBOOK.md; RUNBOOK M2; KPIS E1a–c). Month-to-date vs forecast comes from Cost Management (budget `cost-budget.bicep`), not from the workspace."
+      },
+      "name": "text--cost-tokens-and-estimated-eur-per-agent"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let lookback = {TimeRange:seconds}s;\nlet p95LatencyBudgetMs = 300000;          // 5 min per run — reasoning-tier deliverables\nlet dailyTokenBudget   = 5000000;         // per agent per day; revisit monthly\nlet priceIn  = dynamic({\"gpt-4o-mini\": 0.15, \"gpt-4o\": 2.50, \"o4-mini\": 1.10, \"o3-mini\": 1.10});\nlet priceOut = dynamic({\"gpt-4o-mini\": 0.60, \"gpt-4o\": 10.00, \"o4-mini\": 4.40, \"o3-mini\": 4.40});\nAppDependencies\n| where TimeGenerated > ago(lookback)\n| where isnotempty(Properties[\"gen_ai.agent.name\"]) or isnotempty(Properties[\"gen_ai.request.model\"])\n| extend agentName = coalesce(tostring(Properties[\"gen_ai.agent.name\"]), \"(unattributed)\"),\n         model     = coalesce(tostring(Properties[\"gen_ai.request.model\"]), \"(unknown)\"),\n         inTok     = tolong(Properties[\"gen_ai.usage.input_tokens\"]),\n         outTok    = tolong(Properties[\"gen_ai.usage.output_tokens\"]),\n         isRun     = Name has \"process_thread_run\" or Name has \"invoke_agent\" or Name has \"create_run\"\n| summarize runs         = countif(isRun),\n            p50Ms        = percentile(iff(isRun, DurationMs, real(null)), 50),\n            p95Ms        = percentile(iff(isRun, DurationMs, real(null)), 95),\n            inputTokens  = sum(inTok),\n            outputTokens = sum(outTok)\n          by agentName, model\n| extend totalTokens = inputTokens + outputTokens\n| extend estCostEur = round((todouble(inputTokens)  / 1000000.0) * todouble(priceIn[model])\n                          + (todouble(outputTokens) / 1000000.0) * todouble(priceOut[model]), 2)\n| extend breach = case(p95Ms > p95LatencyBudgetMs, \"latency-p95\",\n                       totalTokens > dailyTokenBudget, \"token-budget\",\n                       \"\")\n| project agentName, model, runs, p50Ms = round(p50Ms, 0), p95Ms = round(p95Ms, 0),\n          inputTokens, outputTokens, totalTokens, estCostEur, breach\n| order by totalTokens desc",
+        "size": 0,
+        "title": "Tokens and estimated EUR per agent / model, selected range (latency-and-tokens.kql)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "table"
+      },
+      "name": "query-tokens-and-estimated-eur-per-agent-model"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "AppDependencies\n| where TimeGenerated > ago(30d)\n| where isnotempty(Properties[\"gen_ai.request.model\"])\n| extend model = tostring(Properties[\"gen_ai.request.model\"]), inTok = tolong(Properties[\"gen_ai.usage.input_tokens\"]), outTok = tolong(Properties[\"gen_ai.usage.output_tokens\"])\n| summarize tokens = sum(inTok) + sum(outTok) by bin(TimeGenerated, 1d), model",
+        "size": 0,
+        "title": "Daily token volume per model, last 30 days (fixed 30 d window)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "crossComponentResources": [
+          "{Workspace}"
+        ],
+        "visualization": "barchart"
+      },
+      "name": "query-daily-token-volume-per-model-last-30-day"
+    }
+  ],
+  "fallbackResourceIds": [],
+  "styleSettings": {}
+}

@@ -1,0 +1,216 @@
+# CI for the InfoSec Assurance Foundry conversion kit (delta D-OPS-G1 of
+# convertion/operations/CHANGE_MANAGEMENT.md §10, D-EVAL-G1 of
+# convertion/operations/evaluation/EVALUATION.md §8, D-UP-8 of
+# convertion/enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md §6).
+#
+# On every pull request the kit must prove, on a clean runner and entirely
+# OFFLINE, that it still converts the claude.ai export faithfully and that
+# nothing in it is inconsistent, unparsable or secret-bearing. On main the
+# same gates run again, and only then does .github/workflows/deploy.yml pick
+# the run up (`workflow_run` on success) and wait for the `production`
+# environment approval of the accountable owner — OIDC only, no stored
+# credential. Deployment lives in its own workflow so that this one can be
+# read, reviewed and reasoned about as what it is: a gate that never touches
+# Azure. The nightly detective half is .github/workflows/nightly-drift.yml.
+#
+# Equivalent pipeline for Azure DevOps: convertion/ci/azure-pipelines.yml.
+# Both call the same scripts, so the two can never diverge.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '22'
+  BICEP_VERSION: '0.47.16'      # pinned: infra/main.bicep uses `!` non-null assertions
+  GITLEAKS_VERSION: '8.18.4'    # `detect --no-git` is the CLI surface of this line
+
+jobs:
+  gates:
+    name: Offline gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # KIT_RELEASE is `git describe`
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache pip wheels
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          restore-keys: pip-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+
+      - name: Cache the pinned Bicep CLI
+        id: bicep-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/bin/bicep
+          key: bicep-${{ runner.os }}-${{ env.BICEP_VERSION }}
+
+      - name: Toolchain (no Azure SDK — every gate below runs without Azure)
+        run: |
+          # One install for the whole job: the test step used to re-invoke pip
+          # mid-run, which re-resolved the index on a cold cache every time.
+          python3 -m pip install --disable-pip-version-check --quiet \
+            PyYAML==6.0.2 jsonschema==4.23.0 pytest requests
+          mkdir -p "$HOME/.local/bin"
+          if [ ! -x "$HOME/.local/bin/bicep" ]; then
+            curl -sSLf "https://github.com/Azure/bicep/releases/download/v${BICEP_VERSION}/bicep-linux-x64" \
+              -o "$HOME/.local/bin/bicep"
+            chmod 0755 "$HOME/.local/bin/bicep"
+          fi
+          sudo install -m 0755 "$HOME/.local/bin/bicep" /usr/local/bin/bicep
+          bicep --version
+          # shellcheck: the shell lint of step [4]. Present on the hosted image;
+          # installed from apt if a future image drops it, so REQUIRE_SHELLCHECK=1
+          # below can be a hard gate instead of a skip.
+          command -v shellcheck >/dev/null 2>&1 || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck; }
+          shellcheck --version | head -2
+
+      - name: '[1] Convert skills from the claude.ai export'
+        # The gate builds the FULL set so the fidelity check covers every agent.
+        # Building is not deploying: governance/THIRD_PARTY_IP.md §2 gates the
+        # conversion so nobody ships the Anthropic-licensed agents unaware, and
+        # deploy.sh requires the same variable to be set deliberately.
+        env:
+          ACCEPT_ANTHROPIC_LICENSE: '1'
+        run: python3 convertion/scripts/convert_skills.py
+
+      - name: '[2] Verify conversion fidelity (templates, rules, gates)'
+        run: python3 convertion/scripts/verify_conversion.py
+
+      - name: '[3] Verify kit consistency (secrets, syntax, cross-refs)'
+        run: python3 convertion/scripts/verify_kit.py
+
+      - name: '[4] Syntax gate (python, json, yaml, javascript, bicep, shell + shellcheck)'
+        env:
+          REQUIRE_SHELLCHECK: '1'   # the lint may not silently skip on a runner
+        run: convertion/ci/syntax_check.sh
+
+      - name: '[4b] EU residency gate (region allow-lists, parameters, SKUs)'
+        run: python3 convertion/ci/tests/test_residency.py
+
+      - name: '[4b2] Workflow efficiency gate (bounded Foreach concurrency)'
+        run: python3 convertion/ci/tests/test_workflow_efficiency.py
+
+      - name: '[4c] Self-knowledge pack is in step with the kit'
+        run: python3 convertion/scripts/build_self_knowledge.py --check
+
+      - name: '[4c2] Inference profiles resolve for every agent on its tier'
+        run: python3 convertion/scripts/inference_profiles.py --check
+
+      - name: '[4c3] Console catalogue: every item is described'
+        run: python3 convertion/scripts/build_console.py --check
+
+      - name: '[4c4] Cross-artefact coverage audit (the files agree with each other)'
+        run: python3 convertion/scripts/audit_coverage.py
+
+      - name: '[4c5] Authoritative sources: registry, allow-list and citation pack agree'
+        run: python3 convertion/scripts/check_knowledge_sources.py
+
+      - name: '[4d] Function test suites (offline — azure.functions/identity stubbed)'
+        run: |
+          python3 -m pytest convertion/functions/delivery/tests \
+            convertion/functions/office-tools/tests \
+            convertion/scripts/tests -q
+
+      - name: '[5] Infrastructure policy gate (EU residency, C5/C6/C11/C12/C22)'
+        run: convertion/infra/validate.sh
+
+      - name: '[6] Evaluation gate G0 + continuous-eval / red-team plans (C18)'
+        run: |
+          python3 convertion/operations/evaluation/run_evals.py --dry-run \
+            --golden convertion/operations/evaluation/golden-set.example.json \
+            --out convertion/build/evals/ci
+          python3 -m py_compile convertion/operations/evaluation/run_evals.py
+          python3 convertion/operations/evaluation/run_evals.py --dry-run --emit-plans \
+            --out convertion/build/evals/plans
+
+      - name: '[7] Platform currency: pinned model versions, lifecycle, learning loop (C6/C25)'
+        run: |
+          python3 convertion/enterprise/upgrade/check_model_lifecycle.py --dry-run \
+            --horizon 180 --json convertion/build/lifecycle-report.json
+          python3 convertion/enterprise/memory/learning_loop.py --dry-run \
+            --out "${RUNNER_TEMP}/learning"
+
+      - name: '[8] Offline dry-run chain (deploy.sh --dry-run)'
+        env:
+          CI: 'true'
+        run: cd convertion && ./deploy.sh --dry-run
+
+      - name: Publish gate evidence (ISMS change record)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-evidence
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            convertion/build/manifest.json
+            convertion/build/lifecycle-report.json
+            convertion/build/evals/**
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # full history: a secret removed in a later commit still counts
+
+      - name: Install gitleaks ${{ env.GITLEAKS_VERSION }}
+        run: |
+          curl -sSLf "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C "${RUNNER_TEMP}" gitleaks
+          sudo install -m 0755 "${RUNNER_TEMP}/gitleaks" /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: Scan the working tree (documented placeholders allow-listed)
+        run: |
+          gitleaks detect --no-git --source . --config .github/gitleaks.toml \
+            --redact --report-format sarif --report-path "${RUNNER_TEMP}/gitleaks-tree.sarif"
+
+      - name: Scan the git history
+        run: |
+          gitleaks detect --source . --config .github/gitleaks.toml \
+            --redact --report-format sarif --report-path "${RUNNER_TEMP}/gitleaks-history.sarif"
+
+      - name: Publish gitleaks reports (redacted)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-reports
+          if-no-files-found: warn
+          retention-days: 30
+          path: ${{ runner.temp }}/gitleaks-*.sarif
+
+  # The deploy job that used to live here is now
+  # .github/workflows/deploy.yml. It triggers on `workflow_run` when THIS
+  # workflow completes successfully on `main`, so the gate order is unchanged
+  # (gates + secret-scan green → production approval → deploy.sh), and a
+  # deployment can no longer be started by editing this file alone: the two
+  # workflows are separately owned in CODEOWNERS.

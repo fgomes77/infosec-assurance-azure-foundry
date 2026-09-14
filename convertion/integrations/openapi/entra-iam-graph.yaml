@@ -1,0 +1,92 @@
+# Purpose: Microsoft Graph — Entra ID READ-ONLY subset for IAM context
+#   (requirement i: access to Euronext IAM tooling with full read access
+#   and no write permissions): users, groups, directory roles, role
+#   assignments, applications/service principals, access reviews.
+# Auth: Entra ID OAuth 2.0 client-credentials (same app pattern as
+#   defender-graph). App permissions (admin-consented, all READ:
+#   User.Read.All, Group.Read.All, RoleManagement.Read.Directory,
+#   Application.Read.All, AccessReview.Read.All). Credentials in the
+#   Foundry connection conn-entra-iam (Key Vault backed).
+# READ-ONLY BY CONSTRUCTION: GET operations only; attach_integrations.py
+#   additionally strips any non-GET operation (no agent lists this
+#   connection in write_connections).
+openapi: 3.0.3
+info:
+  title: Microsoft Graph Entra ID IAM (read-only subset)
+  description: >-
+    Minimal read surface over Entra ID for IAM assurance context:
+    identities, groups, privileged roles and their assignments, app
+    registrations/service principals, access reviews.
+  version: "1.0"
+servers:
+  - url: https://graph.microsoft.com/v1.0
+security:
+  - oauth2ClientCredentials: []
+paths:
+  /users:
+    get:
+      operationId: listUsers
+      summary: List/filter users
+      parameters:
+        - { name: $filter, in: query, schema: { type: string } }
+        - { name: $select, in: query, schema: { type: string, default: "id,displayName,userPrincipalName,accountEnabled" } }
+        - { name: $top, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        "200": { description: Users. }
+  /groups:
+    get:
+      operationId: listGroups
+      summary: List/filter groups
+      parameters:
+        - { name: $filter, in: query, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        "200": { description: Groups. }
+  /groups/{groupId}/members:
+    get:
+      operationId: listGroupMembers
+      summary: List members of a group
+      parameters:
+        - { name: groupId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Group members. }
+  /directoryRoles:
+    get:
+      operationId: listDirectoryRoles
+      summary: List activated directory (admin) roles
+      responses:
+        "200": { description: Directory roles. }
+  /directoryRoles/{roleId}/members:
+    get:
+      operationId: listRoleMembers
+      summary: List members of a directory role (privileged access review)
+      parameters:
+        - { name: roleId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Role members. }
+  /servicePrincipals:
+    get:
+      operationId: listServicePrincipals
+      summary: List/filter service principals (third-party app access)
+      parameters:
+        - { name: $filter, in: query, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 25, maximum: 100 } }
+      responses:
+        "200": { description: Service principals. }
+  /identityGovernance/accessReviews/definitions:
+    get:
+      operationId: listAccessReviews
+      summary: List access review definitions and status
+      parameters:
+        - { name: $top, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        "200": { description: Access review definitions. }
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: read-only Graph app permissions

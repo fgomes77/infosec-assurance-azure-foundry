@@ -1,5 +1,19 @@
+# Kept in step with ../setup/requirements.txt: server.py shares the data-plane
+# adapter ../scripts/_foundry_runtime.py (finding C1 — GA Responses API,
+# api-version v1; the classic threads/runs runtime retires 2027-03-31).
 mcp==1.12.3
-azure-ai-projects==1.0.0
-azure-ai-agents==1.1.0
-azure-identity==1.19.0
+azure-ai-projects>=2.3.0,<3
+azure-identity>=1.19.0,<2
 python-dotenv==1.0.1
+
+# DOCUMENTED FALLBACK (classic mode): azure-ai-projects==1.0.0 +
+# azure-ai-agents==1.1.0. Must be gone before 2027-03-31.
+azure-ai-agents>=1.1.0,<2
+
+# Only when MEMORY_BACKEND=search-index (finding C3):
+# azure-search-documents>=11.5.0,<12
+
+# operations/backup_vector_stores.py --upload-account (BACKUP_DR.md B1); the
+# container image copies operations/backup_vector_stores.py to /app/operations/,
+# the path operations/backup-job.bicep invokes.
+azure-storage-blob==12.24.0

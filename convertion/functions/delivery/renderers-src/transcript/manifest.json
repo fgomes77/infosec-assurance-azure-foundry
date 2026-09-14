@@ -1,0 +1,11 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{outdir}"],
+  "formats": ["md", "html", "docx"],
+  "outputs": "dir",
+  "timeout": 300,
+  "schema": "transcript.schema.json",
+  "stdout_must_contain": "PASS - ",
+  "source": "Renderer for the diarized-transcript outputs of workflows/speech-transcription.json (Azure AI Speech batch + diarization, EU) and of any whisperx-transcribe-diarize JSON. Turn model, HH:MM:SS timestamps and speaker legend follow the byte-verified claude-account-export/skills/whisperx-transcribe-diarize/scripts/format_transcript.py; the palette is the Euronext house style (templates/enx-theme.json), per agents/document_agents_addendum.md. Speaker names come from the approved contract (speakerNames), never from the engine - the skill's relabel_speakers.py is an upstream editorial step. Audio clips stay on POST /api/speaker_clips (whisperx renderer)."
+}

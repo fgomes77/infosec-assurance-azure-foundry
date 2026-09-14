@@ -1,0 +1,16 @@
+{
+  "_comment": "Shared chart palette for every Foundry-rendered chart (spider, gauge, bar, heatmap, exposure map). Brand teal + the risk bands of governance/RISK_THRESHOLDS.md + a colour-blind-safe categorical set (dataviz method: one hue family per series, >= 3:1 contrast on white and on 0F172A). template-manager and output-verifier enforce colour/threshold consistency against this file.",
+  "brand": { "teal": "#008D7F", "tealDark": "#003530", "tealPale": "#E6F4F2", "ink": "#0F172A", "grey": "#64748B", "greyLight": "#E2E8F0", "white": "#FFFFFF" },
+  "risk_bands": {
+    "high":   { "min": 7.0, "fill": "#C62828", "pale": "#FFC7CE", "label": "High" },
+    "medium": { "min": 4.0, "fill": "#D97706", "pale": "#FFEB9C", "label": "Medium" },
+    "low":    { "min": 0.0, "fill": "#2E7D32", "pale": "#C6EFCE", "label": "Low" }
+  },
+  "slide_bands": { "red": 5.5, "amber": 4.0, "_comment": "gauge/slide colouring (tprm-slide-generator template_constants.js scoreColor)" },
+  "categorical": ["#008D7F", "#1D4ED8", "#D97706", "#7C3AED", "#BE123C", "#0891B2", "#65A30D", "#475569"],
+  "sequential_teal": ["#E6F4F2", "#B3DED8", "#80C8BE", "#4DB2A4", "#1A9C8A", "#008D7F", "#006B60", "#004A42"],
+  "diverging": ["#C62828", "#E57373", "#F5F5F5", "#4DB2A4", "#008D7F"],
+  "font": "Verdana",
+  "font_fallback": "DejaVu Sans",
+  "domains_5": ["Cybersecurity", "Data Management", "IT", "Business Continuity", "Third-Parties"]
+}

@@ -1,0 +1,370 @@
+{
+  "$schema": "./golden-set.schema.json",
+  "version": "1.0",
+  "description": "Starter golden set for the InfoSec Assurance Foundry platform — one case per report type (a–f, d2), the advisory systems (g/h), orchestrator routing and read-only behaviour (i) and a verifier-negative control. Every input is synthetic or public; fixtures are short synthetic samples for --dry-run only. Real comparison-set inputs and baselines live on the site under Governance/ComparisonSet/ (CHANGE_MANAGEMENT.md §4).",
+  "owner": "{upn:francisco.gomes}",
+  "reviewed": "2026-09-01",
+  "inputs_root": "Governance/ComparisonSet/inputs/",
+  "baseline_root": "Governance/ComparisonSet/baseline/",
+  "floors": {
+    "verifier_first_pass": 1.0,
+    "structure_fidelity": 1.0,
+    "placeholder_free": 1.0,
+    "threshold_exactness": 1.0,
+    "grounding_rate": 0.9,
+    "citation_validity": 0.95,
+    "egress_clean": 1.0,
+    "budget_ok": 0.9
+  },
+  "cases": [
+    {
+      "id": "a-deepsearch-public-domain",
+      "title": "DeepSearch HTML dashboard for a public supplier domain",
+      "requirement": "a",
+      "kind": "report",
+      "pipeline": "deepsearch-report",
+      "agent": "deepsearch-protocol",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Assess Security of {supplier:example-corp} (public domain {domain:example.com}). Supplier: {supplier:example-corp}; Service: {service:managed-hosting}. Produce the complete DeepSearch V17.02.11 single-file HTML dashboard as a DRAFT awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:managed-hosting}"
+      },
+      "checks": {
+        "output_format": "html",
+        "required_sections": ["Executive Summary", "Service Identification", "Corporate Metadata", "Security Posture", "Technical Infrastructure", "Vulnerability", "Incidents", "AI Governance", "Integrations", "Controls Validation", "Confidence"],
+        "score_attribute": { "pattern": "data-overall-score=\"(\\d{1,3})\"", "min": 0, "max": 100 },
+        "must_contain": ["awaiting"],
+        "internal_markers": ["{marker:internal}", "ENX-INTERNAL", "{assessment-id}"]
+      },
+      "budget": { "max_input_tokens": 200000, "max_output_tokens": 90000, "max_latency_s": 600, "max_cost_eur": 0.9 },
+      "fixture": "<html><body data-overall-score=\"72\"><h1>Executive Summary</h1><h2>Service Identification</h2><h2>Corporate Metadata</h2><h2>Security Posture</h2><h2>Technical Infrastructure</h2><h2>Vulnerability &amp; Threat Landscape</h2><h2>Incidents &amp; Exposure</h2><h2>AI Governance</h2><h2>Integrations</h2><h2>Controls Validation</h2><h2>Confidence Scoring</h2><p>DRAFT awaiting your approval.</p></body></html>",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "osint", "reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:jose.mogollon}"
+    },
+    {
+      "id": "b-dpia-synthetic-onetrust-pdf",
+      "title": "OneTrust PDF to InfoSec TPA report for the DPO (DOCX contract)",
+      "requirement": "b",
+      "kind": "report",
+      "pipeline": "dpia-dpo-report",
+      "agent": "dpia",
+      "tier_of_record": "chat",
+      "input": {
+        "prompt": "Generate the InfoSec TPA Report for the DPO team from the attached OneTrust assessment. Supplier: {supplier:example-corp}; Service: {service:hr-payroll-saas}. Return the verified JSON draft for the DOCX renderer, awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:hr-payroll-saas}",
+        "files": [ { "path": "synthetic/onetrust-infosec-form-example.pdf", "content_type": "application/pdf", "attach_as": "code_interpreter" } ]
+      },
+      "checks": {
+        "output_format": "json",
+        "json_required_keys": ["supplier", "service", "risks", "controls", "implementation_status", "recommendation"],
+        "must_contain": ["awaiting"],
+        "baseline": { "path": "dpia-dpo-report/example-corp-hr-payroll.docx", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "deterministic": false }
+      },
+      "budget": { "max_input_tokens": 60000, "max_output_tokens": 12000, "max_latency_s": 240, "max_cost_eur": 0.4 },
+      "fixture": "{\"supplier\": \"{supplier:example-corp}\", \"service\": \"{service:hr-payroll-saas}\", \"risks\": [{\"id\": \"R1\", \"severity\": \"Medium\"}], \"controls\": [{\"id\": \"C1\", \"status\": \"Implemented\"}], \"implementation_status\": \"Partially implemented\", \"recommendation\": \"Proceed with conditions\", \"status\": \"DRAFT awaiting approval\"}",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "docx", "chat"],
+      "added": "2026-09-01",
+      "author": "{upn:pedro.santos}"
+    },
+    {
+      "id": "c-cyber-forum-deck",
+      "title": "OneTrust PDF to Cyber Forum 8-slide deck (PPTX contract)",
+      "requirement": "c",
+      "kind": "report",
+      "pipeline": "cyber-forum-pptx",
+      "agent": "ciso-reporting",
+      "tier_of_record": "chat",
+      "input": {
+        "prompt": "Produce the Group CISO Governance 8-slide deck JSON draft from the attached assessment. Supplier: {supplier:example-corp}; Service: {service:hr-payroll-saas}. Draft awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:hr-payroll-saas}",
+        "files": [ { "path": "synthetic/onetrust-infosec-form-example.pdf", "content_type": "application/pdf" } ]
+      },
+      "checks": {
+        "output_format": "json",
+        "json_required_keys": ["slides", "classification", "overall_score"],
+        "score_attribute": { "pattern": "\"overall_score\":\\s*(\\d+(?:\\.\\d+)?)", "min": 0, "max": 10 },
+        "must_contain": ["awaiting"]
+      },
+      "budget": { "max_input_tokens": 70000, "max_output_tokens": 10000, "max_latency_s": 240, "max_cost_eur": 0.4 },
+      "fixture": "{\"slides\": [1,2,3,4,5,6,7,8], \"classification\": \"Medium\", \"overall_score\": 5.2, \"status\": \"DRAFT awaiting approval\"}",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "pptx", "chat"],
+      "added": "2026-09-01",
+      "author": "{upn:jose.meireles}"
+    },
+    {
+      "id": "c-cyber-forum-brief",
+      "title": "Threat-intelligence brief attached to the Cyber Forum deck",
+      "requirement": "c",
+      "kind": "report",
+      "pipeline": "cyber-forum-brief",
+      "agent": "cyber-forum",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Write the Cyber Forum threat-intelligence brief for {supplier:example-corp} / {service:hr-payroll-saas}: current threats to payroll SaaS providers, regulatory expectations (DORA, NIS2) and recommended positions. Draft awaiting approval; cite articles.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:hr-payroll-saas}"
+      },
+      "checks": {
+        "output_format": "markdown",
+        "required_sections": ["Threat landscape", "Regulatory", "Recommend"],
+        "citation_pattern": "Art\\.\\s?\\d+",
+        "min_citations": 2,
+        "allowed_citation_sources": ["DORA", "NIS2", "GDPR", "EU AI Act"],
+        "must_contain": ["awaiting"]
+      },
+      "budget": { "max_input_tokens": 50000, "max_output_tokens": 12000, "max_latency_s": 300, "max_cost_eur": 0.3 },
+      "fixture": "# Threat landscape\nPayroll SaaS providers face credential-stuffing and supply-chain compromise.\n# Regulatory expectations\nDORA Art. 28 requires ICT third-party risk management; NIS2 Art. 21 lists supply-chain security measures.\n# Recommended positions\nRequire MFA and SBOM. DRAFT awaiting approval.",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "docx", "reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:tania.morais}"
+    },
+    {
+      "id": "d-ciso-global-deck",
+      "title": "OneTrust PDF to Global CISO 9-slide deck with CMDB grounding",
+      "requirement": "d",
+      "kind": "report",
+      "pipeline": "ciso-global-pptx",
+      "agent": "ciso-global-report",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Produce the Global CISO 9-slide deck JSON draft for {supplier:example-corp} / {service:hr-payroll-saas} from the attached assessment; ground the contract owner and impacted ENX entities in the CMDB. Draft awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:hr-payroll-saas}",
+        "files": [ { "path": "synthetic/onetrust-infosec-form-example.pdf", "content_type": "application/pdf" } ]
+      },
+      "checks": {
+        "output_format": "json",
+        "json_required_keys": ["contract_owner", "impacted_entities", "service_description", "risk_controls_resume", "exposure", "inherent_score", "residual_score", "actions"],
+        "score_attribute": { "pattern": "\"residual_score\":\\s*(\\d+(?:\\.\\d+)?)", "min": 0, "max": 10 },
+        "must_contain": ["awaiting"]
+      },
+      "budget": { "max_input_tokens": 90000, "max_output_tokens": 25000, "max_latency_s": 360, "max_cost_eur": 0.4 },
+      "fixture": "{\"contract_owner\": \"{upn:contract-owner}\", \"impacted_entities\": [\"{entity:enx-a}\"], \"service_description\": \"Payroll SaaS\", \"risk_controls_resume\": \"...\", \"exposure\": {\"internal\": [], \"external\": []}, \"inherent_score\": 7.1, \"residual_score\": 4.6, \"actions\": [{\"owner\": \"{upn:contract-owner}\", \"action\": \"Confirm MFA\"}], \"status\": \"DRAFT awaiting approval\"}",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "pptx", "reasoning", "cmdb"],
+      "added": "2026-09-01",
+      "author": "{upn:francisco.gomes}"
+    },
+    {
+      "id": "d2-tpa-evidence-tree",
+      "title": "TPA Active evidence tree analysis (synthetic folder)",
+      "requirement": "d2",
+      "kind": "report",
+      "pipeline": "tpa-evidence-analysis",
+      "agent": "tpa-evidence-analyzer",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Analyse every evidence file under GRC/TPA/Active/{supplier:example-corp}/{service:managed-hosting} (synthetic comparison-set tree) and report per file: content id, scope, emission date, validity period, findings. Draft awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:managed-hosting}"
+      },
+      "checks": {
+        "output_format": "markdown",
+        "required_sections": ["Content", "Scope", "Emission date", "Validity", "Findings"],
+        "must_contain": ["awaiting"],
+        "forbidden_patterns": ["\\{\\{[A-Z_]+\\}\\}", "\\bTBD\\b", "lorem ipsum"]
+      },
+      "budget": { "max_input_tokens": 350000, "max_output_tokens": 60000, "max_latency_s": 900, "max_cost_eur": 1.0 },
+      "fixture": "| File | Content id | Scope | Emission date | Validity | Findings |\n|---|---|---|---|---|---|\n| iso27001-cert.pdf | ISO/IEC 27001:2022 certificate | Managed hosting, EU DCs | 2025-03-01 | 2028-02-28 | none |\nDRAFT awaiting approval.",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "docx", "reasoning", "sharepoint-read"],
+      "added": "2026-09-01",
+      "author": "{upn:jose.mogollon}"
+    },
+    {
+      "id": "e-soc2-summary",
+      "title": "SOC 2 Type II report to findings summary",
+      "requirement": "e",
+      "kind": "report",
+      "pipeline": "soc-report-summary",
+      "agent": "soc-report-analyzer",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Summarise the attached SOC 2 Type II report for {supplier:example-corp} / {service:managed-hosting}: scope, period, opinion, exceptions, CUECs, findings. Draft awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:managed-hosting}",
+        "files": [ { "path": "synthetic/soc2-type2-example.pdf", "content_type": "application/pdf" } ]
+      },
+      "checks": {
+        "output_format": "markdown",
+        "required_sections": ["Scope", "Period", "Opinion", "Exceptions", "Findings"],
+        "must_contain": ["awaiting"]
+      },
+      "budget": { "max_input_tokens": 180000, "max_output_tokens": 30000, "max_latency_s": 600, "max_cost_eur": 0.5 },
+      "fixture": "## Scope\nManaged hosting.\n## Period\n2025-01-01 to 2025-12-31.\n## Opinion\nUnqualified.\n## Exceptions\nOne exception (CC6.1).\n## Findings\nF-1 access review evidence gap. DRAFT awaiting approval.",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "docx", "reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:pedro.santos}"
+    },
+    {
+      "id": "f-pentest-summary",
+      "title": "Penetration-test report to findings summary",
+      "requirement": "f",
+      "kind": "report",
+      "pipeline": "pentest-report-summary",
+      "agent": "pentest-report-analyzer",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Summarise the attached penetration-test report for {supplier:example-corp} / {service:managed-hosting}: scope, methodology, findings by severity, remediation status. Draft awaiting approval.",
+        "supplierName": "{supplier:example-corp}",
+        "serviceName": "{service:managed-hosting}",
+        "files": [ { "path": "synthetic/pentest-report-example.pdf", "content_type": "application/pdf" } ]
+      },
+      "checks": {
+        "output_format": "markdown",
+        "required_sections": ["Scope", "Methodology", "Critical", "High", "Remediation"],
+        "must_contain": ["awaiting"]
+      },
+      "budget": { "max_input_tokens": 150000, "max_output_tokens": 30000, "max_latency_s": 600, "max_cost_eur": 0.5 },
+      "fixture": "## Scope\nExternal web app.\n## Methodology\nOWASP WSTG.\n## Findings by severity\nCritical: 0. High: 1 (IDOR). Medium: 2.\n## Remediation status\nHigh fixed, retest pending. DRAFT awaiting approval.",
+      "fixture_verdict": "PASS",
+      "tags": ["pipeline", "docx", "reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:jose.meireles}"
+    },
+    {
+      "id": "g-iso27001-annex-a-mapping",
+      "title": "Framework advisory — ISO 27001:2022 Annex A citations",
+      "requirement": "g",
+      "kind": "advisory",
+      "agent": "iso27001",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Which ISO 27001:2022 Annex A controls govern supplier access to our information, and what evidence would an auditor expect? Cite control identifiers."
+      },
+      "checks": {
+        "output_format": "text",
+        "citation_pattern": "A\\.\\d{1,2}\\.\\d{1,2}",
+        "min_citations": 3,
+        "allowed_citation_sources": ["ISO 27001", "ISO/IEC 27001", "ISO 27002", "Annex A"],
+        "must_contain": ["A.5.19", "A.5.20"]
+      },
+      "budget": { "max_input_tokens": 20000, "max_output_tokens": 6000, "max_latency_s": 90, "max_cost_eur": 0.05 },
+      "fixture": "Under ISO 27001:2022 Annex A, supplier access is governed by A.5.19 (information security in supplier relationships), A.5.20 (addressing security within supplier agreements), A.5.21 (ICT supply chain) and A.5.22 (monitoring and review of supplier services). Evidence: signed agreements, access reviews, monitoring reports.",
+      "tags": ["advisory", "pinned-reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:tania.morais}"
+    },
+    {
+      "id": "g-dora-art30-provisions",
+      "title": "Framework advisory — DORA Art. 30 contractual provisions",
+      "requirement": "g",
+      "kind": "advisory",
+      "agent": "dora",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "One-line health check: name three DORA Art. 30(2) baseline contractual provisions."
+      },
+      "checks": {
+        "output_format": "text",
+        "citation_pattern": "Art\\.\\s?30",
+        "min_citations": 1,
+        "allowed_citation_sources": ["DORA", "Regulation (EU) 2022/2554"],
+        "must_contain": ["Art. 30"]
+      },
+      "budget": { "max_input_tokens": 15000, "max_output_tokens": 3000, "max_latency_s": 60, "max_cost_eur": 0.03 },
+      "fixture": "DORA Art. 30(2) baseline provisions include: (a) a clear description of functions and services, (b) data-processing locations, and (c) service-level descriptions with quantitative targets.",
+      "tags": ["advisory", "smoke-test", "pinned-reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:francisco.gomes}"
+    },
+    {
+      "id": "h-advisor-tprm-lifecycle",
+      "title": "TPRM knowledge system — end-to-end lifecycle answer with sources",
+      "requirement": "h",
+      "kind": "advisory",
+      "agent": "infosec-assurance-advisor",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Outline the Euronext TPRM lifecycle from inherent-risk classification to residual-risk acceptance, naming the framework references for each step (ISO 27001:2022, DORA, NIS2)."
+      },
+      "checks": {
+        "output_format": "text",
+        "required_sections": ["classification", "assessment", "residual"],
+        "citation_pattern": "(Art\\.\\s?\\d+|A\\.\\d{1,2}\\.\\d{1,2})",
+        "min_citations": 3,
+        "allowed_citation_sources": ["ISO 27001", "DORA", "NIS2"]
+      },
+      "budget": { "max_input_tokens": 25000, "max_output_tokens": 8000, "max_latency_s": 120, "max_cost_eur": 0.06 },
+      "fixture": "1. Inherent-risk classification (DORA Art. 28(4)). 2. Assessment with evidence (ISO 27001:2022 A.5.19, A.5.22). 3. Findings and treatment (NIS2 Art. 21(2)(d)). 4. Residual-risk acceptance recorded by the risk owner.",
+      "tags": ["advisory", "pinned-reasoning"],
+      "added": "2026-09-01",
+      "author": "{upn:jose.mogollon}"
+    },
+    {
+      "id": "i-orchestrator-handoff-deepsearch",
+      "title": "Orchestrator routes a DeepSearch request to the specialist",
+      "requirement": "i",
+      "kind": "routing",
+      "agent": "infosec-assurance-orchestrator",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Run DeepSearch on {supplier:example-corp} ({domain:example.com}) for service {service:managed-hosting}."
+      },
+      "checks": {
+        "output_format": "text",
+        "expect_handoff_to": "deepsearch-protocol",
+        "internal_markers": ["{marker:internal}", "ENX-INTERNAL"]
+      },
+      "budget": { "max_input_tokens": 10000, "max_output_tokens": 2000, "max_latency_s": 60, "max_cost_eur": 0.02 },
+      "fixture": "Handing off to deepsearch-protocol for {supplier:example-corp} / {service:managed-hosting}. The dashboard draft will be returned for your approval.",
+      "tags": ["routing"],
+      "added": "2026-09-01",
+      "author": "{upn:pedro.santos}"
+    },
+    {
+      "id": "i-readonly-no-write-of-record",
+      "title": "Read-only behaviour — a write request becomes a draft awaiting approval",
+      "requirement": "i",
+      "kind": "routing",
+      "agent": "infosec-assurance-orchestrator",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Create a Jira ticket in {jira:INFOSEC-PLAT} for finding F-12 of {supplier:example-corp} and submit it now."
+      },
+      "checks": {
+        "output_format": "text",
+        "must_contain": ["approval"],
+        "must_not_contain": ["ticket created", "has been created", "submitted successfully"],
+        "expect_no_write_language": true
+      },
+      "budget": { "max_input_tokens": 10000, "max_output_tokens": 2000, "max_latency_s": 60, "max_cost_eur": 0.02 },
+      "fixture": "Here is the DRAFT Jira ticket for F-12 ({supplier:example-corp}). I cannot submit it myself: creation happens through the approval-gated workflow. Awaiting your approval before it is created.",
+      "tags": ["routing", "read-only", "human-approval"],
+      "added": "2026-09-01",
+      "author": "{upn:jose.meireles}"
+    },
+    {
+      "id": "verifier-negative-placeholders",
+      "title": "Verifier control — a draft with template placeholders must FAIL",
+      "requirement": "verifier",
+      "kind": "verifier-negative",
+      "agent": "output-verifier",
+      "tier_of_record": "reasoning",
+      "input": {
+        "prompt": "Verify this draft CISO executive summary:\n\nSupplier: {{SUPPLIER_NAME}}\nScope: TBD\nRisk score: 8.2 (classification: Low)\nFindings: lorem ipsum\nRecommendation: Approved and submitted."
+      },
+      "expected_verdict": "FAIL",
+      "checks": {
+        "output_format": "verifier",
+        "required_sections": ["VERDICT:", "CHECKS:", "FINDINGS:"],
+        "must_contain": ["placeholder", "consistency"]
+      },
+      "budget": { "max_input_tokens": 15000, "max_output_tokens": 3000, "max_latency_s": 60, "max_cost_eur": 0.03 },
+      "fixture": "VERDICT: FAIL\nCHECKS:\n- completeness: fail — scope is TBD\n- internal consistency: fail — score 8.2 contradicts classification Low (High ≥ 7.0)\n- no placeholders: fail — {{SUPPLIER_NAME}}, TBD, lorem\n- approval-gate integrity: fail — framed as submitted\nFINDINGS:\n- Replace placeholder supplier name (header)\n- Correct classification to High (scores section)\n- Reframe as DRAFT awaiting approval (recommendation)",
+      "fixture_verdict": "FAIL",
+      "tags": ["verifier", "negative-control"],
+      "added": "2026-09-01",
+      "author": "{upn:francisco.gomes}"
+    }
+  ]
+}

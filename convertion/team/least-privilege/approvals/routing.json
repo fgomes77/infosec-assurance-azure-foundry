@@ -1,0 +1,111 @@
+{
+  "_comment": "Approval routing (least-privilege lens: team/least-privilege/APPROVAL_ROUTING.md). Consumed by the approval flow / Function behind the workflows' approvalWebhookUrl. The flow receives the HttpWebhook subscribe body ({kind, reportType, requestedBy, correlationId, callbackUrl, ...}), evaluates rules in order, picks the first match, resolves the approver set (Graph group members minus exclusions), sends the Teams Approval, and POSTs {decision, approver, correlationId, tier, timestamp} to callbackUrl. It must verify approver ∈ resolved set using the approver's token UPN (Graph checkMemberGroups), never a free-text field. Decision values other than 'approved' / 'APPROVED' skip the submission (workflows/README.md).",
+  "version": "1.0",
+  "principals": {
+    "owner": "{upn:francisco.gomes}",
+    "deputy": "{upn:deputy-approver}",
+    "lineManager": "{upn:line-manager}"
+  },
+  "groups": {
+    "reportApprovers": "sg-infosec-foundry-report-approvers",
+    "platformApprovers": "sg-infosec-foundry-platform-approvers"
+  },
+  "requesterResolution": {
+    "source": "requestedBy field populated by the caller from the authenticated token claim (preferred: Logic Apps Request trigger OAuth policy, x-ms-client-principal-name); if absent the run is treated as scheduled (no human requester)",
+    "scheduledRunsRequester": null
+  },
+  "rules": [
+    {
+      "id": "tier1-stakeholder-reports",
+      "tier": 1,
+      "match": { "kind": "REPORT_DELIVERY", "reportType": ["InfoSecTPA-DPO", "CyberForum", "CISOGlobal"] },
+      "approvers": { "group": "reportApprovers" },
+      "excludeRequester": true,
+      "minimumApprovals": 1,
+      "timeout": "P3D",
+      "fallbackWhenEmpty": { "principal": "owner", "ifRequesterIsOwner": "deputy" },
+      "rationale": "Leaves the team (DPO, CISOs, contract owners): four-eyes, approver != author. EU AI Act Art. 14; ISO 27001 A.5.3"
+    },
+    {
+      "id": "tier1-escalated-internal-report",
+      "tier": 1,
+      "match": { "kind": "REPORT_DELIVERY", "reportType": ["DeepSearch", "EvidenceAnalysis", "SOCSummary", "PentestSummary"], "stakeholderFacing": true },
+      "approvers": { "group": "reportApprovers" },
+      "excludeRequester": true,
+      "minimumApprovals": 1,
+      "timeout": "P3D",
+      "fallbackWhenEmpty": { "principal": "owner", "ifRequesterIsOwner": "deputy" },
+      "rationale": "Internal working paper promoted to a stakeholder-facing deliverable at trigger time"
+    },
+    {
+      "id": "tier2-internal-report-author-signoff",
+      "tier": 2,
+      "match": { "kind": "REPORT_DELIVERY", "reportType": ["DeepSearch", "EvidenceAnalysis", "SOCSummary", "PentestSummary"] },
+      "approvers": { "requester": true },
+      "requireRequester": true,
+      "elseRule": "tier1-scheduled-or-no-requester",
+      "minimumApprovals": 1,
+      "timeout": "P3D",
+      "sampling": { "peerReviewShare": 0.10, "cadence": "quarterly", "recordedIn": "Governance/AccessReviews/{yyyy}-Q{n}/report-sampling.md" },
+      "rationale": "Minimum that still puts a natural person between the verifier-passed draft and the SharePoint write; internal audience"
+    },
+    {
+      "id": "tier1-scheduled-or-no-requester",
+      "tier": 1,
+      "match": { "kind": "REPORT_DELIVERY" },
+      "approvers": { "group": "reportApprovers" },
+      "excludeRequester": false,
+      "minimumApprovals": 1,
+      "timeout": "P3D",
+      "rationale": "Scheduled runs (onetrust-assessment-intake, scheduled-deepsearch) have no human author"
+    },
+    {
+      "id": "tier1-records-of-record",
+      "tier": 1,
+      "match": { "kind": ["JIRA_CREATE", "IAF_SUBMIT"] },
+      "approvers": { "group": "reportApprovers" },
+      "excludeRequester": true,
+      "minimumApprovals": 1,
+      "timeout": "P3D",
+      "fallbackWhenEmpty": { "principal": "owner", "ifRequesterIsOwner": "deputy" },
+      "rationale": "Submissions into registers of record are human-accountable acts (DORA/NIS2 context in governance/HUMAN_APPROVAL.md)"
+    },
+    {
+      "id": "tier3-template-update",
+      "tier": 3,
+      "match": { "kind": "TEMPLATE_UPDATE" },
+      "approvers": { "principal": "owner" },
+      "ifRequesterIsOwner": { "principal": "deputy" },
+      "minimumApprovals": 1,
+      "timeout": "P7D",
+      "additionalConfirmation": "methodology change confirmed by the requester when thresholds/scoring change (template-manager charter)",
+      "rationale": "Configuration of record; segregation of duties when the owner is the requester"
+    },
+    {
+      "id": "tier3-platform-change",
+      "tier": 3,
+      "match": { "kind": "PLATFORM_CHANGE" },
+      "approvers": { "principal": "owner" },
+      "ifRequesterIsOwner": { "principal": "deputy" },
+      "channel": "GitHub PR review (CODEOWNERS) + deployment environment 'prod' approval",
+      "timeout": null,
+      "rationale": "Bicep, registry.json, OpenAPI specs, workflow definitions, agent instructions, persona, knowledge packs, Graph consents, privileged group membership"
+    },
+    {
+      "id": "tier3-memory-delete",
+      "tier": 3,
+      "match": { "kind": "MEMORY_DELETE" },
+      "approvers": { "principal": "owner" },
+      "ifRequesterIsOwner": { "principal": "deputy" },
+      "skipWhen": "requester is the note author (self-deletion needs no approval)",
+      "timeout": "P7D",
+      "rationale": "Shared team memory is a RoPA-scoped store; deletion of another person's note is auditable"
+    }
+  ],
+  "neverAutoApprove": true,
+  "breakGlass": { "grantsApproval": false, "runbook": "operations/access-governance/BREAK_GLASS.md" },
+  "decisionRecord": {
+    "fields": ["decision", "approver", "approverObjectId", "correlationId", "ruleId", "tier", "timestamp", "requestedBy"],
+    "retention": "Logic Apps run history + Log Analytics export >= 1 year (DORA Art. 28)"
+  }
+}

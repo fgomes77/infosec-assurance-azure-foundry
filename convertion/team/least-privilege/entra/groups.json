@@ -1,0 +1,100 @@
+{
+  "_comment": "Entra ID security groups of record for the InfoSec Assurance Foundry platform (team/TEAM_MODEL.md §6; delta D-T3 applied). All groups: securityEnabled=true, mailEnabled=false, assigned membership (no dynamic rules), isAssignableToRole=false, covered by Entra access reviews. UPNs are placeholders; object ids are filled by scripts/provision_identity.sh into team/rbac.parameters.json. The owner owns only the groups he uses to run the team; every group that grants him privilege or approves his changes is owned by the line manager (executed by {group:iam-admins}). Controls: ISO 27001:2022 A.5.3, A.5.15, A.5.16, A.5.18, A.8.2; DORA Art. 9(4)(c); NIS2 Art. 21(2)(i).",
+  "namingPrefix": "sg-infosec-foundry-",
+  "conditionalAccessPolicy": {
+    "name": "CA-InfoSec-Foundry",
+    "targets": "all groups below",
+    "cloudApps": ["Microsoft Azure Management", "Azure AI Foundry / Azure Cognitive Services", "Office 365 SharePoint Online"],
+    "grant": ["mfa", "compliantDevice"],
+    "signInFrequencyHours": 12,
+    "blockLegacyAuth": true,
+    "controls": ["ISO 27001:2022 A.8.5", "DORA Art. 9(4)(d)", "NIS2 Art. 21(2)(j)"]
+  },
+  "groups": [
+    {
+      "name": "sg-infosec-foundry-users",
+      "purpose": "Assurance users: Azure AI User (or the agent-consumer custom role) on the Foundry project; SharePoint site members; Copilot Studio agent audience; hosted-MCP Easy Auth allowed group; GitHub Read; CA policy scope",
+      "owners": ["{upn:francisco.gomes}"],
+      "backupOwners": ["{group:iam-admins}"],
+      "members": ["{upn:francisco.gomes}", "{upn:jose.mogollon}", "{upn:pedro.santos}", "{upn:jose.meireles}", "{upn:tania.morais}"],
+      "additionsRequestedBy": "line manager of the joiner via access package AP-InfoSec-Foundry-User (12 months)",
+      "additionsApprovedBy": "{upn:francisco.gomes}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:francisco.gomes}" },
+      "grants": ["Azure AI User (project)", "SharePoint Members (site): Edit on GRC/TPA/Active, Read on Reports/, Templates/, Governance/", "Copilot Studio agent audience", "MCP local (own az login) / hosted (Easy Auth)", "GitHub team infosec-assurance-users (Read)"]
+    },
+    {
+      "name": "sg-infosec-foundry-report-approvers",
+      "purpose": "Tier A peer four-eyes approvers (REPORT_DELIVERY reportTypes DeepSearch, AIDeepSearch, EvidenceAnalysis, SOCSummary, PentestSummary, ThreatIntelBrief, Transcript, Advisory; JIRA_CREATE, IAF_SUBMIT, TEAMS_POST); the approval flow resolves this group minus the requester",
+      "owners": ["{upn:francisco.gomes}"],
+      "members": ["{upn:francisco.gomes}", "{upn:jose.mogollon}", "{upn:pedro.santos}", "{upn:jose.meireles}", "{upn:tania.morais}"],
+      "additionsRequestedBy": "{upn:francisco.gomes} after the joiner's onboarding attestation (team/ONBOARDING.md §5)",
+      "additionsApprovedBy": "{upn:francisco.gomes}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:francisco.gomes}" },
+      "grants": ["May answer Tier A approval gates (team/approval-policy.json)"]
+    },
+    {
+      "name": "sg-infosec-foundry-senior-approvers",
+      "purpose": "Tier B senior four-eyes approvers (REPORT_DELIVERY reportTypes InfoSecTPA-DPO, CyberForum, CISOGlobal, CISOExecSummary — deliverables that leave the team); the deputy also approves the owner's own Tier C items (TEMPLATE_UPDATE, PLATFORM_CHANGE review, MEMORY_DELETE)",
+      "owners": ["{upn:line-manager}"],
+      "executedBy": "{group:iam-admins}",
+      "members": ["{upn:francisco.gomes}", "{upn:deputy-approver}"],
+      "additionsRequestedBy": "{upn:francisco.gomes} (nominates the deputy)",
+      "additionsApprovedBy": "{upn:line-manager}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:line-manager}" },
+      "grants": ["May answer Tier B gates; deputy answers Tier C gates where requestedBy is the owner (approval-policy.json tiers.C.requester_is_owner_fallback)"]
+    },
+    {
+      "name": "sg-infosec-foundry-owner",
+      "purpose": "Standing low-privilege owner roles only: Reader (RG), Log Analytics Reader, Key Vault Reader (names, not values), SharePoint site owner, Copilot Studio maker, GitHub Maintain; no standing privileged Azure role",
+      "owners": ["{upn:line-manager}"],
+      "executedBy": "{group:iam-admins}",
+      "members": ["{upn:francisco.gomes}"],
+      "additionsRequestedBy": "{upn:line-manager}",
+      "additionsApprovedBy": "{upn:line-manager}",
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:line-manager}" },
+      "grants": ["see team/rbac.bicep (owner* resources)", "Tier C approver of others' TEMPLATE_UPDATE / PLATFORM_CHANGE / MEMORY_DELETE items"]
+    },
+    {
+      "name": "sg-infosec-foundry-admin-pim",
+      "purpose": "PIM-eligible privileged Azure roles for platform maintenance (ledger rows L1–L5, L7, L8: Azure AI Developer, Contributor, Key Vault Secrets Officer, Logic Apps Standard Developer/Operator, Website Contributor, Storage Blob Data Reader, Monitoring Contributor, Bing Contributor); nobody active by default",
+      "owners": ["{upn:line-manager}"],
+      "executedBy": "{group:iam-admins}",
+      "members": [],
+      "eligibleMembers": ["{upn:francisco.gomes}"],
+      "pim": { "eligible": true, "maxActivationHours": 8, "requireMfa": true, "requireJustification": true, "requireTicket": true, "approverForActivation": "self-activation for Azure AI Developer / Key Vault / Logic Apps / Function / Monitoring / Blob roles; {upn:line-manager} approval for Contributor (RG)" },
+      "accessReview": { "cadence": "quarterly", "reviewer": "{upn:line-manager}", "pimActivationReview": "monthly" },
+      "grants": ["see team/rbac.bicep (pim* resources; perm* resources only when enablePim=false — exception recorded in team/ACCESS_REGISTER.md)"]
+    },
+    {
+      "name": "sg-infosec-foundry-breakglass",
+      "purpose": "Eligible-only membership granting the -admin-pim role set (no RBAC Administrator) to the deputy for a bounded window when the owner is unavailable > 2 business days or during a P1/P2 incident (operations/access-governance/BREAK_GLASS.md)",
+      "owners": ["{upn:line-manager}"],
+      "executedBy": "{group:iam-admins}",
+      "members": [],
+      "eligibleMembers": ["{upn:deputy-approver}"],
+      "pim": { "eligible": true, "maxActivationHours": 8, "requireMfa": true, "requireJustification": true, "requireTicket": true, "approverForActivation": "{upn:line-manager} or {group:soc-oncall}" },
+      "accessReview": { "cadence": "each activation reviewed by {upn:francisco.gomes} within 5 business days; quarterly by {upn:line-manager}" },
+      "grants": ["see team/rbac.bicep (bg* resources)"]
+    },
+    {
+      "name": "sg-infosec-foundry-readers",
+      "purpose": "Read-only evidence access for ISMS / internal audit and the DPO per engagement (ledger row L15); empty outside engagements",
+      "owners": ["{upn:francisco.gomes}"],
+      "members": [],
+      "additionsRequestedBy": "{upn:head-of-internal-audit} or {group:dpo}",
+      "additionsApprovedBy": "{upn:francisco.gomes}",
+      "accessReview": { "cadence": "end of each engagement (remove); quarterly check that it is empty", "reviewer": "{upn:francisco.gomes}" },
+      "grants": ["Reader (RG)", "Log Analytics Reader", "Logic Apps Standard Reader (run history)", "SharePoint Visitors on Governance/"]
+    }
+  ],
+  "servicePrincipals": [
+    {
+      "name": "{app:infosec-foundry-deployer}",
+      "type": "app registration with federated credential (GitHub Actions OIDC, environment production, repo {github:org/repo}) — no client secret, no interactive sign-in",
+      "owner": "{upn:francisco.gomes}",
+      "roles": ["Contributor (RG)", "Role Based Access Control Administrator (RG, ABAC-constrained to the roles in team/rbac.bicep)", "Azure AI Developer (Foundry account)", "Key Vault Secrets Officer (seeding only)"],
+      "interactiveSignIn": false,
+      "ledger": "team/TEAM_MODEL.md §5 L11"
+    }
+  ]
+}

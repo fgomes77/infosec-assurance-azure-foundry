@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "xlsx_generic",
+  "description": "Contract of the generic tabular XLSX template (`xlsx-generic`), rendered by functions/delivery/renderers/xlsx-generic/render.py (openpyxl) and recalculated by office-tools /api/recalc before release. Colour convention: blue = input value, black = formula, teal header = column title; risk bands High >= 7.0 / Medium >= 4.0 / Low < 4.0 (governance/RISK_THRESHOLDS.md).",
+  "type": "object",
+  "required": ["title", "sheets"],
+  "properties": {
+    "title": { "type": "string", "minLength": 3 },
+    "supplier": { "type": "string" },
+    "service": { "type": "string" },
+    "reportDate": { "type": "string", "format": "date", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "classification": { "type": "string", "default": "Euronext Internal" },
+    "sheets": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "required": ["name", "columns"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "maxLength": 31, "description": "Excel sheet name limit; the renderer truncates at 31 characters." },
+          "columns": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "rows": {
+            "type": "array",
+            "items": { "type": "array", "items": { "type": ["string", "number", "boolean", "null"] } },
+            "description": "Row values in column order. A string starting with '=' is written as a formula and recalculated by office-tools."
+          },
+          "widths": { "type": "array", "items": { "type": "integer", "minimum": 4, "maximum": 120 } },
+          "freeze": { "type": "string", "default": "A2" },
+          "number_formats": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Column name -> Excel number format, e.g. {\"Residual\": \"0.0\"}." },
+          "conditional": { "type": "object", "additionalProperties": { "type": "string", "enum": ["risk_band"] }, "description": "Column name -> rule; only 'risk_band' exists (red >= 7.0, amber >= 4.0, green < 4.0)." }
+        }
+      }
+    },
+    "legend": {
+      "type": "array",
+      "items": { "type": "object", "required": ["label", "meaning"], "properties": { "label": { "type": "string" }, "meaning": { "type": "string" } } }
+    },
+    "assumptions": { "type": "array", "items": { "type": "string" } },
+    "sources": { "type": "array", "items": { "type": "string" } }
+  }
+}

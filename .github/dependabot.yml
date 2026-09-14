@@ -1,0 +1,35 @@
+# Dependency currency for the kit (convertion/operations/LIFECYCLE.md §"Platform
+# currency": a Dependabot PR is a *patch*-class change — CI green is the gate,
+# the owner merges). Grouped weekly so the review is one PR per ecosystem, not
+# one per pin. Version pins live in the files below; never auto-merge.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: pip
+    directories:
+      - /convertion/setup                       # Foundry data-plane SDK (C1)
+      - /convertion/mcp-server
+      - /convertion/functions/delivery
+      - /convertion/integrations/copilot/function
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directories:
+      - /convertion/functions/delivery
+      - /convertion/functions/delivery/renderers-src/*
+    schedule:
+      interval: weekly
+    groups:
+      renderers:
+        patterns: ['*']

@@ -1,0 +1,92 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview. This is the template-manager preview dataset for the house-style tokens, not a second copy of the theme: values are quoted from templates/enx-theme.json so a before/after preview shows what a token change would do.",
+  "theme_id": "enx-theme",
+  "theme_version": "1.0",
+  "preview_title": "Euronext house style — token preview",
+  "swatches": [
+    {
+      "token": "palette.primary",
+      "value": "#008D7F",
+      "usage": "Headings, table header fill, KPI accents"
+    },
+    {
+      "token": "palette.secondary",
+      "value": "#5ce0d2",
+      "usage": "Section titles, chart line"
+    },
+    {
+      "token": "palette.body_background",
+      "value": "#0a1a1f",
+      "usage": "HTML dashboard background"
+    },
+    {
+      "token": "risk_colours.high",
+      "value": "#e06c3c",
+      "usage": "High band (>= 7.0)"
+    },
+    {
+      "token": "risk_colours.medium",
+      "value": "#e0b23c",
+      "usage": "Medium band (>= 4.0)"
+    },
+    {
+      "token": "risk_colours.low",
+      "value": "#3cb371",
+      "usage": "Low band (< 4.0)"
+    }
+  ],
+  "glyphs": [
+    {
+      "token": "risk_glyphs.high",
+      "entity": "&#x1F534;",
+      "usage": "High-risk row marker"
+    },
+    {
+      "token": "risk_glyphs.yes",
+      "entity": "&#x2705;",
+      "usage": "Control implemented"
+    },
+    {
+      "token": "risk_glyphs.no",
+      "entity": "&#x274C;",
+      "usage": "Control missing"
+    }
+  ],
+  "typography": {
+    "font_family": "Verdana, Geneva, 'DejaVu Sans', sans-serif",
+    "base_font_size_px": 13,
+    "min_font_size_px": 11
+  },
+  "sample_kpis": [
+    {
+      "label": "Overall risk",
+      "value": "MEDIUM",
+      "band": "medium"
+    },
+    {
+      "label": "Residual score",
+      "value": "5.2",
+      "band": "medium"
+    },
+    {
+      "label": "Open actions",
+      "value": "2",
+      "band": "low"
+    }
+  ],
+  "sample_risk_rows": [
+    {
+      "id": "R06",
+      "finding": "Unpatched transfer agent",
+      "band": "medium",
+      "confidence": "HIGH"
+    },
+    {
+      "id": "R02",
+      "finding": "Sub-processor list not published",
+      "band": "low",
+      "confidence": "MEDIUM"
+    }
+  ],
+  "classification_footer": "Euronext - Information Security Assurance - Confidential"
+}

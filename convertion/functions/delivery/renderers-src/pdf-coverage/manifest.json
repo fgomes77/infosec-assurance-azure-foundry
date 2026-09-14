@@ -1,0 +1,8 @@
+{
+  "runtime": "python",
+  "entry": "scripts/triage.py",
+  "formats": [],
+  "outputs": "none",
+  "endpoint": "POST /api/pdf/{triage|inventory|chunk|verify|cross_check} (function_app.py) - not a render template",
+  "source": "byte-verified claude-account-export/skills/pdf-full-coverage-analyzer/scripts/* staged as pdf-full-coverage-analyzer-scripts.zip; needs poppler-utils, tesseract-ocr, PyMuPDF, pdfplumber (Dockerfile). Reached through POST /api/pdf/{stage} on the delivery Function, invoked by the pipeline on behalf of pdf-full-coverage-analyzer, tpa-evidence-analyzer, soc-report-analyzer and pentest-report-analyzer. There is no OpenAPI spec for it and it is not an agent tool: the surface is POST-only and attach_integrations.py strips every non-GET operation (governance/HUMAN_APPROVAL.md Layer 1)."
+}

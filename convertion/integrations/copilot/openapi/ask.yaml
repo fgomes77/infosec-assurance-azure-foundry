@@ -1,0 +1,115 @@
+# Purpose: API plugin spec for the Microsoft 365 Copilot / Teams channel.
+#   Thin Azure Function wrapper (integrations/copilot/function/) over the
+#   Foundry Agents API: /ask (seconds-scale advisory Q&A) and /request_report
+#   (starts an approval-gated delivery pipeline and returns a tracking id -
+#   long-running report agents are never awaited inside Copilot).
+# Auth: Entra ID (microsoftEntra in the plugin manifest) - Copilot sends the
+#   user's token for scope api://{copilot-wrapper-app-id}/access_as_user; the
+#   Function validates it (Easy Auth), authorises the caller against
+#   sg-infosec-foundry-users, calls Foundry with its managed identity, and
+#   exchanges the token on-behalf-of (OBO) for user-scoped Graph reads.
+openapi: 3.0.3
+info:
+  title: ENX InfoSec Assurance - Copilot API plugin
+  description: Ask the assurance advisors or request a governed report (draft -> verifier -> human approval -> SharePoint).
+  version: "1.0"
+servers:
+  - url: https://{copilot-wrapper-function}.azurewebsites.net/api
+security:
+  - entraOAuth: []
+paths:
+  /ask:
+    post:
+      operationId: askAdvisor
+      summary: Ask an assurance advisor a question
+      description: >-
+        Send a question to one advisory agent (cyber-forum, dora, nis2,
+        eu-ai-act, iso27001, iso42001, infosec-assurance-advisor). The answer
+        is text with sources. Use for questions answerable in seconds; for
+        reports use requestReport.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent, question]
+              properties:
+                agent:
+                  type: string
+                  enum: [infosec-assurance-advisor, cyber-forum, dora, nis2, eu-ai-act, iso27001, iso42001]
+                  description: Advisory agent to ask (default infosec-assurance-advisor, which routes).
+                question: { type: string, maxLength: 8000 }
+                conversationId: { type: string, description: Optional Foundry conversation id from a previous answer to continue the conversation (finding C1). }
+                threadId: { type: string, deprecated: true, description: Deprecated alias of conversationId, accepted for one release; classic threads/runs retire 2027-03-31. }
+      responses:
+        "200":
+          description: The advisor's answer.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer: { type: string }
+                  conversationId: { type: string }
+                  threadId: { type: string, deprecated: true, description: Echo of conversationId for one release. }
+                  routedFrom: { type: string, description: "Set when the orchestrator answered a ROUTE line naming another agent and the wrapper performed the hand-off (finding C2)." }
+                  agent: { type: string }
+                  citations: { type: array, items: { type: string } }
+        "403": { description: Caller not in the assurance users group. }
+        "504": { description: Agent run did not finish within the plugin time budget - retry or use requestReport. }
+  /request_report:
+    post:
+      operationId: requestReport
+      summary: Request a governed report (DeepSearch, DPIA, CISO deck, evidence analysis, ...)
+      description: >-
+        Starts the report-delivery pipeline (Logic Apps) for the named
+        pipeline key (workflows/pipelines.json) with supplier and service.
+        Returns immediately with a runId; the report is generated, checked by
+        the verifier, approved by a human and stored under
+        SharePoint Reports/<Supplier>/<Service>/ - the requester is notified in Teams.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pipeline, supplierName, requestText]
+              properties:
+                pipeline:
+                  type: string
+                  enum: [deepsearch-report, ai-deepsearch-report, dpia-dpo-report, cyber-forum-pptx, ciso-global-pptx, ciso-exec-summary, tpa-evidence-analysis, soc-report-summary, pentest-report-summary, cyber-forum-brief, advisory-file-delivery, transcript-summary]
+                supplierName: { type: string }
+                serviceName: { type: string, description: Optional for tpa-evidence-analysis (d2 all-services mode). }
+                requestText: { type: string, maxLength: 8000 }
+                inputFileIds: { type: array, items: { type: string }, description: Foundry file ids of files uploaded via /upload_evidence (SOC/pentest/OneTrust PDFs). }
+      responses:
+        "202":
+          description: Pipeline started.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runId: { type: string }
+                  statusUrl: { type: string }
+                  message: { type: string }
+  /report_status/{runId}:
+    get:
+      operationId: getReportStatus
+      summary: Status of a requested report
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Current state (running, awaiting_approval, approved, rejected, delivered) and the SharePoint link when delivered.
+components:
+  securitySchemes:
+    entraOAuth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            api://{copilot-wrapper-app-id}/access_as_user: Call the assurance wrapper as the signed-in user.

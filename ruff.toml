@@ -1,0 +1,59 @@
+# ruff configuration — the precondition for the ruff pre-commit hook.
+#
+# The hook was deliberately left out of `.pre-commit-config.yaml` until this
+# file existed: `ruff check convertion/` reported 17 findings, and a hook that
+# is red on arrival teaches people to reach for `--no-verify`, which costs more
+# than the hook ever returns. Everything ignored below is ignored for a stated
+# structural reason; the genuine findings were fixed rather than silenced.
+#
+# Scope note: this file governs the repository's own Python. It must never be
+# pointed at `claude-account-export/` or `convertion/build/` — those trees are
+# byte-verified against their sources and a formatter touching them would break
+# `verify_conversion.py`.
+
+target-version = "py311"
+line-length = 100
+
+exclude = [
+  "claude-account-export",
+  "convertion/build",
+  ".ruff_cache",
+  "node_modules",
+]
+
+[lint]
+# Ruff's default rule set (`E4`, `E7`, `E9`, `F`) — pycodestyle errors that
+# indicate a real mistake plus pyflakes. Deliberately NOT the wider catalogue:
+# turning on `I` (import sorting), `W` and `B` takes this repository from 17
+# findings to 363 in one line, none of which is a defect, and a gate that
+# reports 363 non-defects is a gate people learn to skip. Widen it only
+# together with the work to make the tree clean, in the same pull request.
+
+[lint.per-file-ignores]
+# E402 (module-level import not at top of file) cannot be fixed by moving the
+# import. Every script that talks to Foundry opens with the
+#     try: import azure...  except ImportError: <explain and exit>
+# shim, so that a missing SDK produces one readable sentence instead of a
+# traceback — which means the real imports necessarily follow a try/except
+# block. The alternative (importing inside every function) would be worse code
+# to satisfy a linter.
+"convertion/scripts/**" = ["E402"]
+"convertion/functions/**" = ["E402"]
+"convertion/mcp-server/**" = ["E402"]
+"convertion/operations/**" = ["E402"]
+"convertion/enterprise/**" = ["E402"]
+
+# E702 (statement on the same line as another, separated by `;`) in the
+# renderers and their tests: the compact `a = x; b = y` lines there mirror the
+# layout arithmetic of the byte-verified originals they were derived from, and
+# spreading them changes a diff that reviewers compare line-for-line against
+# the skill's own code.
+"convertion/functions/delivery/renderers-src/**" = ["E402", "E702"]
+"convertion/functions/delivery/tests/**" = ["E402", "E702"]
+
+# Test files legitimately shadow and rebind fixtures.
+"convertion/scripts/tests/**" = ["E402"]
+
+# Same reason as the renderers: the dossier's infographic generator is compact
+# drawing code where `x = …; y = …` pairs read as one coordinate.
+"project-dossier/**" = ["E702"]

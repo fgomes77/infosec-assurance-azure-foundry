@@ -1,0 +1,22 @@
+// Token economy (MODEL_ROUTING rule 7): tokens per agent per deliverable, daily.
+//
+// ItemCount is the sampling weight Application Insights attaches to every
+// retained item: 1 when nothing was sampled, n when this item stands for n.
+// Multiplying by it keeps the totals true if telemetry sampling is ever
+// enabled on this workspace — a plain sum() would silently under-report the
+// token bill by the sampling ratio, and a cost decision taken on an
+// under-reported bill is worse than no decision (governance/INFERENCE_PROFILES.md §4).
+AppDependencies
+| where TimeGenerated > ago(1d)
+| where isnotempty(Properties["gen_ai.usage.input_tokens"])
+| extend agent  = tostring(Properties["gen_ai.agent.name"]),
+         model  = tostring(Properties["gen_ai.response.model"]),
+         inTok  = tolong(Properties["gen_ai.usage.input_tokens"]),
+         outTok = tolong(Properties["gen_ai.usage.output_tokens"]),
+         weight = toreal(coalesce(ItemCount, 1))
+| summarize runs         = toreal(sum(weight)),
+            inputTokens  = sum(inTok * weight),
+            outputTokens = sum(outTok * weight)
+          by agent, model
+| extend tokensPerRun = round((inputTokens + outputTokens) / runs, 1)
+| order by tokensPerRun desc

@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tpsrca_report",
+  "description": "Placeholder contract of templates/assets/tpsrca-report.html - the primary HTML of the TPSRCA assessment pack (html + risk-register xlsx + gap-tracker xlsx + executive-brief pptx + evidence zip). The tpsrca-assessment-engine agent fills these {{PLACEHOLDERS}} from its own 12-agent output (claude-account-export/skills/tpsrca-assessment-engine/references/output_schema.json); the section ids of the template map 1:1 to that schema's top-level keys. The template is not yet approved (registry last_approved: null) and its renderer/pipeline are pending, so this contract governs the template-manager preview today and the multi-file renderer when it lands.",
+  "type": "object",
+  "required": [
+    "APPROVAL_STATUS",
+    "ASSESSMENT_DATE",
+    "ASSESSMENT_ID",
+    "ASSESSMENT_SCOPE",
+    "ASSESSMENT_VERSION",
+    "CLASSIFICATION",
+    "CLASSIFICATION_TIER",
+    "COMPOSITE_SCORE",
+    "CONFIDENCE_LEVEL",
+    "CONFIDENCE_OVERALL_SCORE",
+    "CRITICAL_RISKS_COUNT",
+    "FRAMEWORK_AXIS_LABELS",
+    "FRAMEWORK_SCORES",
+    "FRAMEWORK_SCORE_NOTE",
+    "GAPS_COUNT",
+    "GENERATED_TIMESTAMP_UTC",
+    "HIGH_RISKS_COUNT",
+    "KEY_FINDINGS",
+    "OVERALL_EFFECTIVENESS",
+    "PPTX_BRIEF_NAME",
+    "PRIORITY_ACTIONS_COUNT",
+    "RATING",
+    "RATING_CLASS",
+    "ROWS_CALCULATIONS",
+    "ROWS_CONFIDENCE",
+    "ROWS_CONTROLS",
+    "ROWS_EVIDENCE",
+    "ROWS_FRAMEWORKS",
+    "ROWS_GAPS",
+    "ROWS_INHERENT_RISKS",
+    "ROWS_RECOMMENDATIONS",
+    "ROWS_RESIDUAL_RISKS",
+    "ROWS_TREND",
+    "STARS",
+    "SUPPLIER_NAME",
+    "SUPPLIER_SLUG",
+    "SUPPLIER_URL",
+    "TOTAL_CONTROLS",
+    "TOTAL_EXPOSURE",
+    "TOTAL_RISKS",
+    "TOTAL_SOURCES",
+    "VALIDATED_SOURCES",
+    "XLSX_GAP_TRACKER_NAME",
+    "XLSX_RISK_REGISTER_NAME",
+    "ZIP_EVIDENCE_NAME"
+  ],
+  "properties": {
+    "APPROVAL_STATUS": {
+      "type": "string",
+      "description": "composite_score.approval_status; any conditional approval must be justified in ROWS_RECOMMENDATIONS."
+    },
+    "ASSESSMENT_DATE": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "ASSESSMENT_ID": {
+      "type": "string"
+    },
+    "ASSESSMENT_SCOPE": {
+      "type": "string"
+    },
+    "ASSESSMENT_VERSION": {
+      "type": "string"
+    },
+    "CLASSIFICATION": {
+      "type": "string",
+      "default": "Confidential"
+    },
+    "CLASSIFICATION_TIER": {
+      "type": "string",
+      "description": "metadata.classification_tier from the engine (supplier tiering, not the document label)."
+    },
+    "COMPOSITE_SCORE": {
+      "type": "string",
+      "pattern": "^\\d{1,3}(\\.\\d)?$",
+      "description": "Agent 8 composite_score.overall_score (0-100)."
+    },
+    "CONFIDENCE_LEVEL": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ]
+    },
+    "CONFIDENCE_OVERALL_SCORE": {
+      "type": "string",
+      "pattern": "^\\d{1,3}(\\.\\d)?$",
+      "description": "Agent 2 data_confidence.overall_score (0-100)."
+    },
+    "CRITICAL_RISKS_COUNT": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "FRAMEWORK_AXIS_LABELS": {
+      "type": "string",
+      "pattern": "^[^|]+(\\|[^|]+)+$",
+      "description": "Pipe-separated framework names (Agent 7 framework_scores.frameworks). Must have the same count as FRAMEWORK_SCORES."
+    },
+    "FRAMEWORK_SCORES": {
+      "type": "string",
+      "pattern": "^\\d{1,3}(\\.\\d)?(\\|\\d{1,3}(\\.\\d)?)+$",
+      "description": "Pipe-separated compliance percentages (0-100), same order and count as FRAMEWORK_AXIS_LABELS - the chart silently skips a mismatch."
+    },
+    "FRAMEWORK_SCORE_NOTE": {
+      "type": "string",
+      "minLength": 1
+    },
+    "GAPS_COUNT": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "GENERATED_TIMESTAMP_UTC": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "HIGH_RISKS_COUNT": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "KEY_FINDINGS": {
+      "type": "string",
+      "description": "Pre-rendered <li> items from executive_summary.key_findings."
+    },
+    "OVERALL_EFFECTIVENESS": {
+      "type": "string",
+      "description": "Agent 5 control_effectiveness summary, e.g. '72% effective (Partially Effective)'."
+    },
+    "PPTX_BRIEF_NAME": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.(xlsx|pptx|zip)$",
+      "description": "File name of the companion deliverable in the assessment pack, as stored in SharePoint Reports/<Supplier>/<Service>/."
+    },
+    "PRIORITY_ACTIONS_COUNT": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "RATING": {
+      "type": "string",
+      "description": "composite_score.rating, e.g. 'STRONG', 'ADEQUATE', 'WEAK'."
+    },
+    "RATING_CLASS": {
+      "type": "string",
+      "enum": [
+        "risk-critical",
+        "risk-high",
+        "risk-medium",
+        "risk-low",
+        "risk-not-found"
+      ],
+      "description": "CSS class from templates/enx-theme.json risk_colours."
+    },
+    "ROWS_CALCULATIONS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_CONFIDENCE": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_CONTROLS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_EVIDENCE": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_FRAMEWORKS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_GAPS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_INHERENT_RISKS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_RECOMMENDATIONS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_RESIDUAL_RISKS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "ROWS_TREND": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for the matching engine section (section ids map 1:1 to the top-level keys of the engine's references/output_schema.json). HTML entities only for glyphs; no <script> and no external references."
+    },
+    "STARS": {
+      "type": "string",
+      "pattern": "^(&#x[0-9A-Fa-f]+;)+$",
+      "description": "Star rating as HTML entities only - never literal Unicode (enx-theme.json risk_glyphs rule)."
+    },
+    "SUPPLIER_NAME": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SUPPLIER_SLUG": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "SUPPLIER_URL": {
+      "type": "string",
+      "description": "Supplier's public site as assessed; no Euronext-internal hostnames."
+    },
+    "TOTAL_CONTROLS": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "TOTAL_EXPOSURE": {
+      "type": "string",
+      "description": "Agent 6 residual exposure summary as rendered in the KPI tile."
+    },
+    "TOTAL_RISKS": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "TOTAL_SOURCES": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "VALIDATED_SOURCES": {
+      "type": "string",
+      "pattern": "^\\d+$",
+      "description": "Integer as a string - written straight into the KPI tile."
+    },
+    "XLSX_GAP_TRACKER_NAME": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.(xlsx|pptx|zip)$",
+      "description": "File name of the companion deliverable in the assessment pack, as stored in SharePoint Reports/<Supplier>/<Service>/."
+    },
+    "XLSX_RISK_REGISTER_NAME": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.(xlsx|pptx|zip)$",
+      "description": "File name of the companion deliverable in the assessment pack, as stored in SharePoint Reports/<Supplier>/<Service>/."
+    },
+    "ZIP_EVIDENCE_NAME": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+\\.(xlsx|pptx|zip)$",
+      "description": "File name of the companion deliverable in the assessment pack, as stored in SharePoint Reports/<Supplier>/<Service>/."
+    }
+  }
+}

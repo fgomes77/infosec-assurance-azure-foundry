@@ -1,0 +1,126 @@
+{
+  "_comment": "Read-only status lookup for a report-delivery pipeline run (companion of the 202 ACCEPTED response). GET-by-runId over the Logic Apps runtime management API - no new storage, no writer. Called by the Copilot plugin / Teams form / MCP get_run_result.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "subscriptionId": {
+        "type": "string",
+        "defaultValue": "{subscription-id}"
+      },
+      "resourceGroup": {
+        "type": "string",
+        "defaultValue": "{resource-group}"
+      },
+      "logicAppName": {
+        "type": "string",
+        "defaultValue": "{logicapp-name}"
+      }
+    },
+    "triggers": {
+      "Status_requested": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [
+              "runId",
+              "pipeline"
+            ],
+            "properties": {
+              "runId": {
+                "type": "string"
+              },
+              "pipeline": {
+                "type": "string",
+                "description": "workflow name of the pipeline instance, e.g. deepsearch-report"
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Get_run": {
+        "_comment": "Read-only Logic Apps Standard runtime management API (MI, Contributor-read on the Logic App only). Returns Running/Succeeded/Failed/... for the pipeline run.",
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroup')}/providers/Microsoft.Web/sites/@{parameters('logicAppName')}/hostruntime/runtime/webhooks/workflow/api/management/workflows/@{triggerBody()?['pipeline']}/runs/@{triggerBody()?['runId']}",
+          "queries": {
+            "api-version": "2018-11-01"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://management.azure.com"
+          }
+        },
+        "runAfter": {}
+      },
+      "Get_upload_action": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroup')}/providers/Microsoft.Web/sites/@{parameters('logicAppName')}/hostruntime/runtime/webhooks/workflow/api/management/workflows/@{triggerBody()?['pipeline']}/runs/@{triggerBody()?['runId']}/actions/Upload_and_share",
+          "queries": {
+            "api-version": "2018-11-01"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://management.azure.com"
+          }
+        },
+        "runAfter": {
+          "Get_run": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Get_gate_action": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroup')}/providers/Microsoft.Web/sites/@{parameters('logicAppName')}/hostruntime/runtime/webhooks/workflow/api/management/workflows/@{triggerBody()?['pipeline']}/runs/@{triggerBody()?['runId']}/actions/Human_approval_gate",
+          "queries": {
+            "api-version": "2018-11-01"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://management.azure.com"
+          }
+        },
+        "runAfter": {
+          "Get_upload_action": [
+            "Succeeded",
+            "Failed"
+          ]
+        }
+      },
+      "Respond_status": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "runId": "@{triggerBody()?['runId']}",
+            "pipeline": "@{triggerBody()?['pipeline']}",
+            "runStatus": "@{body('Get_run')?['properties']?['status']}",
+            "stage": "@{if(equals(body('Get_upload_action')?['properties']?['status'],'Succeeded'),'STORED',if(equals(body('Get_gate_action')?['properties']?['status'],'Running'),'AWAITING_APPROVAL',if(equals(body('Get_gate_action')?['properties']?['status'],'Succeeded'),'DECIDED_NOT_STORED',if(equals(body('Get_run')?['properties']?['status'],'Running'),'GENERATING_OR_VERIFYING','ENDED'))))}",
+            "webUrl": "@{body('Get_upload_action')?['properties']?['outputsLink']?['uri']}",
+            "note": "webUrl is a link to the action outputs (contains webUrl/shareUrl); the Teams notification and the callbackUrl carry the direct SharePoint link."
+          }
+        },
+        "runAfter": {
+          "Get_gate_action": [
+            "Succeeded",
+            "Failed"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

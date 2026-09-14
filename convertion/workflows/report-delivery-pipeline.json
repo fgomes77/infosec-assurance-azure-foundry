@@ -1,0 +1,1304 @@
+{
+  "_comment": "Generic report-delivery pipeline (requirements a,b,c,d,d2,e,f + advisory/brief pipelines). Deploy ONE Logic App per entry in pipelines.json - each instantiation fixes agentName/agentVersion, renderFormat, template, libraryRoot, approvalKind and sensitivityLabelId via parameters. Agent invocation runs on the GA conversations/responses data plane (finding C1) and pins `<agent>:<version>` (finding C19). Flow: HTTP trigger -> immediate 202 ACCEPTED {runId} -> resolve Supplier/Service segments (fallbacks only where pipelines.json allows) -> create a conversation -> run the producing agent (uploaded files attached as input_file parts) -> run output-verifier (charter format 'VERDICT: PASS|FAIL' on the first line) -> on PASS raise the human approval gate (subscribe body carries 'kind' for team/approval-policy.json) -> on approved: extract the fenced JSON contract (or the HTML document) -> render (delivery Function) -> ensure Supplier/Service folders (reuse-if-exists) -> upload + org share link -> assign the sensitivity label through the delivery Function (finding C16) -> optional portfolio/history record -> Teams notification -> optional callback to the requester (callbackUrl). Outcome is never returned synchronously (approval can take days): poll workflows/report-status.json or receive the callback. Nothing is stored without verifier PASS and human approval.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "apiVersion": {
+        "type": "string",
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
+      },
+      "agentName": {
+        "type": "string",
+        "defaultValue": "{producing-agent-name}",
+        "_comment": "Agent NAME on the Agents v2 runtime ('TRIGGER' = the advisory-file-delivery instance, which takes agentRef from the trigger body)."
+      },
+      "agentVersion": {
+        "type": "string",
+        "defaultValue": "{producing-agent-version}",
+        "_comment": "Promoted agent version - build/agent-versions.json `ref` = `<agent>:<version>` (finding C19). Empty runs the agent's latest version, which a pipeline of record must not do; scripts/build_logicapps.py fills it from the ledger."
+      },
+      "verifierAgentName": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-name}"
+      },
+      "verifierAgentVersion": {
+        "type": "string",
+        "defaultValue": "{output-verifier-agent-version}",
+        "_comment": "Promoted verifier version (build/agent-versions.json, C19)."
+      },
+      "reportType": {
+        "type": "string",
+        "defaultValue": "{ReportType-for-file-name}"
+      },
+      "renderFormat": {
+        "type": "string",
+        "defaultValue": "{html|docx|pptx|xlsx}"
+      },
+      "renderTemplate": {
+        "type": "string",
+        "defaultValue": "{renderer-folder-or-empty}"
+      },
+      "deliveryFunctionBaseUrl": {
+        "type": "string",
+        "defaultValue": "https://{delivery-function}.azurewebsites.net/api"
+      },
+      "deliveryFunctionKey": {
+        "type": "securestring",
+        "defaultValue": "{function-key-from-key-vault}"
+      },
+      "sharepointDriveId": {
+        "type": "string",
+        "defaultValue": "{reports-library-drive-id}"
+      },
+      "libraryRootItemId": {
+        "type": "string",
+        "defaultValue": "{item-id-of-Reports-root-or-Reports-DPO-root}"
+      },
+      "sensitivityLabelId": {
+        "type": "string",
+        "defaultValue": "",
+        "_comment": "Purview sensitivity label id assigned to the delivered file (finding C16; Graph driveItem:assignSensitivityLabel from the delivery Function - the only SharePoint writer). Per report type from templates/registry.json `sensitivity_label`, otherwise pipelines.json `shared.sensitivityLabel`. Empty leaves the library default label in force."
+      },
+      "approvalWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{human-approval-subscribe-endpoint}"
+      },
+      "teamsWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{teams-incoming-webhook-url}"
+      },
+      "approvalKind": {
+        "type": "string",
+        "defaultValue": "{kind-from-team/approval-policy.json e.g. REPORT_DEEPSEARCH}"
+      },
+      "supplierNameFallback": {
+        "type": "string",
+        "defaultValue": "",
+        "_comment": "Empty = supplierName mandatory. pipelines.json sets e.g. 'General' for non-supplier-specific briefs."
+      },
+      "serviceNameFallback": {
+        "type": "string",
+        "defaultValue": "",
+        "_comment": "Empty = serviceName mandatory. pipelines.json sets '_ALL-SERVICES' for d2 only."
+      },
+      "portfolioStatusOnStore": {
+        "type": "string",
+        "defaultValue": "",
+        "_comment": "Empty = no portfolio record. 'Ongoing' after DeepSearch, 'Complete' after the CISO decks (delivery Function /api/portfolio_update writes the TPRM Portfolio SharePoint list AFTER approval)."
+      },
+      "appendScoreHistory": {
+        "type": "bool",
+        "defaultValue": false,
+        "_comment": "true only for scoring pipelines: delivery Function /api/history_append writes the TPSRCA History list AFTER approval (Trend Analyzer input)."
+      }
+    },
+    "triggers": {
+      "When_a_report_is_requested": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "required": [
+              "requestText"
+            ],
+            "properties": {
+              "supplierName": {
+                "type": "string",
+                "description": "Asked of the user - drives Reports/<Supplier>/ folder (reused if it exists). Mandatory unless the instance sets supplierNameFallback."
+              },
+              "serviceName": {
+                "type": "string",
+                "description": "Asked of the user - drives <Supplier>/<Service>/ folder (created only if missing). Mandatory unless the instance sets serviceNameFallback (d2 only)."
+              },
+              "requestText": {
+                "type": "string",
+                "description": "The task, incl. references to uploaded OT/SOC/pentest file ids where applicable"
+              },
+              "inputFileIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Foundry file ids of user-uploaded PDFs (b,c,d,e,f)"
+              },
+              "requestedBy": {
+                "type": "string"
+              },
+              "agentRef": {
+                "type": "string",
+                "description": "advisory-file-delivery only: `<agent-name>:<version>` of the advisory agent that produces the deliverable (build/agent-versions.json `ref`, finding C19; a bare name runs the latest version). Ignored by the fixed report pipelines - see Resolve_agent_ref."
+              },
+              "callbackUrl": {
+                "type": "string",
+                "description": "Optional: the pipeline POSTs the final outcome {runId,status,webUrl,shareUrl,fileName,overallScore} here (used by the Routine-replacement workflows)."
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Respond_accepted": {
+        "type": "Response",
+        "kind": "Http",
+        "inputs": {
+          "statusCode": 202,
+          "body": {
+            "runId": "@{workflow().run.name}",
+            "status": "ACCEPTED",
+            "statusUrl": "Query workflows/report-status.json with this runId, or supply callbackUrl."
+          }
+        },
+        "runAfter": {}
+      },
+      "Resolve_supplier_name": {
+        "type": "Compose",
+        "inputs": "@if(empty(coalesce(triggerBody()?['supplierName'],'')), parameters('supplierNameFallback'), triggerBody()?['supplierName'])",
+        "runAfter": {
+          "Respond_accepted": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Resolve_service_name": {
+        "type": "Compose",
+        "inputs": "@if(empty(coalesce(triggerBody()?['serviceName'],'')), parameters('serviceNameFallback'), triggerBody()?['serviceName'])",
+        "runAfter": {
+          "Resolve_supplier_name": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Terminate_if_segments_missing": {
+        "type": "If",
+        "expression": {
+          "or": [
+            {
+              "equals": [
+                "@empty(outputs('Resolve_supplier_name'))",
+                true
+              ]
+            },
+            {
+              "equals": [
+                "@empty(outputs('Resolve_service_name'))",
+                true
+              ]
+            }
+          ]
+        },
+        "runAfter": {
+          "Resolve_service_name": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Terminate_missing_segments": {
+            "type": "Terminate",
+            "inputs": {
+              "runStatus": "Failed",
+              "runError": {
+                "code": "MISSING_SUPPLIER_OR_SERVICE",
+                "message": "supplierName/serviceName are required for Reports/<Supplier>/<Service>/ storage; the orchestrator must collect them conversationally before triggering."
+              }
+            },
+            "runAfter": {}
+          }
+        },
+        "else": {
+          "actions": {}
+        }
+      },
+      "Resolve_agent_ref": {
+        "_comment": "Only the advisory-file-delivery instance (agentName parameter = 'TRIGGER') accepts the agent from the caller; every report pipeline pins its own `<agent>:<version>`.",
+        "type": "Compose",
+        "inputs": "@if(equals(parameters('agentName'),'TRIGGER'), coalesce(triggerBody()?['agentRef'],''), if(empty(parameters('agentVersion')), parameters('agentName'), concat(parameters('agentName'), ':', parameters('agentVersion'))))",
+        "runAfter": {
+          "Terminate_if_segments_missing": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Agent_reference": {
+        "_comment": "agent_reference body field of the Responses API; the version key is present only when the pipeline pins one (finding C19).",
+        "type": "Compose",
+        "inputs": "@if(contains(outputs('Resolve_agent_ref'), ':'), createObject('type','agent_reference','name', first(split(outputs('Resolve_agent_ref'), ':')), 'version', last(split(outputs('Resolve_agent_ref'), ':'))), createObject('type','agent_reference','name', outputs('Resolve_agent_ref')))",
+        "runAfter": {
+          "Resolve_agent_ref": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Select_attachments": {
+        "_comment": "Responses API input parts: user-uploaded Foundry files become `input_file` content parts. The per-attachment tools[] list of the classic thread API no longer exists - file_search / code_interpreter come from the agent definition (finding C1).",
+        "type": "Select",
+        "inputs": {
+          "from": "@coalesce(triggerBody()?['inputFileIds'], createArray())",
+          "select": {
+            "type": "input_file",
+            "file_id": "@item()"
+          }
+        },
+        "runAfter": {
+          "Agent_reference": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Create_conversation": {
+        "_comment": "One conversation per report run; `owner` + `runId` metadata carry the user context Purview records (finding C15) and tie the Foundry trace to this Logic Apps run.",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "metadata": {
+              "owner": "@{coalesce(triggerBody()?['requestedBy'],'')}",
+              "reportType": "@{parameters('reportType')}",
+              "runId": "@{workflow().run.name}"
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Select_attachments": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Agent_input": {
+        "_comment": "Single user message: instruction part + one input_file part per uploaded file.",
+        "type": "Compose",
+        "inputs": "@concat(createArray(createObject('type','input_text','text', concat('Supplier name: ', outputs('Resolve_supplier_name'), '. Service name: ', outputs('Resolve_service_name'), '. Task: ', coalesce(triggerBody()?['requestText'],''), '. Emit the final deliverable as your output contract specifies (a single ```json fenced block, or the full single-file HTML document).'))), body('Select_attachments'))",
+        "runAfter": {
+          "Create_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Run_producing_agent": {
+        "_comment": "Background response: long report runs are polled, never held open.",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_conversation')?['id']}",
+            "agent_reference": "@outputs('Agent_reference')",
+            "input": [
+              {
+                "role": "user",
+                "content": "@outputs('Agent_input')"
+              }
+            ],
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Agent_input": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Until_agent_run_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_agent_run_status')?['status'])",
+        "limit": {
+          "count": 240,
+          "timeout": "PT2H"
+        },
+        "runAfter": {
+          "Run_producing_agent": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_30s": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 30,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_agent_run_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_producing_agent')?['id']}?api-version=@{parameters('apiVersion')}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_30s": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Get_agent_output": {
+        "_comment": "Final read of the response object; the deliverable is `output_text` (fallback: the last output[].content[].text).",
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_producing_agent')?['id']}?api-version=@{parameters('apiVersion')}",
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_agent_run_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Agent_draft_text": {
+        "type": "Compose",
+        "inputs": "@coalesce(body('Get_agent_output')?['output_text'], last(body('Get_agent_output')?['output'])?['content'][0]?['text'], '')",
+        "runAfter": {
+          "Get_agent_output": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Create_verifier_conversation": {
+        "_comment": "Separate conversation for the verifier turn - the draft is verified out of the producing agent's context (agents/verifier_instructions.md).",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "metadata": {
+              "source": "output-verifier",
+              "reportType": "@{parameters('reportType')}",
+              "runId": "@{workflow().run.name}"
+            }
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Agent_draft_text": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Run_output_verifier": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "conversation": "@{body('Create_verifier_conversation')?['id']}",
+            "agent_reference": "@if(empty(parameters('verifierAgentVersion')), createObject('type','agent_reference','name',parameters('verifierAgentName')), createObject('type','agent_reference','name',parameters('verifierAgentName'),'version',parameters('verifierAgentVersion')))",
+            "input": "Deliverable type: @{parameters('reportType')}. Supplier: @{outputs('Resolve_supplier_name')}. Service: @{outputs('Resolve_service_name')}. Verify this draft per your charter: first line exactly 'VERDICT: PASS' or 'VERDICT: FAIL', then findings. Draft: @{outputs('Agent_draft_text')}",
+            "background": true
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Create_verifier_conversation": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Until_verifier_completes": {
+        "type": "Until",
+        "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_verifier_status')?['status'])",
+        "limit": {
+          "count": 40,
+          "timeout": "PT30M"
+        },
+        "runAfter": {
+          "Run_output_verifier": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Delay_10s": {
+            "type": "Wait",
+            "inputs": {
+              "interval": {
+                "count": 10,
+                "unit": "Second"
+              }
+            },
+            "runAfter": {}
+          },
+          "Get_verifier_status": {
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Delay_10s": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Get_verifier_verdict": {
+        "_comment": "Verdict text is `output_text` of the verifier response.",
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_output_verifier')?['id']}?api-version=@{parameters('apiVersion')}",
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          }
+        },
+        "runAfter": {
+          "Until_verifier_completes": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Verifier_verdict_text": {
+        "type": "Compose",
+        "inputs": "@coalesce(body('Get_verifier_verdict')?['output_text'], last(body('Get_verifier_verdict')?['output'])?['content'][0]?['text'], '')",
+        "runAfter": {
+          "Get_verifier_verdict": [
+            "Succeeded"
+          ]
+        }
+      },
+      "If_verifier_passed": {
+        "type": "If",
+        "expression": {
+          "or": [
+            {
+              "startsWith": [
+                "@trim(first(split(outputs('Verifier_verdict_text'), '\n')))",
+                "VERDICT: PASS"
+              ]
+            },
+            {
+              "equals": [
+                "@trim(first(split(outputs('Verifier_verdict_text'), '\n')))",
+                "PASS"
+              ]
+            }
+          ]
+        },
+        "runAfter": {
+          "Verifier_verdict_text": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Human_approval_gate": {
+            "_comment": "HttpWebhook: subscribes the approval app (Teams adaptive card / Power App per governance/HUMAN_APPROVAL.md); the run BLOCKS here until the approver calls back APPROVED/REJECTED. Expires P3D -> auto-reject.",
+            "type": "HttpWebhook",
+            "inputs": {
+              "subscribe": {
+                "method": "POST",
+                "uri": "@parameters('approvalWebhookUrl')",
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}",
+                  "kind": "@{parameters('approvalKind')}",
+                  "correlationId": "@{workflow().run.name}",
+                  "reportType": "@{parameters('reportType')}",
+                  "supplier": "@{outputs('Resolve_supplier_name')}",
+                  "service": "@{outputs('Resolve_service_name')}",
+                  "requestedBy": "@{triggerBody()?['requestedBy']}",
+                  "draft": "@{outputs('Agent_draft_text')}",
+                  "verifierVerdict": "@{outputs('Verifier_verdict_text')}"
+                }
+              },
+              "unsubscribe": {}
+            },
+            "limit": {
+              "timeout": "P3D"
+            },
+            "runAfter": {}
+          },
+          "If_approved": {
+            "type": "If",
+            "expression": {
+              "and": [
+                {
+                  "equals": [
+                    "@toLower(coalesce(body('Human_approval_gate')?['decision'],''))",
+                    "approved"
+                  ]
+                }
+              ]
+            },
+            "runAfter": {
+              "Human_approval_gate": [
+                "Succeeded"
+              ]
+            },
+            "actions": {
+              "Extract_json_contract": {
+                "_comment": "Renderers (render.py / generate_slide.js) need the JSON object, not the agent's prose. Takes the first ```json fenced block; falls back to the whole text when there is none (html deliverables). The Function validates the object against templates/<template>.schema.json and returns 400 on mismatch.",
+                "type": "Compose",
+                "inputs": "@if(contains(outputs('Agent_draft_text'), '```json'), trim(first(split(last(split(outputs('Agent_draft_text'), '```json')), '```'))), outputs('Agent_draft_text'))",
+                "runAfter": {}
+              },
+              "Extract_html_document": {
+                "_comment": "html deliverables: keep only the document from '<!DOCTYPE' (or '<html') to the closing '</html>' so surrounding prose/markdown fences never reach SharePoint.",
+                "type": "Compose",
+                "inputs": "@if(contains(outputs('Agent_draft_text'), '</html>'), concat(if(contains(outputs('Agent_draft_text'), '<!DOCTYPE'), concat('<!DOCTYPE', last(split(first(split(outputs('Agent_draft_text'), '</html>')), '<!DOCTYPE'))), concat('<html', last(split(first(split(outputs('Agent_draft_text'), '</html>')), '<html')))), '</html>'), outputs('Agent_draft_text'))",
+                "runAfter": {
+                  "Extract_json_contract": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Render_report_file": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/render",
+                  "queries": {
+                    "code": "@parameters('deliveryFunctionKey')"
+                  },
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": {
+                    "format": "@{parameters('renderFormat')}",
+                    "template": "@{parameters('renderTemplate')}",
+                    "fileName": "@{parameters('reportType')}_@{outputs('Resolve_supplier_name')}_@{outputs('Resolve_service_name')}_@{formatDateTime(utcNow(),'yyyy-MM-dd')}.@{parameters('renderFormat')}",
+                    "content": "@{outputs('Extract_html_document')}",
+                    "data": "@if(equals(parameters('renderFormat'),'html'), null, json(outputs('Extract_json_contract')))"
+                  },
+                  "retryPolicy": {
+                    "type": "exponential",
+                    "count": 4,
+                    "interval": "PT10S"
+                  }
+                },
+                "runAfter": {
+                  "Extract_html_document": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Ensure_supplier_service_folders": {
+                "_comment": "The requirement rule: reuse Supplier folder if it exists, create Service folder under it only if missing. Idempotent + race-safe in the Function.",
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/ensure_folder",
+                  "queries": {
+                    "code": "@parameters('deliveryFunctionKey')"
+                  },
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": {
+                    "driveId": "@{parameters('sharepointDriveId')}",
+                    "rootItemId": "@{parameters('libraryRootItemId')}",
+                    "segments": [
+                      "@{outputs('Resolve_supplier_name')}",
+                      "@{outputs('Resolve_service_name')}"
+                    ]
+                  },
+                  "retryPolicy": {
+                    "type": "exponential",
+                    "count": 4,
+                    "interval": "PT10S"
+                  }
+                },
+                "runAfter": {
+                  "Render_report_file": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "Upload_and_share": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@{parameters('deliveryFunctionBaseUrl')}/upload",
+                  "queries": {
+                    "code": "@parameters('deliveryFunctionKey')"
+                  },
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": {
+                    "driveId": "@{parameters('sharepointDriveId')}",
+                    "folderId": "@{body('Ensure_supplier_service_folders')?['folderId']}",
+                    "fileName": "@{body('Render_report_file')?['fileName']}",
+                    "contentBase64": "@{body('Render_report_file')?['contentBase64']}",
+                    "share": true
+                  },
+                  "retryPolicy": {
+                    "type": "exponential",
+                    "count": 4,
+                    "interval": "PT10S"
+                  }
+                },
+                "runAfter": {
+                  "Ensure_supplier_service_folders": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "If_audit_artefacts": {
+                "_comment": "Most deliverables carry no auditArtifacts; skip the folder creation entirely rather than making an empty audit/<date> folder on every run.",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "greater": [
+                        "@length(coalesce(body('Render_report_file')?['auditArtifacts'], json('[]')))",
+                        0
+                      ]
+                    }
+                  ]
+                },
+                "actions": {
+                  "Ensure_audit_folder": {
+                    "_comment": "The audit subfolder is created with the SAME ensure_folder endpoint as the supplier/service folders (idempotent, race-safe, never a duplicate). /api/upload takes a folderId, not a path, so the folder is resolved first rather than teaching the upload endpoint a second addressing mode.",
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/ensure_folder",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "driveId": "@{parameters('sharepointDriveId')}",
+                        "rootItemId": "@{parameters('libraryRootItemId')}",
+                        "segments": [
+                          "@{outputs('Resolve_supplier_name')}",
+                          "@{outputs('Resolve_service_name')}",
+                          "audit",
+                          "@{formatDateTime(utcNow(),'yyyyMMdd')}"
+                        ]
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  },
+                  "Upload_audit_artefacts": {
+                    "_comment": "A chunked full-coverage analysis must ship its coverage evidence WITH the report (governance/DATA_PROTECTION_GUARDRAILS.md section 4): chunk inventory, per-chunk extraction, coverage statement, verdict. Each artefact goes to Reports/<Supplier>/<Service>/audit/<yyyyMMdd>/ through the same managed identity, inside the same approval - it is part of the approved deliverable, not a separate submission, so it needs no second gate. Empty for every deliverable that carries no auditArtifacts, which is most of them.",
+                    "type": "Foreach",
+                    "foreach": "@coalesce(body('Render_report_file')?['auditArtifacts'], json('[]'))",
+                    "actions": {
+                      "Upload_one_audit_artefact": {
+                        "type": "Http",
+                        "inputs": {
+                          "method": "POST",
+                          "uri": "@{parameters('deliveryFunctionBaseUrl')}/upload",
+                          "queries": {
+                            "code": "@parameters('deliveryFunctionKey')"
+                          },
+                          "headers": {
+                            "Content-Type": "application/json"
+                          },
+                          "body": {
+                            "driveId": "@{parameters('sharepointDriveId')}",
+                            "folderId": "@{body('Ensure_audit_folder')?['folderId']}",
+                            "fileName": "@{items('Upload_audit_artefacts')?['name']}",
+                            "contentBase64": "@{items('Upload_audit_artefacts')?['contentBase64']}",
+                            "share": false
+                          },
+                          "retryPolicy": {
+                            "type": "exponential",
+                            "count": 4,
+                            "interval": "PT10S"
+                          }
+                        }
+                      }
+                    },
+                    "runtimeConfiguration": {
+                      "concurrency": {
+                        "repetitions": 1
+                      }
+                    },
+                    "runAfter": {
+                      "Ensure_audit_folder": [
+                        "Succeeded"
+                      ]
+                    }
+                  }
+                },
+                "runAfter": {
+                  "Upload_and_share": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "If_sensitivity_label_set": {
+                "_comment": "Finding C16 / ENTERPRISE_BLUEPRINT PUR-1: every delivered report of record carries a Purview sensitivity label. The delivery Function (the only SharePoint writer) calls Graph driveItem:assignSensitivityLabel with its managed identity; the call is asynchronous and metered. Skipped when no label id is configured - the library default label then applies (sharepoint/README.md).",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('sensitivityLabelId')",
+                          ""
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "If_audit_artefacts": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Assign_sensitivity_label": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/assign_label",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "driveId": "@{parameters('sharepointDriveId')}",
+                        "itemId": "@{body('Upload_and_share')?['itemId']}",
+                        "labelId": "@{parameters('sensitivityLabelId')}",
+                        "assignmentMethod": "standard",
+                        "reportType": "@{parameters('reportType')}",
+                        "runId": "@{workflow().run.name}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "Overall_score": {
+                "_comment": "Scoring deliverables (DeepSearch dashboard) carry the composite score as a data-overall-score=\"NN\" attribute in the HTML (agent addendum). Empty when absent - never inferred.",
+                "type": "Compose",
+                "inputs": "@if(contains(outputs('Agent_draft_text'), 'data-overall-score=\"'), trim(first(split(last(split(outputs('Agent_draft_text'), 'data-overall-score=\"')), '\"'))), '')",
+                "runAfter": {
+                  "If_sensitivity_label_set": [
+                    "Succeeded",
+                    "Failed"
+                  ]
+                }
+              },
+              "If_portfolio_status_set": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('portfolioStatusOnStore')",
+                          ""
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Overall_score": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Record_portfolio_status": {
+                    "_comment": "Replaces the claude.ai 'TPRM Dashboard Integration' (tprm_portfolio.json TPA Status Ongoing/Complete). The write happens only after the human approval already given for this run.",
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/portfolio_update",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "supplierName": "@{outputs('Resolve_supplier_name')}",
+                        "serviceName": "@{outputs('Resolve_service_name')}",
+                        "tpaStatus": "@{parameters('portfolioStatusOnStore')}",
+                        "reportType": "@{parameters('reportType')}",
+                        "reportUrl": "@{body('Upload_and_share')?['webUrl']}",
+                        "runId": "@{workflow().run.name}",
+                        "approvedBy": "@{body('Human_approval_gate')?['approver']}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "If_history_enabled": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "equals": [
+                        "@parameters('appendScoreHistory')",
+                        true
+                      ]
+                    },
+                    {
+                      "not": {
+                        "equals": [
+                          "@outputs('Overall_score')",
+                          ""
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "If_portfolio_status_set": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Append_score_history": {
+                    "_comment": "TPSRCA History list row (Trend Analyzer input) - after approval only.",
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/history_append",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "supplierName": "@{outputs('Resolve_supplier_name')}",
+                        "serviceName": "@{outputs('Resolve_service_name')}",
+                        "assessmentDate": "@{formatDateTime(utcNow(),'yyyy-MM-dd')}",
+                        "composite": "@{outputs('Overall_score')}",
+                        "reportType": "@{parameters('reportType')}",
+                        "reportUrl": "@{body('Upload_and_share')?['webUrl']}",
+                        "runId": "@{workflow().run.name}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "Notify_team": {
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "@parameters('teamsWebhookUrl')",
+                  "headers": {
+                    "Content-Type": "application/json"
+                  },
+                  "body": {
+                    "text": "✅ @{parameters('reportType')} for @{outputs('Resolve_supplier_name')} / @{outputs('Resolve_service_name')} approved by @{body('Human_approval_gate')?['approver']} and stored: @{body('Upload_and_share')?['shareUrl']} | sensitivity label: @{if(equals(parameters('sensitivityLabelId'),''),'library default', if(equals(actions('If_sensitivity_label_set')?['status'],'Succeeded'), parameters('sensitivityLabelId'), 'ASSIGNMENT FAILED - apply manually'))}"
+                  }
+                },
+                "runAfter": {
+                  "If_research_records": [
+                    "Succeeded"
+                  ]
+                }
+              },
+              "If_callback_stored": {
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@coalesce(triggerBody()?['callbackUrl'],'')",
+                          ""
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Notify_team": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Callback_stored": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@triggerBody()?['callbackUrl']",
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "runId": "@{workflow().run.name}",
+                        "status": "STORED",
+                        "reportType": "@{parameters('reportType')}",
+                        "supplierName": "@{outputs('Resolve_supplier_name')}",
+                        "serviceName": "@{outputs('Resolve_service_name')}",
+                        "fileName": "@{body('Render_report_file')?['fileName']}",
+                        "webUrl": "@{body('Upload_and_share')?['webUrl']}",
+                        "shareUrl": "@{body('Upload_and_share')?['shareUrl']}",
+                        "overallScore": "@{outputs('Overall_score')}",
+                        "approver": "@{body('Human_approval_gate')?['approver']}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "If_evidence_cache_records": {
+                "_comment": "Delta re-analysis (requirement d2): record what this run extracted so the next assessment reads only the evidence that actually changed. AFTER the verifier passed AND the report was approved — an unapproved extraction never enters the cache. The agent emits cacheRecords only for files it read in full; reused files are already there.",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('renderFormat')",
+                          "html"
+                        ]
+                      }
+                    },
+                    {
+                      "equals": [
+                        "@contains(outputs('Extract_json_contract'), 'cacheRecords')",
+                        true
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "If_history_enabled": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Store_evidence_cache": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/evidence_cache",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "files": "@json(outputs('Extract_json_contract'))?['cacheRecords']",
+                        "extractorRef": "@{outputs('Resolve_agent_ref')}",
+                        "runId": "@{workflow().run.name}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              },
+              "If_research_records": {
+                "_comment": "Requirement: every search this run made is kept in the supplier's own knowledge file with its date and the action that caused it, so the next run reads instead of re-searching. The agent emits researchRecords[] (sourceId, query, url, title, citation, facts, observedAt) for every web search, page read and authority lookup it performed; the Function stores them and refreshes Reports/<Supplier>/_Knowledge/research-ledger.md. AFTER verifier PASS and human approval, like the evidence cache: research behind a rejected draft never becomes a fact the next run reuses. Fetches the delivery Function itself served (osint-proxy, passive-recon) are already recorded at the point of the call.",
+                "type": "If",
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@parameters('renderFormat')",
+                          "html"
+                        ]
+                      }
+                    },
+                    {
+                      "equals": [
+                        "@contains(outputs('Extract_json_contract'), 'researchRecords')",
+                        true
+                      ]
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "If_evidence_cache_records": [
+                    "Succeeded"
+                  ]
+                },
+                "actions": {
+                  "Store_research_ledger": {
+                    "type": "Http",
+                    "inputs": {
+                      "method": "POST",
+                      "uri": "@{parameters('deliveryFunctionBaseUrl')}/research_ledger",
+                      "queries": {
+                        "code": "@parameters('deliveryFunctionKey')"
+                      },
+                      "headers": {
+                        "Content-Type": "application/json"
+                      },
+                      "body": {
+                        "supplier": "@{outputs('Resolve_supplier_name')}",
+                        "service": "@{outputs('Resolve_service_name')}",
+                        "records": "@json(outputs('Extract_json_contract'))?['researchRecords']",
+                        "runId": "@{workflow().run.name}",
+                        "originatingAction": "@{parameters('reportType')} (@{workflow().name})",
+                        "driveId": "@{parameters('sharepointDriveId')}",
+                        "reportsRoot": "@{parameters('libraryRootItemId')}"
+                      },
+                      "retryPolicy": {
+                        "type": "exponential",
+                        "count": 4,
+                        "interval": "PT10S"
+                      }
+                    },
+                    "runAfter": {}
+                  }
+                },
+                "else": {
+                  "actions": {}
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Record_rejection": {
+                  "type": "Compose",
+                  "inputs": {
+                    "outcome": "rejected_or_expired",
+                    "decision": "@{body('Human_approval_gate')?['decision']}",
+                    "approver": "@{body('Human_approval_gate')?['approver']}",
+                    "comment": "@{body('Human_approval_gate')?['comment']}",
+                    "note": "Nothing was rendered or stored."
+                  },
+                  "runAfter": {}
+                },
+                "If_callback_rejected": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@coalesce(triggerBody()?['callbackUrl'],'')",
+                            ""
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "runAfter": {
+                    "Record_rejection": [
+                      "Succeeded"
+                    ]
+                  },
+                  "actions": {
+                    "Callback_rejected": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "@triggerBody()?['callbackUrl']",
+                        "headers": {
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "runId": "@{workflow().run.name}",
+                          "status": "REJECTED_BY_APPROVER",
+                          "reportType": "@{parameters('reportType')}",
+                          "supplierName": "@{outputs('Resolve_supplier_name')}",
+                          "serviceName": "@{outputs('Resolve_service_name')}",
+                          "comment": "@{body('Human_approval_gate')?['comment']}"
+                        },
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 4,
+                          "interval": "PT10S"
+                        }
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              }
+            },
+            "_comment": "Approval-callback contract (workflows/README.md): decision is compared case-insensitively; only 'approved' stores."
+          }
+        },
+        "else": {
+          "actions": {
+            "Notify_verifier_fail": {
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "@parameters('teamsWebhookUrl')",
+                "headers": {
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "text": "❌ @{parameters('reportType')} draft for @{outputs('Resolve_supplier_name')} / @{outputs('Resolve_service_name')} FAILED verification: @{outputs('Verifier_verdict_text')}"
+                }
+              },
+              "runAfter": {}
+            },
+            "If_callback_verifier_fail": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "@coalesce(triggerBody()?['callbackUrl'],'')",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "runAfter": {
+                "Notify_verifier_fail": [
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "Callback_verifier_fail": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "@triggerBody()?['callbackUrl']",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "runId": "@{workflow().run.name}",
+                      "status": "VERIFIER_FAIL",
+                      "reportType": "@{parameters('reportType')}",
+                      "supplierName": "@{outputs('Resolve_supplier_name')}",
+                      "serviceName": "@{outputs('Resolve_service_name')}",
+                      "findings": "@{outputs('Verifier_verdict_text')}"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 4,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "runAfter": {}
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            }
+          }
+        },
+        "_comment": "Charter contract (agents/verifier_instructions.md): the FIRST line is exactly 'VERDICT: PASS' or 'VERDICT: FAIL'. A bare 'PASS' first line is also accepted for backward compatibility; anything else = FAIL."
+      }
+    },
+    "outputs": {}
+  }
+}

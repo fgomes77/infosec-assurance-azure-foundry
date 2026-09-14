@@ -2,3 +2,9 @@ build/
 setup/.env
 setup/provision-outputs.json
 __pycache__/
+functions/delivery/renderers/
+templates/audit.log
+
+# Memory exports are filed in SharePoint / the EU blob container, never committed
+# (operations/BACKUP_DR.md §3).
+operations/backups/

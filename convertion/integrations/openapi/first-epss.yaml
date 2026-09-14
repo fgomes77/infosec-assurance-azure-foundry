@@ -1,0 +1,85 @@
+# Purpose: EPSS (Exploit Prediction Scoring System) scores from FIRST - the
+#   probability that a vulnerability will be exploited in the next 30 days,
+#   and its percentile against all scored CVEs. Used with CVSS (severity) and
+#   KEV (observed exploitation) to prioritise remediation honestly:
+#   CVSS says how bad it would be, EPSS says how likely it is, KEV says it is
+#   already happening.
+# Why it exists: a findings register that orders work by CVSS alone
+#   over-prioritises the theoretical and under-prioritises the imminent.
+# Auth: NONE - the FIRST EPSS API is public. Connection conn-first-epss is
+#   anonymous.
+# Egress: CVE identifiers and dates only - all public.
+# Use rules: EPSS is a probability, not a verdict. Always report the score
+#   WITH its date (scores move daily) and never present it as a severity;
+#   never use it to lower a severity that CVSS or KEV justifies.
+openapi: 3.0.3
+info:
+  title: FIRST EPSS - exploit prediction scores
+  description: >-
+    Read-only retrieval of EPSS scores and percentiles for one or more CVEs,
+    optionally as at a past date or as a 30-day time series.
+  version: "1.0"
+servers:
+  - url: https://api.first.org/data/v1
+paths:
+  /epss:
+    get:
+      operationId: getEpssScores
+      summary: EPSS score and percentile for one or more CVEs
+      parameters:
+        - name: cve
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            One CVE id, or several comma-separated (the whole parameter must
+            stay under 2000 characters). Omit only with a bounded filter and
+            a limit.
+        - name: date
+          in: query
+          required: false
+          schema: { type: string, format: date }
+          description: >-
+            Historic scores as at this date (YYYY-MM-DD, from 2021-04-14).
+            Use it when assessing what was known at the time of an incident.
+        - name: scope
+          in: query
+          required: false
+          schema: { type: string, enum: [time-series] }
+          description: time-series returns the last 30 days for one CVE.
+        - name: epss-gt
+          in: query
+          required: false
+          schema: { type: number, format: float }
+          description: Only CVEs with an EPSS score greater than or equal to this.
+        - name: percentile-gt
+          in: query
+          required: false
+          schema: { type: number, format: float }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 100, maximum: 10000 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, default: 0 }
+      responses:
+        "200":
+          description: EPSS scores.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  total: { type: integer }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        cve: { type: string }
+                        epss: { type: string }
+                        percentile: { type: string }
+                        date: { type: string, format: date }

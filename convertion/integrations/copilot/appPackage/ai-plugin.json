@@ -1,0 +1,28 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.2/schema.json",
+  "schema_version": "v2.2",
+  "name_for_human": "ENX InfoSec Assurance",
+  "description_for_human": "Ask the assurance advisors or request a governed TPRM report.",
+  "description_for_model": "Use askAdvisor for security/GRC/regulatory questions (seconds-scale answers with sources). Use requestReport to start a governed report pipeline (returns a runId; the file lands in SharePoint after human approval). Use getReportStatus to check a runId.",
+  "namespace": "enxAssurance",
+  "functions": [
+    { "name": "askAdvisor", "description": "Ask one assurance advisory agent a question and return its sourced answer." },
+    { "name": "requestReport", "description": "Start a governed report pipeline for a supplier/service; returns runId." },
+    { "name": "getReportStatus", "description": "Return the status and SharePoint link of a requested report." }
+  ],
+  "runtimes": [
+    {
+      "type": "OpenApi",
+      "auth": {
+        "type": "OAuthPluginVault",
+        "reference_id": "{teams-developer-portal-oauth-registration-id}"
+      },
+      "spec": { "url": "../openapi/ask.yaml" },
+      "run_for_functions": ["askAdvisor", "requestReport", "getReportStatus"]
+    }
+  ],
+  "capabilities": {
+    "localization": {},
+    "conversation_starters": []
+  }
+}

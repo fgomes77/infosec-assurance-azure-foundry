@@ -1,0 +1,305 @@
+{
+  "_comment": "Authoritative template inventory for the template-manager system (requirement j). 'source' is ONE FILE relative to the repo root - the conversion source of truth that update_templates.py overwrites after recorded approval (never a directory, never a #fragment of a byte-verified SKILL.md), then convert->verify->create re-runs so agents, vector stores, code_interpreter files and the delivery-function renderers update together. 'sample' = sanitised synthetic dataset (templates/samples/) used by the template-manager before/after preview, evaluation/run_regression.py and the /api/preview endpoint. 'schema' = JSON Schema in templates/ that the delivery Function validates against before rendering (SCHEMA_DIRS). 'renderer' = staged entry the Function invokes (stage_renderers.py). 'renderer_pending' = renderer source not yet registered in stage_renderers.SOURCES (see templates/README.md 'Pending shared deltas'). Field reference: templates/README.md. Versions bump on every approved change. 'promoted_agent_versions' (finding C19) records the immutable agent versions the last approved propagation promoted, as '<agent>:<version>' refs: update_templates.py writes it from the deploy ledger (build/agent-versions.json via _foundry_runtime.pinned_ref) after the consuming agents have been recreated, and writes the same list to templates/audit.log. Pipelines pin '<agent>:<version>', so this field is the link between an approved template change and the agent versions actually serving traffic - and the rollback target. An empty list means the template has not been propagated through update_templates.py yet (or the runtime does not version agents). Never hand-edit it: it is evidence, not configuration. 'sensitivity_label' (finding C16) is the OPTIONAL per-report-type Purview sensitivity label id for templates that produce a report of record: scripts/build_logicapps.py prefers it over workflows/pipelines.json shared.sensitivityLabel when setting the pipeline's sensitivityLabelId parameter, and the delivery Function's /assign_label route applies it to the stored file. An EMPTY value means the Reports library's default label is sufficient and no per-file assignment is made; the per-file label supplements, never replaces, the library default. RENDERER PATH CONVENTION (finding: registry paths must name what the Function actually invokes): 'renderer'/'renderer_pending' always end in render.py (python runtime) or generate_slide.js (node runtime) under functions/delivery/renderers/<renderer>/ (staged) or functions/delivery/renderers-src/<renderer>/ (source) - the entry named in each renderer's manifest.json. The byte-verified skill generators (scripts/generate_reports_v2.py for ciso-reporting, scripts/generate_report.js for dpia, scripts/generate_slide.js + generate_radar.py for tprm-board-slide) are never registered here directly: they are wrapped or ported by that render.py, because the Function invokes one entry per renderer with argv from the manifest and the originals expect the skill's own layout. SCHEMA RESOLUTION: the Function resolves the schema by the pipeline's renderTemplate (templates/<renderTemplate>.schema.json, dashes or underscores) - NOT by the 'schema' field below and NOT by the renderer manifest's 'schema' key; see templates/README.md 'Schema resolution' for which contracts are enforced today and which are documentation only. HTML templates must be SELF-CONTAINED: vendor Chart.js, fonts and images inline, no CDN <script>/<link> of any kind — required by the no-egress design and by the SharePoint download-only decision (infra/README.md §Artifacts decision, sharepoint/README.md); template-manager checks this on every update and the check is part of the approval package.",
+  "templates": [
+    {
+      "id": "deepsearch-html-dashboard",
+      "name": "DeepSearch OSINT Assessment HTML Dashboard",
+      "format": "html",
+      "source": "convertion/templates/assets/deepsearch-dashboard.html",
+      "source_note": "Template of record extracted from the PHASE 4 design specification of claude-account-export/skills/deepsearch-protocol/SKILL.md (byte-verified skill untouched); the agent addendum tells the agent to fill this file's {{PLACEHOLDERS}}.",
+      "sample": "convertion/templates/samples/deepsearch-html-dashboard.json",
+      "schema": "deepsearch_dashboard.schema.json",
+      "style": {
+        "theme": "dark teal RGB(0,141,127)",
+        "font": "Verdana",
+        "sections": 11,
+        "buttons": 9,
+        "spider_graph": true
+      },
+      "consumers": [
+        "deepsearch-protocol",
+        "ai-deepsearch-osint-gathering-report"
+      ],
+      "pipelines": [
+        "deepsearch-report"
+      ],
+      "version": "17.02.11",
+      "last_approved": "2026-03-24",
+      "sensitivity_label": "",
+      "promoted_agent_versions": [],
+      "notes": "OPEN TEMPLATE DEFECTS (found while building templates/samples/deepsearch-html-dashboard.json; both need an approval run through scripts/update_templates.py because this is an approved template of record): (1) <body> carries no data-overall-score attribute, so every filled report fails the gate check 'data-overall-score=\"NN\" missing on <body> (ENX addendum)' - fix: <body data-overall-score=\"{{OVERALL_SCORE}}\"> plus an OVERALL_SCORE entry in deepsearch_dashboard.schema.json; (2) the header comment contains the literal string {{PLACEHOLDERS}}, which the same gate reports as 'placeholder text present' whenever the agent keeps the comment - fix: reword the comment without braces. Until both are fixed, a filled report only passes the gate if the agent adds the body attribute and drops the comment, which the 'fill placeholders only' rule forbids."
+    },
+    {
+      "id": "ciso-executive-summary-html",
+      "name": "Strategic Risk Intelligence Dashboard (CISO HTML)",
+      "format": "html",
+      "source": "claude-account-export/skills/ciso-executive-summary/assets/template.html",
+      "sample": "convertion/templates/samples/ciso-executive-summary-html.json",
+      "style": {
+        "spider_graph_domains": 5,
+        "dual_perimeter": true,
+        "thresholds": "High>=7.0 Medium>=4.0"
+      },
+      "consumers": [
+        "ciso-executive-summary"
+      ],
+      "pipelines": [
+        "ciso-exec-summary"
+      ],
+      "version": "1.0",
+      "last_approved": "2026-04-07",
+      "sensitivity_label": "",
+      "promoted_agent_versions": [],
+      "schema": "ciso_exec_summary_render.schema.json",
+      "notes": "The pipeline delivers format 'html' with an empty renderTemplate, so the HTML is checked by gates.ciso_exec_summary_html; the schema above is the render-request contract of the pending renderer (functions/delivery/renderers-src/ciso-exec-summary/render.py) and of the template-manager preview.",
+      "renderer": "functions/delivery/renderers/ciso-exec-summary/render.py",
+      "thresholds": ">12 HIGH, >4 MEDIUM, <=4 LOW (OneTrust 1-25 residual scale) - governance/RISK_THRESHOLDS.md section 1. NOT the TPRM 10-scale: this deliverable reports OneTrust residual scores in their own scale and never re-maps them."
+    },
+    {
+      "id": "ciso-reporting-deck",
+      "name": "CISO Governance Meeting 8-slide PPTX",
+      "format": "pptx",
+      "source": "claude-account-export/skills/ciso-reporting/assets/Group_CISO_Report_Template_v3_1.pptx",
+      "binary": true,
+      "sample": "convertion/templates/samples/ciso-reporting-deck.json",
+      "schema": "ciso_reporting_assessment.schema.json",
+      "consumers": [
+        "ciso-reporting"
+      ],
+      "pipelines": [
+        "cyber-forum-pptx"
+      ],
+      "renderer": "functions/delivery/renderers/ciso-reporting/render.py",
+      "version": "1.0",
+      "last_approved": "2026-05-26",
+      "sensitivity_label": "",
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "tprm-board-slide",
+      "name": "TPRM Executive Summary Board Slide",
+      "format": "pptx",
+      "source": "claude-account-export/skills/pptx-executive-summary-ciso/assets/template_constants.js",
+      "sample": "convertion/templates/samples/tprm-board-slide.json",
+      "schema": "tprm_board_slide.schema.json",
+      "consumers": [
+        "pptx-executive-summary-ciso",
+        "tprm-slide-generator"
+      ],
+      "pipelines": [],
+      "version": "1.0",
+      "last_approved": "2026-03-06",
+      "sensitivity_label": "",
+      "promoted_agent_versions": [],
+      "renderer": "functions/delivery/renderers/tprm-board-slide/render.py"
+    },
+    {
+      "id": "ciso-global-deck",
+      "name": "Global CISO Report 9-slide PPTX (req. d)",
+      "format": "pptx",
+      "source": "convertion/agents/ciso-global-report_instructions.md#deck-content",
+      "fragment_markers": [
+        "<!-- deck-content:start -->",
+        "<!-- deck-content:end -->"
+      ],
+      "schema": "ciso_global_deck.schema.json",
+      "sample": "convertion/templates/samples/ciso-global-deck.json",
+      "slides": [
+        "cover",
+        "service-supplier-id",
+        "enx-entities",
+        "service-description",
+        "supplier-description",
+        "risk-controls-resume",
+        "exposure-diagram",
+        "ict-scores",
+        "enx-actions"
+      ],
+      "consumers": [
+        "ciso-global-report"
+      ],
+      "pipelines": [
+        "ciso-global-pptx"
+      ],
+      "renderer": "functions/delivery/renderers/ciso-global/generate_slide.js",
+      "version": "1.0",
+      "last_approved": null,
+      "sensitivity_label": "",
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "dpia-dpo-docx",
+      "name": "InfoSec TPA Report for DPO (DOCX)",
+      "format": "docx",
+      "source": "convertion/functions/delivery/renderers-src/dpia/render.py",
+      "source_note": "python-docx port driven by data.json; the byte-verified Node original (claude-account-export/skills/dpia/scripts/generate_report.js) stays the visual reference and is never edited.",
+      "sample": "convertion/templates/samples/dpia-dpo-docx.json",
+      "schema": "dpia_report.schema.json",
+      "consumers": [
+        "dpia"
+      ],
+      "pipelines": [
+        "dpia-dpo-report"
+      ],
+      "renderer": "functions/delivery/renderers/dpia/render.py",
+      "version": "1.0",
+      "last_approved": "2026-01-27",
+      "sensitivity_label": "{label:confidential-dpo}",
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "evidence-summary-docx",
+      "name": "Evidence / SOC / Pentest Findings Summary (DOCX)",
+      "format": "docx",
+      "source": "convertion/functions/delivery/renderers-src/evidence-summary/render.py",
+      "sample": "convertion/templates/samples/evidence-summary-docx.json",
+      "schema": "evidence_summary.schema.json",
+      "consumers": [
+        "tpa-evidence-analyzer",
+        "soc-report-analyzer",
+        "pentest-report-analyzer"
+      ],
+      "pipelines": [
+        "tpa-evidence-analysis",
+        "soc-report-summary",
+        "pentest-report-summary"
+      ],
+      "renderer": "functions/delivery/renderers/evidence-summary/render.py",
+      "version": "1.0",
+      "last_approved": null,
+      "sensitivity_label": "",
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "transcript",
+      "name": "Diarized meeting/interview transcript (MD + HTML + DOCX)",
+      "format": "docx",
+      "formats": [
+        "md",
+        "html",
+        "docx"
+      ],
+      "source": "convertion/functions/delivery/renderers-src/transcript/render.py",
+      "source_note": "Turn model, HH:MM:SS timestamps and speaker legend follow the byte-verified claude-account-export/skills/whisperx-transcribe-diarize/scripts/format_transcript.py, which stays the reference and is never edited; the palette is templates/enx-theme.json per agents/document_agents_addendum.md. speakerNames is the governed equivalent of the skill's relabel_speakers.py: mapping a diarization label to a person is an assertion, so it arrives in the approved contract rather than being guessed.",
+      "sample": "convertion/templates/samples/transcript.json",
+      "schema": "transcript.schema.json",
+      "consumers": [
+        "whisperx-transcribe-diarize"
+      ],
+      "pipelines": [
+        "transcript-summary"
+      ],
+      "renderer": "functions/delivery/renderers/transcript/render.py",
+      "version": "1.0",
+      "last_approved": null,
+      "sensitivity_label": "",
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "xlsx-generic",
+      "name": "Generic tabular XLSX export (advisor/TPRM outputs)",
+      "format": "xlsx",
+      "source": "convertion/functions/delivery/renderers-src/xlsx-generic/render.py",
+      "sample": "convertion/templates/samples/xlsx-generic.json",
+      "schema": "xlsx_generic.schema.json",
+      "consumers": [
+        "xlsx",
+        "infosec-assurance-advisor"
+      ],
+      "pipelines": [
+        "advisory-file-delivery",
+        "concentration-risk-analysis",
+        "dora-register-of-information",
+        "findings-remediation-register"
+      ],
+      "renderer": "functions/delivery/renderers/xlsx-generic/render.py",
+      "version": "1.0",
+      "last_approved": null,
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "docx-generic",
+      "name": "Generic advisory DOCX (house style)",
+      "format": "docx",
+      "source": "convertion/functions/delivery/renderers-src/docx-generic/render.py",
+      "sample": "convertion/templates/samples/docx-generic.json",
+      "schema": "docx_generic.schema.json",
+      "consumers": [
+        "infosec-assurance-advisor",
+        "cyber-forum"
+      ],
+      "pipelines": [
+        "advisory-file-delivery",
+        "contract-security-review",
+        "exit-offboarding-assurance",
+        "isms-audit-pack",
+        "regulatory-change-watch",
+        "supplier-incident-assessment",
+        "supplier-intake-triage"
+      ],
+      "renderer": "functions/delivery/renderers/docx-generic/render.py",
+      "version": "1.0",
+      "last_approved": null,
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "pptx-generic",
+      "name": "Generic advisory PPTX (16:9 house style)",
+      "format": "pptx",
+      "source": "convertion/functions/delivery/renderers-src/pptx-generic/render.py",
+      "sample": "convertion/templates/samples/pptx-generic.json",
+      "schema": "pptx_generic.schema.json",
+      "consumers": [
+        "infosec-assurance-advisor"
+      ],
+      "pipelines": [
+        "advisory-file-delivery"
+      ],
+      "renderer": "functions/delivery/renderers/pptx-generic/render.py",
+      "version": "1.0",
+      "last_approved": null,
+      "promoted_agent_versions": []
+    },
+    {
+      "id": "tpsrca-report",
+      "name": "TPSRCA Assessment Pack (HTML report + Risk Register XLSX + Gap Tracker XLSX + Executive Brief PPTX + Evidence Pack ZIP)",
+      "format": "html",
+      "formats": [
+        "html",
+        "xlsx",
+        "pptx",
+        "zip"
+      ],
+      "source": "convertion/templates/assets/tpsrca-report.html",
+      "source_note": "The tpsrca-html-template skill referenced by tpsrca-assessment-engine Agent 12 is NOT in the export; this template of record reuses the DeepSearch dark-teal tokens (SSOT section 5a) and is filled from the engine's output_schema.json contract.",
+      "sample": "convertion/templates/samples/tpsrca-report.json",
+      "schema": "tpsrca_report.schema.json",
+      "consumers": [
+        "tpsrca-assessment-engine"
+      ],
+      "pipelines": [],
+      "renderer_pending": "functions/delivery/renderers-src/tpsrca-report/render.py",
+      "pipeline_pending": "tpsrca-assessment (multi-file: html primary + xlsx x2 + pptx + zip built in the Function)",
+      "version": "1.0",
+      "last_approved": null,
+      "sensitivity_label": "",
+      "promoted_agent_versions": [],
+      "notes": "Same header-comment defect as deepsearch-html-dashboard: the comment contains the literal {{PLACEHOLDERS}}. No gate keys on this template yet (no pipeline), so it is not blocking; fix it in the same approval run."
+    },
+    {
+      "id": "enx-theme",
+      "name": "Euronext house style tokens (the only permitted theme)",
+      "format": "json",
+      "source": "convertion/templates/enx-theme.json",
+      "sample": "convertion/templates/samples/enx-theme.json",
+      "consumers": [
+        "template-manager"
+      ],
+      "pipelines": [],
+      "notes": "Palette/typography/classification tokens consumed by every renderer and by the verifier's house-style rule. Any change is a template change (this workflow), never an ad-hoc theme (theme-factory / brand-guidelines are not deployed - templates/themes/euronext-house.md).",
+      "version": "1.0",
+      "last_approved": null,
+      "promoted_agent_versions": []
+    }
+  ]
+}

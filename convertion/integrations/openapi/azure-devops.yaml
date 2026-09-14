@@ -1,0 +1,135 @@
+# Purpose: GitHub-connector replacement - READ-ONLY Azure DevOps Git surface
+#   (repositories, files, commits, pull requests + threads, pipeline runs,
+#   code search) for infosec-assurance-advisor, cyber-forum (e.g. reviewing a
+#   security-relevant PR, reading a policy-as-code repo) and template-manager
+#   (reading the conversion-source repo before a template proposal).
+#   For GitHub Enterprise Server/Cloud, swap servers[0].url for the GitHub
+#   REST API base and adjust paths - keep GET-only.
+# Auth: Entra ID bearer (Azure DevOps resource 499b84ac-1321-427f-aa17-267ca6975798/.default)
+#   on a service principal holding Project "Reader" + "Read" on repos only;
+#   Foundry connection conn-azure-devops. No PAT in this repo.
+# By design there is NO agent equivalent of the GitHub write tools
+#   (create_pull_request, push_files, merge_pull_request, create_branch,
+#   issue_write): repository changes are submissions of record and happen
+#   only through the approval-gated template-update workflow
+#   (workflows/template-update-approval.json -> CI job opening a PR, never
+#   pushing to main). See CONNECTOR_DECISIONS.md.
+openapi: 3.0.3
+info:
+  title: Azure DevOps Git - read-only subset
+  version: "1.0"
+servers:
+  - url: https://dev.azure.com/{organization}
+security:
+  - entraBearer: []
+paths:
+  /{project}/_apis/git/repositories:
+    get:
+      operationId: listRepositories
+      summary: List repositories of a project
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: Repositories (id, name, defaultBranch, webUrl). }
+  /{project}/_apis/git/repositories/{repositoryId}/items:
+    get:
+      operationId: getItem
+      summary: Read a file or list a folder at a path
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: repositoryId, in: path, required: true, schema: { type: string } }
+        - { name: path, in: query, required: true, schema: { type: string } }
+        - { name: versionDescriptor.version, in: query, schema: { type: string }, description: Branch, tag or commit. }
+        - { name: recursionLevel, in: query, schema: { type: string, enum: [none, oneLevel, full], default: none } }
+        - { name: includeContent, in: query, schema: { type: boolean, default: true } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: Item content or folder listing. }
+  /{project}/_apis/git/repositories/{repositoryId}/commits:
+    get:
+      operationId: listCommits
+      summary: Commit history
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: repositoryId, in: path, required: true, schema: { type: string } }
+        - { name: searchCriteria.itemPath, in: query, schema: { type: string } }
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: Commits. }
+  /{project}/_apis/git/repositories/{repositoryId}/pullrequests:
+    get:
+      operationId: listPullRequests
+      summary: List pull requests
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: repositoryId, in: path, required: true, schema: { type: string } }
+        - { name: searchCriteria.status, in: query, schema: { type: string, enum: [active, completed, abandoned, all], default: active } }
+        - { name: $top, in: query, schema: { type: integer, default: 50 } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: Pull requests. }
+  /{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}:
+    get:
+      operationId: getPullRequest
+      summary: Pull request details
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: repositoryId, in: path, required: true, schema: { type: string } }
+        - { name: pullRequestId, in: path, required: true, schema: { type: integer } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: The pull request. }
+  /{project}/_apis/git/repositories/{repositoryId}/pullrequests/{pullRequestId}/threads:
+    get:
+      operationId: listPullRequestThreads
+      summary: Review comment threads of a pull request
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: repositoryId, in: path, required: true, schema: { type: string } }
+        - { name: pullRequestId, in: path, required: true, schema: { type: integer } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: Threads and comments. }
+  /{project}/_apis/pipelines/{pipelineId}/runs:
+    get:
+      operationId: listPipelineRuns
+      summary: Recent runs of a pipeline (CI status)
+      parameters:
+        - { name: project, in: path, required: true, schema: { type: string } }
+        - { name: pipelineId, in: path, required: true, schema: { type: integer } }
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      responses:
+        "200": { description: Pipeline runs (state, result, createdDate). }
+  /_apis/search/codesearchresults:
+    post:
+      operationId: codeSearch
+      x-enx-read-only: true  # idempotent query POST (code search) - kept under the read-only rule
+      summary: Search code across repositories (query POST, read-only)
+      description: >-
+        Full-text code search (searchText, filters project/repository/path/branch).
+        Server base for this operation is https://almsearch.dev.azure.com/{organization};
+        Foundry routes via the connection's base URL - set the server override
+        in the connection if the search host differs.
+      parameters:
+        - { name: api-version, in: query, required: true, schema: { type: string, default: "7.1" } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [searchText]
+              properties:
+                searchText: { type: string }
+                $top: { type: integer, default: 25 }
+                filters: { type: object, additionalProperties: { type: array, items: { type: string } } }
+      responses:
+        "200": { description: Code search results. }
+components:
+  securitySchemes:
+    entraBearer:
+      type: http
+      scheme: bearer
+      description: Entra ID token for the Azure DevOps resource; Reader-only service principal via conn-azure-devops.

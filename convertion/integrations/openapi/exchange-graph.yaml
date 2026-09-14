@@ -1,0 +1,78 @@
+# Purpose: Gmail-connector replacement - READ-ONLY Microsoft Graph mail
+#   surface on the ONE assurance shared mailbox {assurance-shared-mailbox-upn}
+#   (supplier evidence and questionnaire replies arriving by mail). Used by
+#   tpa-evidence-analyzer (evidence triage) and infosec-assurance-advisor.
+# Auth: Entra ID client-credentials, application permission Mail.Read
+#   restricted by an Exchange application access policy to this mailbox only
+#   (New-ApplicationAccessPolicy -AccessRight RestrictAccess). No Mail.Send:
+#   sending exists only as an approval-gated Logic Apps action
+#   (workflows/report-delivery-pipeline.json 'Send_share_link_email', kind
+#   MAIL_SEND) - never as an agent tool.
+# Residency: Exchange Online tenant geo must be EU (Microsoft 365 data
+#   location); confirm in the M365 admin centre before enabling.
+# Personal data: message bodies are DATA for the current task only - not to
+#   be persisted to memory (DATA_PROTECTION_GUARDRAILS personal-data section).
+openapi: 3.0.3
+info:
+  title: Microsoft Graph Mail - assurance shared mailbox (read-only subset)
+  version: "1.0"
+servers:
+  - url: https://graph.microsoft.com/v1.0
+security:
+  - oauth2ClientCredentials: []
+paths:
+  /users/{mailbox}/mailFolders:
+    get:
+      operationId: listMailFolders
+      summary: List folders of the shared mailbox
+      parameters:
+        - { name: mailbox, in: path, required: true, schema: { type: string }, description: UPN of the assurance shared mailbox (parameter, never a personal mailbox). }
+      responses:
+        "200": { description: Mail folders (id, displayName, unreadItemCount). }
+  /users/{mailbox}/messages:
+    get:
+      operationId: listMessages
+      summary: List or search messages in the shared mailbox
+      description: >-
+        List messages with OData $filter/$search (e.g. $search="{supplier public name}",
+        $filter=hasAttachments eq true and receivedDateTime ge 2026-01-01T00:00:00Z).
+        Returns metadata + bodyPreview; use getMessage for the full body.
+      parameters:
+        - { name: mailbox, in: path, required: true, schema: { type: string } }
+        - { name: $search, in: query, schema: { type: string } }
+        - { name: $filter, in: query, schema: { type: string } }
+        - { name: $select, in: query, schema: { type: string, default: "id,subject,from,receivedDateTime,hasAttachments,bodyPreview" } }
+        - { name: $top, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        "200": { description: Messages. }
+  /users/{mailbox}/messages/{messageId}:
+    get:
+      operationId: getMessage
+      summary: Read one message (full body)
+      parameters:
+        - { name: mailbox, in: path, required: true, schema: { type: string } }
+        - { name: messageId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The message. }
+  /users/{mailbox}/messages/{messageId}/attachments:
+    get:
+      operationId: listAttachments
+      summary: List attachments of a message (metadata; bytes are filed by the mailbox-intake workflow)
+      description: >-
+        Attachment names/sizes/content types. The binary evidence is filed
+        under TPA/Inbox/<Supplier>/<Service>/ by workflows/mailbox-intake.json;
+        analyse it from SharePoint, not from the mail body.
+      parameters:
+        - { name: mailbox, in: path, required: true, schema: { type: string } }
+        - { name: messageId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Attachments (id, name, size, contentType). }
+components:
+  securitySchemes:
+    oauth2ClientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
+          scopes:
+            https://graph.microsoft.com/.default: Mail.Read scoped by application access policy to the shared mailbox.

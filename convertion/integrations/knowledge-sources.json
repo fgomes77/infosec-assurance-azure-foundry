@@ -1,0 +1,579 @@
+{
+  "_comment": "AUTHORITATIVE SOURCE REGISTRY - the source of record per subject, and the only web reach the platform has. Three things depend on this file: (1) the delivery Function's outbound allow-list (functions/delivery/urlpolicy.py regenerates its DEFAULT_ALLOWLIST from the 'domains' below - run scripts/sync_url_allowlist.py, checked by scripts/check_knowledge_sources.py in CI); (2) the agents' citation discipline (knowledge pack agents/knowledge-packs/authoritative-sources.md, attached to every agent that makes a regulatory, control or vulnerability statement); (3) what an 'api:' access mode means - a registered read-only connection in integrations/registry.json, attached like any other tool. TIERS: 1 = the authority itself (cite it and nothing else where it speaks); 2 = official or standard-body material that interprets or implements tier 1; 3 = a commercial or observational signal that may point at something but evidences nothing on its own. A deliverable NEVER rests a conclusion on a tier-3 source. EGRESS RULE (governance/DATA_PROTECTION_GUARDRAILS.md section 1) is unchanged by this file and applies to every entry: only public terms leave - a CVE id, a CELEX number, a public product name, a supplier's own public domain when the engagement is not confidential. Never an ENX identifier, an assessment id, a person, or document content. Adding a source here is a Tier-B change (operations/CHANGE_MANAGEMENT.md): it widens the outbound allow-list.",
+  "version": "1.0.0",
+  "updated": "2026-09-13",
+  "_access_modes": {
+    "api:<connection>": "a registered read-only connection in integrations/registry.json - structured, citable, rate-limited",
+    "page:osint-proxy": "sanitised public page fetch through the delivery Function (GET /api/fetch_public_page) - allow-listed host, outbound DLP on the URL, size cap, audited",
+    "search:web-search": "Bing grounding on PUBLIC terms, to FIND a tier-1 or tier-2 page; the finding is then read through osint-proxy and cited from there, never from the search snippet"
+  },
+  "precedence": [
+    "The authority that made the rule outranks anyone describing it: EUR-Lex over a law-firm briefing, the ESAs over a vendor webinar, NVD/CVE over a blog, IAF CertSearch over a certificate PDF, the supplier's own advisory over press coverage of it.",
+    "A consolidated EU text outranks the original act when advising on the law in force - and the consolidation date is stated.",
+    "A final report outranks a consultation paper; a consultation paper is never presented as settled.",
+    "Where two tier-1 sources genuinely conflict, both are reported with their dates and the conflict is named - it is not resolved silently.",
+    "No source of any tier justifies asserting a date, an article number or a score that was not actually read in this run."
+  ],
+  "sources": [
+    {
+      "id": "eur-lex",
+      "name": "EUR-Lex / CELLAR (Publications Office of the EU)",
+      "authority": "Publications Office of the European Union",
+      "domains": [
+        "eur-lex.europa.eu",
+        "publications.europa.eu",
+        "op.europa.eu"
+      ],
+      "covers": [
+        "DORA (32022R2554)",
+        "NIS2 (32022L2555)",
+        "GDPR (32016R0679)",
+        "EU AI Act (32024R1689)",
+        "SCCs (32021D0914)",
+        "MiFID II",
+        "CSRD",
+        "every RTS/ITS published in the Official Journal"
+      ],
+      "use_for": "The authentic text and the legal metadata of any EU instrument: article wording, entry into force, date of application, amendments, consolidations, in-force status.",
+      "citation": "Instrument, article/paragraph, CELEX (consolidated CELEX and its consolidation date where a consolidation was read), retrieval date.",
+      "access": "api:eur-lex",
+      "tier": 1,
+      "refresh": "on every use - the law in force is a point-in-time fact",
+      "_comment": "The source of record for EU law on this platform. A regulatory statement in a deliverable cites a CELEX, never a secondary summary."
+    },
+    {
+      "id": "ec-europa",
+      "name": "European Commission",
+      "authority": "European Commission",
+      "domains": [
+        "ec.europa.eu",
+        "digital-strategy.ec.europa.eu",
+        "finance.ec.europa.eu"
+      ],
+      "covers": [
+        "delegated and implementing acts",
+        "AI Act guidelines and the AI Pact",
+        "adequacy decisions",
+        "standardisation requests",
+        "FAQ and Q&A"
+      ],
+      "use_for": "Commission-level interpretation, guidelines, adequacy decisions and the status of acts not yet in the Official Journal.",
+      "citation": "Body, document title, reference, publication date, URL, retrieved date.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "monthly (change watch)"
+    },
+    {
+      "id": "eu-lex-national",
+      "name": "National transposition and supervisory sources",
+      "authority": "Member State legislators and competent authorities",
+      "domains": [
+        "legislation.gov.uk",
+        "legifrance.gouv.fr",
+        "wetten.overheid.nl",
+        "dre.pt",
+        "gesetze-im-internet.de",
+        "boe.es",
+        "normattiva.it"
+      ],
+      "covers": [
+        "NIS2 transpositions",
+        "national ICT and outsourcing rules",
+        "national data protection law"
+      ],
+      "use_for": "Where an EU directive only binds through national law - NIS2 above all - the obligation that actually applies to an ENX entity is the national transposition, in its own language.",
+      "citation": "Instrument in the national language, article, official gazette reference, date, URL, retrieved date.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "when the entity scope or a transposition deadline is in question",
+      "_comment": "Euronext operates in several Member States: a NIS2 answer that cites only the Directive is incomplete for an entity-level question."
+    },
+    {
+      "id": "esas",
+      "name": "ESAs - EBA, ESMA, EIOPA (and the Joint Committee)",
+      "authority": "European Supervisory Authorities",
+      "domains": [
+        "eba.europa.eu",
+        "esma.europa.eu",
+        "eiopa.europa.eu"
+      ],
+      "covers": [
+        "DORA RTS/ITS and the Register of Information templates",
+        "guidelines on outsourcing arrangements",
+        "ICT and security risk management",
+        "oversight of critical ICT third-party providers",
+        "Q&As"
+      ],
+      "use_for": "The supervisory expectation that sits between the Regulation and practice: final report vs consultation paper, and which applies when.",
+      "citation": "Authority, document type (final report / consultation paper / guidelines), reference number, date, URL, retrieved date, and whether it is final.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "monthly (change watch)",
+      "_comment": "A consultation paper is never cited as settled expectation - the change watch marks it MEDIUM or LOW confidence."
+    },
+    {
+      "id": "edpb",
+      "name": "European Data Protection Board (and EDPS)",
+      "authority": "EDPB / EDPS",
+      "domains": [
+        "edpb.europa.eu",
+        "edps.europa.eu"
+      ],
+      "covers": [
+        "Art. 28 processor guidance",
+        "international transfers and TIAs",
+        "breach notification guidelines",
+        "DPIA criteria",
+        "AI and data protection"
+      ],
+      "use_for": "Authoritative interpretation of the GDPR for processor contracts, transfers, DPIAs and breach notification.",
+      "citation": "EDPB Guidelines <n>/<year>, version, adoption date, paragraph, URL.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "quarterly and on any transfer question"
+    },
+    {
+      "id": "enisa",
+      "name": "ENISA - EU Agency for Cybersecurity",
+      "authority": "ENISA",
+      "domains": [
+        "enisa.europa.eu"
+      ],
+      "covers": [
+        "NIS2 technical implementation guidance",
+        "threat landscape reports",
+        "EU cybersecurity certification (EUCS/EUCC)",
+        "supply chain good practice"
+      ],
+      "use_for": "Technical measures and threat context behind NIS2 Art. 21, and the state of EU certification schemes a supplier may claim.",
+      "citation": "ENISA, report title, version, publication date, URL, retrieved date.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "quarterly"
+    },
+    {
+      "id": "eu-cert",
+      "name": "CERT-EU and national CSIRTs",
+      "authority": "CERT-EU and Member State CSIRTs",
+      "domains": [
+        "cert.europa.eu",
+        "ncsc.gov.uk",
+        "cert.pt",
+        "cert.ssi.gouv.fr",
+        "ncsc.nl",
+        "bsi.bund.de"
+      ],
+      "covers": [
+        "security advisories",
+        "exploitation and campaign reporting",
+        "hardening guidance"
+      ],
+      "use_for": "European advisory context for a supplier incident or a vulnerability affecting a service Euronext consumes.",
+      "citation": "Issuing CSIRT, advisory reference, date, URL, retrieved date.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "on incident and on advisory"
+    },
+    {
+      "id": "iso",
+      "name": "ISO / IEC",
+      "authority": "International Organization for Standardization",
+      "domains": [
+        "iso.org",
+        "iec.ch"
+      ],
+      "covers": [
+        "ISO/IEC 27001:2022",
+        "27002:2022",
+        "27005:2022",
+        "27017",
+        "27018",
+        "22301",
+        "20000-1",
+        "42001:2023",
+        "31000"
+      ],
+      "use_for": "Scope, edition, publication date, clause and control NUMBERING of record - and whether an amendment (e.g. 27001:2022/Amd 1:2024) applies.",
+      "citation": "ISO/IEC <number>:<year>[/Amd], clause or control id, edition date. Standard TEXT is licensed - quote only what Euronext's licensed copy permits and cite the clause, never paste the standard.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "annually and on a known revision",
+      "_comment": "THIRD_PARTY_IP.md governs reproduction: the platform reasons from clause numbers and Euronext's licensed copies, never from a pirated full text."
+    },
+    {
+      "id": "nist",
+      "name": "NIST",
+      "authority": "National Institute of Standards and Technology",
+      "domains": [
+        "nist.gov",
+        "csrc.nist.gov",
+        "nvlpubs.nist.gov"
+      ],
+      "covers": [
+        "Cybersecurity Framework 2.0",
+        "SP 800-53 Rev. 5",
+        "SP 800-161 (C-SCRM)",
+        "SP 800-171",
+        "AI RMF 1.0"
+      ],
+      "use_for": "Control catalogues and framework functions/categories, free to quote, used for mapping and for controls language.",
+      "citation": "NIST, publication id and revision, section or control id, publication date, URL.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "annually"
+    },
+    {
+      "id": "cis",
+      "name": "Center for Internet Security",
+      "authority": "CIS",
+      "domains": [
+        "cisecurity.org"
+      ],
+      "covers": [
+        "CIS Controls v8.1 and safeguards",
+        "CIS Benchmarks"
+      ],
+      "use_for": "Safeguard-level control detail and implementation groups, and benchmark hardening expectations for a platform a supplier runs.",
+      "citation": "CIS Controls v8.1, control and safeguard number, IG level, version date.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "annually"
+    },
+    {
+      "id": "csa",
+      "name": "Cloud Security Alliance",
+      "authority": "CSA",
+      "domains": [
+        "cloudsecurityalliance.org"
+      ],
+      "covers": [
+        "Cloud Controls Matrix (CCM)",
+        "CAIQ",
+        "STAR registry"
+      ],
+      "use_for": "Cloud control mapping and the STAR registry entry (level, scope, date) a supplier's CAIQ claim must match.",
+      "citation": "CSA CCM version, control id; STAR registry entry with level and date.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "on evidence review"
+    },
+    {
+      "id": "owasp-ptes",
+      "name": "OWASP / PTES / FIRST CVSS",
+      "authority": "OWASP Foundation, PTES, FIRST",
+      "domains": [
+        "owasp.org",
+        "pentest-standard.org",
+        "first.org"
+      ],
+      "covers": [
+        "OWASP Top 10 and ASVS",
+        "testing guide",
+        "PTES methodology",
+        "CVSS v3.1 and v4.0 specifications"
+      ],
+      "use_for": "Methodology adequacy of a penetration test, and the CVSS calculation of record when a tester's score has to be checked.",
+      "citation": "Standard, version, section; for CVSS the full vector string and version.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "on each pentest review"
+    },
+    {
+      "id": "pci",
+      "name": "PCI Security Standards Council",
+      "authority": "PCI SSC",
+      "domains": [
+        "pcisecuritystandards.org"
+      ],
+      "covers": [
+        "PCI DSS v4.0.1",
+        "TPSP responsibilities",
+        "AoC/ROC semantics"
+      ],
+      "use_for": "What a supplier's AoC actually attests, and the v4 requirements that fall on a third-party service provider.",
+      "citation": "PCI DSS version, requirement number, document date.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "on payment-related assessments"
+    },
+    {
+      "id": "aicpa",
+      "name": "AICPA",
+      "authority": "American Institute of Certified Public Accountants",
+      "domains": [
+        "aicpa.org",
+        "aicpa-cima.com"
+      ],
+      "covers": [
+        "SOC 1/2/3 and SSAE 18",
+        "Trust Services Criteria",
+        "bridge letters"
+      ],
+      "use_for": "What a SOC report type can and cannot support, and the TSC in scope.",
+      "citation": "AICPA TSC year, criterion id; SSAE/ISAE standard number.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "on each SOC review"
+    },
+    {
+      "id": "iaasb",
+      "name": "IAASB",
+      "authority": "International Auditing and Assurance Standards Board",
+      "domains": [
+        "iaasb.org",
+        "ifac.org"
+      ],
+      "covers": [
+        "ISAE 3402",
+        "ISAE 3000 (Revised)"
+      ],
+      "use_for": "The European equivalent assurance standards a supplier's report is issued under, and what the opinion covers.",
+      "citation": "ISAE standard number and paragraph, issue date.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "on each assurance report review"
+    },
+    {
+      "id": "iaf-certsearch",
+      "name": "IAF CertSearch",
+      "authority": "International Accreditation Forum",
+      "domains": [
+        "iafcertsearch.org"
+      ],
+      "covers": [
+        "validity of an ISO certificate",
+        "accredited certification body",
+        "certificate scope and expiry"
+      ],
+      "use_for": "Independent confirmation that a certificate a supplier presented is real, accredited, in force and scoped to the service.",
+      "citation": "IAF CertSearch entry, certificate number, certification body, scope, valid-to date, retrieval date.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "on every certificate accepted as evidence",
+      "_comment": "A certificate PDF is a claim; the registry entry is the verification."
+    },
+    {
+      "id": "national-accreditation",
+      "name": "National accreditation bodies (EA members)",
+      "authority": "European co-operation for Accreditation members",
+      "domains": [
+        "european-accreditation.org",
+        "ipac.pt",
+        "cofrac.fr",
+        "rva.nl",
+        "dakks.de",
+        "ukas.com"
+      ],
+      "covers": [
+        "accreditation status of a certification body"
+      ],
+      "use_for": "Whether the body that issued a certificate is itself accredited for that scheme - the step most evidence reviews skip.",
+      "citation": "Accreditation body, certificate body reference, scheme, status, date.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "when a certification body is unfamiliar"
+    },
+    {
+      "id": "company-registries",
+      "name": "Official company registers",
+      "authority": "National registries and the EU Business Registers portal",
+      "domains": [
+        "e-justice.europa.eu",
+        "sec.gov",
+        "companieshouse.gov.uk",
+        "gleif.org"
+      ],
+      "covers": [
+        "legal entity identity",
+        "LEI",
+        "parent/subsidiary structure",
+        "filings"
+      ],
+      "use_for": "The legal entity behind the trading name, its LEI for the DORA Register of Information, and its group structure for concentration analysis.",
+      "citation": "Register, entity name, registration number or LEI, retrieval date.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "on intake and on register build"
+    },
+    {
+      "id": "nvd",
+      "name": "NIST National Vulnerability Database",
+      "authority": "NIST",
+      "domains": [
+        "nvd.nist.gov",
+        "services.nvd.nist.gov"
+      ],
+      "covers": [
+        "CVE record",
+        "CVSS v3.1/v4.0 vectors",
+        "CWE",
+        "CPE configurations"
+      ],
+      "use_for": "The published severity of record for any CVE named in a pentest, vulnerability report or supplier advisory.",
+      "citation": "CVE id, CVSS vector and version, NVD lastModified date.",
+      "access": "api:nvd-cve",
+      "tier": 1,
+      "refresh": "on every CVE cited"
+    },
+    {
+      "id": "cve-org",
+      "name": "CVE Program (MITRE)",
+      "authority": "MITRE / CVE Program",
+      "domains": [
+        "cve.org",
+        "cveproject.github.io"
+      ],
+      "covers": [
+        "CVE record authority",
+        "CNA assignments",
+        "rejected/disputed records"
+      ],
+      "use_for": "The record itself when NVD enrichment lags, and the CNA's own statement.",
+      "citation": "CVE id, CNA, record version and date.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "when NVD has no enrichment yet"
+    },
+    {
+      "id": "cisa-kev",
+      "name": "CISA Known Exploited Vulnerabilities catalogue",
+      "authority": "CISA",
+      "domains": [
+        "cisa.gov",
+        "www.cisa.gov"
+      ],
+      "covers": [
+        "confirmed in-the-wild exploitation",
+        "remediation due dates",
+        "ransomware campaign use"
+      ],
+      "use_for": "The citable fact that changes priority: this vulnerability is being exploited now.",
+      "citation": "CISA KEV, CVE id, dateAdded, dueDate, catalogue version read.",
+      "access": "api:cisa-kev",
+      "tier": 1,
+      "refresh": "on every vulnerability prioritisation"
+    },
+    {
+      "id": "first-epss",
+      "name": "FIRST EPSS",
+      "authority": "FIRST",
+      "domains": [
+        "api.first.org",
+        "first.org"
+      ],
+      "covers": [
+        "exploitation probability",
+        "percentile"
+      ],
+      "use_for": "Likelihood of exploitation in the next 30 days, to order remediation sensibly alongside CVSS and KEV.",
+      "citation": "EPSS score and percentile WITH the date read (scores move daily).",
+      "access": "api:first-epss",
+      "tier": 2,
+      "refresh": "on prioritisation runs"
+    },
+    {
+      "id": "mitre-attack",
+      "name": "MITRE ATT&CK and D3FEND",
+      "authority": "MITRE",
+      "domains": [
+        "attack.mitre.org",
+        "d3fend.mitre.org"
+      ],
+      "covers": [
+        "adversary techniques",
+        "mitigations",
+        "defensive mappings"
+      ],
+      "use_for": "Technique-level language for incident analysis and for describing what a control actually stops.",
+      "citation": "ATT&CK technique id and name, matrix version.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "on incident analysis"
+    },
+    {
+      "id": "vendor-advisories",
+      "name": "Supplier and platform security advisories",
+      "authority": "the supplier / platform vendor",
+      "domains": [
+        "*.supplier-domain (passed per call)",
+        "msrc.microsoft.com",
+        "cloud.google.com",
+        "aws.amazon.com"
+      ],
+      "covers": [
+        "the supplier's own statement",
+        "affected versions",
+        "fixes",
+        "status pages"
+      ],
+      "use_for": "What the supplier says about its own incident or vulnerability - the primary source for a supplier incident assessment.",
+      "citation": "Vendor, advisory id, version, publication and last-update timestamps.",
+      "access": "page:osint-proxy",
+      "tier": 1,
+      "refresh": "on incident and on evidence review",
+      "_comment": "The supplier domain is allow-listed per call (supplierDomain parameter), not kept in the standing list."
+    },
+    {
+      "id": "transparency",
+      "name": "Supplier trust centres and sub-processor lists",
+      "authority": "the supplier",
+      "domains": [
+        "*.supplier-domain (passed per call)"
+      ],
+      "covers": [
+        "certifications claimed",
+        "sub-processors",
+        "data locations",
+        "DPA and SCC terms",
+        "status history"
+      ],
+      "use_for": "The fourth-party chain and the data-location claims that the concentration analysis and the Register of Information depend on.",
+      "citation": "Page title, URL, retrieved date, and the version/effective date the page itself states.",
+      "access": "page:osint-proxy",
+      "tier": 2,
+      "refresh": "on intake, on register build, on concentration"
+    },
+    {
+      "id": "securityscorecard",
+      "name": "SecurityScorecard",
+      "authority": "SecurityScorecard (contracted)",
+      "domains": [
+        "securityscorecard.com",
+        "api.securityscorecard.io"
+      ],
+      "covers": [
+        "external security rating",
+        "issue findings by factor",
+        "rating history"
+      ],
+      "use_for": "External posture signal and rating drift for the monitoring radar.",
+      "citation": "Provider, score and factor, observation date.",
+      "access": "api:securityscorecard",
+      "tier": 3,
+      "refresh": "continuous (radar)",
+      "_comment": "Tier 3: a commercial signal, never a finding on its own - it points at something to verify, it does not evidence it."
+    },
+    {
+      "id": "ssl-observatories",
+      "name": "Public TLS / certificate observatories",
+      "authority": "Qualys SSL Labs, crt.sh, Mozilla",
+      "domains": [
+        "ssllabs.com",
+        "crt.sh",
+        "securityheaders.com",
+        "observatory.mozilla.org"
+      ],
+      "covers": [
+        "TLS configuration",
+        "certificate transparency",
+        "security headers"
+      ],
+      "use_for": "Passive, public confirmation of a supplier's externally observable configuration - no scanning, no probing.",
+      "citation": "Tool, target host, observation timestamp.",
+      "access": "page:osint-proxy",
+      "tier": 3,
+      "refresh": "on DeepSearch stream 2D",
+      "_comment": "Passive observation only: ActiveScanningAllowed is No on this platform."
+    }
+  ]
+}

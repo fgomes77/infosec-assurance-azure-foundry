@@ -1,0 +1,120 @@
+{
+  "_comment": "Monthly retention REMINDER for the durable team memory and the Foundry housekeeping run (delta D-RC-W1; governance/MEMORY_POLICY.md section 3, operations/RETENTION_AND_CLEANUP.md section 4, RUNBOOK.md M5). This workflow deliberately performs NO deletion and calls NO script: it posts the section 4 checklist to the platform Teams channel and opens the monthly ticket, so the owner runs the rehearsal, reviews the read-only listing and approves the apply step under their own identity. A memory purge requires a named human approver (cleanup_foundry.py --memory --apply --approved-by <upn>), which an unattended workflow cannot hold - so wiring --apply in here would defeat the control it is meant to serve. The Logic App identity needs nothing beyond the Teams webhook and the ticket connection; it holds no Foundry data-plane role.",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "teamsWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "@appsetting('TEAMS_WEBHOOK_URL')",
+        "_comment": "Channel {teams:infosec-assurance-platform}. Key Vault reference resolved by the Logic App managed identity (infra/logicapp.bicep)."
+      },
+      "ownerUpn": {
+        "type": "string",
+        "defaultValue": "{upn:francisco.gomes}",
+        "_comment": "Accountable owner; the only principal who may pass --approved-by on a memory purge (team/TEAM_MODEL.md)."
+      },
+      "ticketWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "@appsetting('JIRA_TICKET_WEBHOOK_URL')",
+        "_comment": "Opens the monthly ISMS housekeeping ticket. Leave the app setting empty to skip the ticket step - the reminder still posts."
+      },
+      "retentionDocPath": {
+        "type": "string",
+        "defaultValue": "operations/RETENTION_AND_CLEANUP.md#4-procedure--monthly-owner-20-min"
+      }
+    },
+    "triggers": {
+      "Monthly_retention_window": {
+        "type": "Recurrence",
+        "inputs": {
+          "frequency": "Month",
+          "interval": 1,
+          "timeZone": "UTC",
+          "schedule": {
+            "monthDays": [
+              2
+            ],
+            "hours": [
+              7
+            ],
+            "minutes": [
+              0
+            ]
+          },
+          "_comment": "Second of the month, after the monthly evaluation review (RUNBOOK M1) has produced its evidence note."
+        }
+      }
+    },
+    "actions": {
+      "Post_checklist_to_Teams": {
+        "_comment": "Notification only - no approval gate, no submission of record (governance/HUMAN_APPROVAL.md).",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@parameters('teamsWebhookUrl')",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "text": "🗂 Monthly retention and cleanup run (@{formatDateTime(utcNow(),'yyyy-MM')}) — owner @{parameters('ownerUpn')}\n\nProcedure: @{parameters('retentionDocPath')} (calendar entry RUNBOOK.md M5). Nothing has been deleted by this message.\n\n1. Offline rehearsal — `python3 scripts/cleanup_foundry.py --dry-run` (no Azure session needed): confirms the horizons read from setup/.env match MEMORY_POLICY.md §3.\n2. Read-only listing — `python3 scripts/cleanup_foundry.py --all`. File the console output as Governance/Operations/@{formatDateTime(utcNow(),'yyyy')}-@{formatDateTime(utcNow(),'MM')}/retention-run.md.\n3. Review the candidate list. Confirm vs-assurance-memory and vs-assurance-combined are NOT in it (check C2).\n4. Approve, then `--apply`.\n5. Expired team notes additionally need `--memory --apply --approved-by \"@{parameters('ownerUpn')}\"` — a named human approver, which is why this workflow never runs the apply step itself.\n\nA quiet month still produces the evidence note."
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        }
+      },
+      "Ticket_configured": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "not": {
+                "equals": [
+                  "@parameters('ticketWebhookUrl')",
+                  ""
+                ]
+              }
+            }
+          ]
+        },
+        "actions": {
+          "Open_housekeeping_ticket": {
+            "_comment": "Opens the tracking ticket only. The ticket body repeats the checklist; it grants no approval and triggers no deletion.",
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('ticketWebhookUrl')",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "summary": "ISMS monthly: retention and cleanup run @{formatDateTime(utcNow(),'yyyy-MM')}",
+                "assignee": "@parameters('ownerUpn')",
+                "description": "Run @{parameters('retentionDocPath')} (RUNBOOK.md M5). Attach the --dry-run rehearsal and the read-only --all listing as evidence before any --apply. A --memory purge needs --approved-by.",
+                "labels": [
+                  "isms",
+                  "retention",
+                  "monthly"
+                ]
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT10S"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Post_checklist_to_Teams": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  }
+}

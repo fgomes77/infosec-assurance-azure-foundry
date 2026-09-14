@@ -1,0 +1,42 @@
+# Root gitleaks configuration — the path gitleaks discovers on its own.
+#
+# The rules and the allow-list of documented placeholders live in ONE place,
+# `.github/gitleaks.toml`, next to the workflow that runs them. This file
+# exists so that the *default* invocation finds them too:
+#
+#   gitleaks detect --no-git --source .        # no --config: reads this file
+#   pre-commit run gitleaks --all-files        # the hook passes no --config
+#   gitleaks protect --staged                  # the local pre-commit path
+#
+# Without it, anyone scanning without `--config .github/gitleaks.toml` would
+# silently run gitleaks' bare defaults — every documented `{placeholder}`,
+# `<tenant>` and public Azure role-definition GUID in the kit would be a
+# finding, the scan would be red for the wrong reason, and the habit of
+# ignoring it would start. One indirection is cheaper than two copies of an
+# allow-list drifting apart.
+#
+# Mechanics worth knowing before editing:
+#   * `extend.path` is resolved relative to the WORKING DIRECTORY, not to this
+#     file. Every documented invocation runs from the repository root (CI,
+#     pre-commit and the dev container all do), so the relative path holds.
+#   * gitleaks allows an extend chain of depth 2 and refuses `useDefault` and
+#     `path` in the same file. The chain here is exactly two links:
+#     `.gitleaks.toml` → `.github/gitleaks.toml` → gitleaks' default rules
+#     (the `[extend] useDefault = true` at the far end). Do not add a third.
+#   * Therefore: add rules and allow-list entries in `.github/gitleaks.toml`.
+#     Nothing but the extend belongs here.
+#
+# Widening an allow-list to silence a finding is forbidden — remove the value,
+# rotate it, and open the incident (convertion/operations/RUNBOOK.md).
+# See convertion/ci/README.md §3.
+
+title = "infosec-assurance-azure-foundry (root — extends .github/gitleaks.toml)"
+
+[extend]
+path = ".github/gitleaks.toml"
+
+[allowlist]
+description = "This file's own example invocations and placeholder syntax"
+paths = [
+  '''^\.gitleaks\.toml$''',
+]

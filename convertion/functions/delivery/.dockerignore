@@ -1,0 +1,11 @@
+# The image ships only what the Functions host runs. renderers-src/ is the
+# SOURCE of the renderers — scripts/stage_renderers.py copies the verified
+# ones into renderers/ before `az acr build`, so shipping the sources too
+# would put unstaged renderer code in the production image for nothing.
+renderers-src/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+local.settings.json

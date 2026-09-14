@@ -1,0 +1,9 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}"],
+  "formats": ["pptx"],
+  "outputs": "single",
+  "schema": "pptx_generic.schema.json",
+  "source": "adapter for claude-account-export/skills/pptx (python-pptx create path); house style per agents/document_agents_addendum.md"
+}

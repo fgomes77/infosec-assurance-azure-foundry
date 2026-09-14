@@ -1,0 +1,16 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": [
+    "{data}",
+    "{out}",
+    "{input}"
+  ],
+  "formats": [
+    "xlsx"
+  ],
+  "outputs": "single",
+  "input": "the user's original OneTrust Form B round-trip export xlsx (render body: inputFileId | inputDriveId+inputItemId | inputContentBase64)",
+  "source": "wrapper around the byte-verified claude-account-export/skills/onetrust-form-b/scripts/fill_form_b.py (staged as onetrust-form-b-scripts.zip). Fails on any VALIDATION WARNING / unmatched id. OneTrust write-back stays manual in the OT UI (read-only enterprise access).",
+  "schema_note": "No JSON Schema and no templates/registry.json entry, deliberately: form-b-fill is not a deliverable template. It writes approved answers back into the user's own OneTrust round-trip export, is reached only by the Form B pipeline (never by renderTemplate), and its payload shape is the question-id/answer map that fill_form_b.py already validates against the workbook itself — a second schema here would duplicate that check and could drift from it. The manifest previously named form_b_answers.schema.json, which never existed, so nothing validated anything."
+}

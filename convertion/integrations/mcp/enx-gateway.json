@@ -1,14 +1,25 @@
 {
-  "_comment": "ENX Gateway MCP — template for attaching the Euronext internal gateway MCP server as a tool on an Azure AI Foundry agent. Fill server_url with the tenant's gateway MCP endpoint and replace allowed_tools with the actual tool names from the gateway's own tool listing (query the server's tools/list, then allowlist ONLY the tools the agent needs — least privilege). The bearer token must be stored in Azure Key Vault and injected at deploy time (e.g. by create_agents.py reading a Key Vault secret via managed identity, or an azd/pipeline variable) — NEVER commit a real token to this repository. Placeholders in {braces} are tenant-specific values.",
+  "_comment": "ENX Gateway MCP - template for attaching the Euronext internal gateway MCP server to a Foundry agent. Fill server_url and the allow-list with the tenant's values. READ-ONLY CHARTER (governance/HUMAN_APPROVAL.md Layer 1, DATA_PROTECTION_GUARDRAILS section 2): allowed_tools MUST contain ONLY read tools - attach_integrations.py calls the gateway's tools/list before attaching and refuses any tool whose annotations lack readOnlyHint=true unless the connection is named in that agent's write_connections (no agent has any). Placeholders in {braces} are tenant-specific values. HARDENING (finding C10): (1) allowed_tools is a closed allow-list - anything the gateway exposes that is not listed is unreachable by the agent, and the list is re-verified at every attach; (2) require_approval is the object form below, so approval is waived ONLY for the named read tools and is REQUIRED for everything else the server may expose now or later; (3) authentication moved from run-time bearer headers to the Foundry project connection 'conn-enx-gateway' (project_connection) - the token stays in Key Vault behind the connection and never travels through a workflow body or this repo. Doc: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol (GA, 2026-08-26).",
   "type": "mcp",
   "server_label": "enx_gateway",
   "server_url": "https://{enx-gateway-host}/mcp",
   "allowed_tools": [
-    "{tool-name-1, e.g. search_supplier_register}",
-    "{tool-name-2, e.g. get_assessment_status}",
-    "{tool-name-3, e.g. submit_finding}"
+    "{read-tool-1, e.g. search_supplier_register}",
+    "{read-tool-2, e.g. get_assessment_status}",
+    "{read-tool-3, e.g. list_vulnerability_findings}"
   ],
-  "headers": {
-    "Authorization": "Bearer {token-from-key-vault}"
-  }
+  "require_approval": {
+    "never": {
+      "tool_names": [
+        "{read-tool-1, e.g. search_supplier_register}",
+        "{read-tool-2, e.g. get_assessment_status}",
+        "{read-tool-3, e.g. list_vulnerability_findings}"
+      ]
+    }
+  },
+  "_require_approval_contract": "The GA default is 'always'. The object form above is the hardened middle ground of record: no human approval for the named read-only tools (they are idempotent GET-equivalents, verified readOnlyHint=true at attach time, and an approval prompt on every advisory question would make the agents unusable), approval REQUIRED for any other tool - including one the gateway starts exposing after this file was written. never.tool_names MUST equal allowed_tools; attach_integrations.py fails the run if the two lists differ (shared delta) rather than silently widening the waiver. If the gateway ever exposes a WRITE tool to this project, list it under that agent's write_connections AND set require_approval to the string 'always' - the approval then lands in the same human gate as the workflows (kind MCP_WRITE in team/approval-policy.json).",
+  "project_connection": "conn-enx-gateway",
+  "_project_connection_contract": "Finding C10 / enterprise IMPLEMENTATION_SERIES D9: the MCP server authenticates through a Foundry project connection instead of run-time headers. attach_integrations.py resolves the NAME above to the connection resource id (client.connections.get(name).id, the same resolution it already does for OpenAPI connections) and emits it as the tool's connection/auth field; the bearer itself is stored in the connection by integrations/connections/connections.bicep / create_connections.sh from Key Vault secret {kv-secret-name-enx-gateway-token}. Callers (Logic Apps HTTP bodies, mcp-server/server.py, smoke_test.py) therefore no longer pass tool_resources.mcp[].headers - drop _azure_helpers.mcp_run_headers() from the run payload once the connection exists. Never commit a real token.",
+  "_agent_identity": "Finding C7: the caller is the agent's own identity, not a shared gateway secret held by a script. The project's agent identity / each published agent's Entra Agent ID is registered in team/ACCESS_REGISTER.md, the gateway authorises that principal (AgenticIdentityToken where the gateway supports it, otherwise the connection credential scoped to the project), and the grant is re-applied after every publish and reviewed in operations/access-governance/QUARTERLY_ACCESS_REVIEW.md.",
+  "_verification": "python3 scripts/attach_integrations.py --dry-run --list-mcp-tools prints each allow-listed tool with its readOnlyHint, the require_approval waiver set and the resolved project connection; a tool without readOnlyHint=true, a waiver that is not equal to allowed_tools, or an unresolvable connection fails the run. Keys starting with '_' are documentation and are stripped before the tool definition is sent."
 }

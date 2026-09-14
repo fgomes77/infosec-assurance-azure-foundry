@@ -1,0 +1,10 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}"],
+  "formats": ["xlsx"],
+  "outputs": "single",
+  "schema": "xlsx_generic.schema.json",
+  "post": "office-tools /api/recalc must report total_errors=0 before release (verifier rule 9, XLSX checklist)",
+  "source": "adapter for claude-account-export/skills/xlsx (openpyxl create path); recalc.py is executed verbatim by functions/office-tools"
+}

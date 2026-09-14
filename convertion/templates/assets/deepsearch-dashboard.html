@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{REPORT_TITLE}} &mdash; {{SUPPLIER_NAME}}</title>
+<!--
+  TEMPLATE OF RECORD - templates/registry.json id "deepsearch-html-dashboard" (v17.02.11).
+  Consumers: deepsearch-protocol, ai-deepsearch-osint-gathering-report.
+  Extracted from the PHASE 4 design specification of
+  claude-account-export/skills/deepsearch-protocol/SKILL.md (the export itself is
+  byte-verified and untouched). The agent fills the {{PLACEHOLDERS}} only - it never
+  edits structure, ids, palette or script. Palette/typography come from
+  templates/enx-theme.json; a change to either is a template change
+  (operations/CHANGE_MANAGEMENT.md, scripts/update_templates.py).
+  PHASE 5 quality gate depends on these literals: the nine section ids below,
+  "chart.umd.min.js", "spiderChart", "downloadReport".
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0a1a1f; --surface:#0f2429; --raised:#123036;
+    --hdr-from:#003530; --hdr-to:#005048;
+    --primary:#008D7F; --secondary:#5ce0d2; --highlight:#00B5A3;
+    --text:#fff; --muted:#b9d4d0; --border:rgba(92,224,210,.25);
+    --th:#00463f; --alt:rgba(255,255,255,.03);
+    --critical:#d64545; --high:#e06c3c; --medium:#e0b23c; --low:#3cb371; --nf:#8fa3a1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:13px/1.45 Verdana,Geneva,'DejaVu Sans',sans-serif;padding:0 16px 48px}
+  .wrap{max-width:1800px;margin:0 auto}
+  header.top{background:linear-gradient(135deg,var(--hdr-from),var(--hdr-to));
+             border-radius:10px;padding:20px 24px;margin:16px 0}
+  header.top h1{margin:0 0 6px;font-size:20px;letter-spacing:.3px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 24px;color:var(--muted);font-size:12px}
+  .meta b{color:var(--text);font-weight:700}
+  .cols{display:flex;flex-wrap:wrap;gap:16px;align-items:stretch}
+  .left{flex:1 1 520px;min-width:0}
+  .right{flex:0 0 420px;max-width:100%}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .kpi{background:rgba(0,141,127,.14);border:1px solid var(--border);
+       border-radius:10px;padding:14px;backdrop-filter:blur(6px)}
+  .kpi .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .kpi .v{font-size:28px;font-weight:700;margin-top:4px}
+  .risk-critical{color:var(--critical)} .risk-high{color:var(--high)}
+  .risk-medium{color:var(--medium)} .risk-low{color:var(--low)} .risk-nf{color:var(--nf)}
+  nav.pills{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;
+            justify-content:center;background:var(--bg);padding:14px 0;margin-top:16px}
+  nav.pills button{background:var(--raised);color:var(--text);border:1px solid var(--border);
+            border-radius:999px;padding:9px 16px;font:inherit;font-size:12px;cursor:pointer}
+  nav.pills button[aria-expanded="true"]{background:var(--primary);border-color:var(--highlight)}
+  section.panel{margin-top:16px}
+  section.panel[hidden]{display:none!important}
+  .panel h2{margin:0 0 10px;font-size:16px;color:var(--secondary)}
+  .panel .close{float:right;background:transparent;border:1px solid var(--border);
+                color:var(--muted);border-radius:6px;cursor:pointer;font:inherit;padding:2px 9px}
+  .tbl{width:100%;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px;min-width:720px}
+  th,td{border:1px solid var(--border);padding:8px 10px;vertical-align:top;text-align:left}
+  th{background:var(--th);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  tbody tr:nth-child(even){background:var(--alt)}
+  a{color:var(--secondary)}
+  h3{font-size:13px;color:var(--secondary);margin:18px 0 6px}
+  footer{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+         margin-top:28px;padding-top:14px;border-top:1px solid var(--border);
+         color:var(--muted);font-size:11px}
+  #downloadReport{background:var(--primary);color:#fff;border:0;border-radius:8px;
+                  padding:10px 18px;font:inherit;cursor:pointer}
+  @media (max-width:900px){.right{flex:1 1 100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>{{REPORT_TITLE}}</h1>
+  <div class="meta">
+    <span><b>Supplier:</b> {{SUPPLIER_NAME}}</span>
+    <span><b>Service:</b> {{SERVICE_TYPE}}</span>
+    <span><b>Domain:</b> {{PRIMARY_DOMAIN}}</span>
+    <span><b>Assessed (UTC):</b> {{ASSESSMENT_DATE_UTC}}</span>
+    <span><b>Overall risk:</b> <span class="{{OVERALL_RISK_CLASS}}">{{OVERALL_RISK_GLYPH}} {{OVERALL_RISK_LEVEL}}</span></span>
+  </div>
+</header>
+
+<div class="cols">
+  <div class="left card">
+    <h2 style="margin:0 0 12px;font-size:16px;color:var(--secondary)">Overall risk assessment</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Risk level</div>
+        <div class="v {{OVERALL_RISK_CLASS}}">{{OVERALL_RISK_LEVEL}}</div></div>
+      <div class="kpi"><div class="k">Assessment result</div>
+        <div class="v">{{ASSESSMENT_RESULT}}</div></div>
+      <div class="kpi"><div class="k">DORA criticality</div>
+        <div class="v">{{DORA_CRITICALITY}}</div></div>
+      <div class="kpi"><div class="k">Overall confidence</div>
+        <div class="v">{{OVERALL_CONFIDENCE}}</div></div>
+    </div>
+    <h3>Evidence basis</h3>
+    <p style="margin:0;color:var(--muted)">{{EVIDENCE_BASIS_STATEMENT}}</p>
+  </div>
+
+  <div class="right card">
+    <h2 style="margin:0 0 12px;font-size:16px;color:var(--secondary)">Risk profile</h2>
+    <canvas id="spiderChart" height="330"
+      data-axis-labels="{{SPIDER_AXIS_LABELS}}"
+      data-scores="{{SPIDER_SCORES}}"></canvas>
+    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">
+      Axes scored 1&ndash;5 with justification in &sect;1. {{SPIDER_JUSTIFICATION_NOTE}}</p>
+  </div>
+</div>
+
+<nav class="pills" aria-label="Report sections">
+  <button data-target="risk"         aria-expanded="false">Risk</button>
+  <button data-target="corporate"    aria-expanded="false">Corporate</button>
+  <button data-target="security"     aria-expanded="false">Security Posture</button>
+  <button data-target="technical"    aria-expanded="false">Technical</button>
+  <button data-target="incidents"    aria-expanded="false">Incidents</button>
+  <button data-target="ai"           aria-expanded="false">AI Governance</button>
+  <button data-target="integrations" aria-expanded="false">Integrations</button>
+  <button data-target="controls"     aria-expanded="false">Controls</button>
+  <button data-target="confidence"   aria-expanded="false">Confidence</button>
+</nav>
+
+<section class="panel card" id="risk" hidden>
+  <button class="close" data-close="risk">&times;</button>
+  <h2>&sect;1 Executive summary &mdash; risks and mitigations</h2>
+  <h3>Top 5 risks impacting customers</h3>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes / mitigation</th>
+  </tr></thead><tbody>{{ROWS_TOP_RISKS}}</tbody></table></div>
+  <h3>Top 5 mitigations (supplier actions vs customer controls)</h3>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes / mitigation</th>
+  </tr></thead><tbody>{{ROWS_TOP_MITIGATIONS}}</tbody></table></div>
+  <h3>Known CVEs &amp; threat vectors (&sect;6)</h3>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes / mitigation</th>
+  </tr></thead><tbody>{{ROWS_VULNERABILITIES}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="corporate" hidden>
+  <button class="close" data-close="corporate">&times;</button>
+  <h2>&sect;2 Service identification &amp; &sect;3 Corporate metadata</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_CORPORATE}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="security" hidden>
+  <button class="close" data-close="security">&times;</button>
+  <h2>&sect;4 Security posture</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_SECURITY_POSTURE}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="technical" hidden>
+  <button class="close" data-close="technical">&times;</button>
+  <h2>&sect;5 Technical infrastructure</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_TECHNICAL}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="incidents" hidden>
+  <button class="close" data-close="incidents">&times;</button>
+  <h2>&sect;7 Incidents &amp; exposure (12&ndash;36 months)</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_INCIDENTS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="ai" hidden>
+  <button class="close" data-close="ai">&times;</button>
+  <h2>&sect;8 AI governance &amp; security</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_AI_GOVERNANCE}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="integrations" hidden>
+  <button class="close" data-close="integrations">&times;</button>
+  <h2>&sect;9 Integrations with other applications</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_INTEGRATIONS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="controls" hidden>
+  <button class="close" data-close="controls">&times;</button>
+  <h2>&sect;10 Controls validation</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Item</th><th>Finding</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_CONTROLS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="confidence" hidden>
+  <button class="close" data-close="confidence">&times;</button>
+  <h2>&sect;11 Confidence scoring (per section)</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Section</th><th>Confidence</th><th>Evidence</th><th>Rationale</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_CONFIDENCE}}</tbody></table></div>
+</section>
+
+<footer>
+  <button id="downloadReport" type="button">&#x2B07; Download Report</button>
+  <span>Generated {{GENERATED_TIMESTAMP_UTC}} &middot; Protocol {{PROTOCOL_VERSION}}</span>
+  <span>Euronext &mdash; Information Security Assurance &mdash; {{CLASSIFICATION}}</span>
+</footer>
+
+</div>
+<script>
+(function () {
+  "use strict";
+  var pills = Array.prototype.slice.call(document.querySelectorAll('nav.pills button'));
+
+  function collapseAll() {
+    pills.forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    Array.prototype.forEach.call(document.querySelectorAll('section.panel'),
+      function (s) { s.hidden = true; });
+  }
+  function open(id) {
+    var panel = document.getElementById(id);
+    if (!panel) { return; }
+    var wasOpen = !panel.hidden;
+    collapseAll();
+    if (wasOpen) { return; }                     /* same button closes it */
+    panel.hidden = false;
+    pills.forEach(function (b) {
+      if (b.getAttribute('data-target') === id) { b.setAttribute('aria-expanded', 'true'); }
+    });
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  pills.forEach(function (b) {
+    b.addEventListener('click', function () { open(b.getAttribute('data-target')); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function (b) {
+    b.addEventListener('click', collapseAll);
+  });
+
+  /* Spider graph - scores come from data-* attributes, never inline JS
+     (PHASE 4B rule 2 of the DeepSearch protocol). */
+  var canvas = document.getElementById('spiderChart');
+  if (canvas && window.Chart) {
+    var labels = (canvas.getAttribute('data-axis-labels') || '').split('|');
+    var scores = (canvas.getAttribute('data-scores') || '').split('|').map(Number);
+    if (labels.length && scores.length === labels.length && !scores.some(isNaN)) {
+      new Chart(canvas.getContext('2d'), {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Risk score (1 low - 5 high)',
+            data: scores,
+            borderColor: '#5ce0d2',
+            backgroundColor: 'rgba(0,141,127,.35)',
+            pointBackgroundColor: '#00B5A3'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#fff', font: { size: 11 } } } },
+          scales: {
+            r: {
+              min: 1, max: 5, ticks: { stepSize: 1, color: '#b9d4d0', backdropColor: 'transparent' },
+              grid: { color: 'rgba(92,224,210,.25)' },
+              angleLines: { color: 'rgba(92,224,210,.25)' },
+              pointLabels: { color: '#fff', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  /* Self-contained download of this report. */
+  var dl = document.getElementById('downloadReport');
+  if (dl) {
+    dl.addEventListener('click', function () {
+      var blob = new Blob(['<!doctype html>\n' + document.documentElement.outerHTML],
+                          { type: 'text/html;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'TPSRCA_{{SUPPLIER_SLUG}}_v17_02_11.html';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(a.href);
+    });
+  }
+}());
+</script>
+</body>
+</html>

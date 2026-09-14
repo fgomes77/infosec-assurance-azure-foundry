@@ -1,0 +1,39 @@
+// ---------------------------------------------------------------------------
+// approval-sla.kql — human approval gates waiting beyond SLA or expired
+// Control: governance/HUMAN_APPROVAL.md Layer 3 (HttpWebhook gate, P3D expiry);
+//          team/TEAM_MODEL.md §12 (Tier B fallback after 2 business days);
+//          SUPPORT_MODEL.md SLO "approval decision <= 2 business days";
+//          EU AI Act Art. 14 (oversight is exercised, not just configured);
+//          ISO 27001:2022 A.5.36; DORA Art. 9(4)(e).
+// Scope:   Log Analytics workspace — LogicAppWorkflowRuntime. Every pipeline in
+//          workflows/ names its gate `Human_approval_gate` (report-delivery-pipeline,
+//          template-update-approval) or `Wait_for_approval_<subject>` (the four
+//          routine workflows), so one pattern covers all.
+// Signal:  gate started (workflowActionStarted) with no completion within slaHours
+//          (= pending, SLA breached), or completed with Status TimedOut (= expired ->
+//          the item never submitted; the requester must re-run — RUNBOOK FM-10).
+// Alert:   rows > 0, evaluated hourly over 7 d (alerts.bicep rule `approval-sla`,
+//          severity 3). The decision record itself lives in the SharePoint list
+//          {list:ApprovalDecisions} (team/approval-policy.json `record`), not here.
+// ---------------------------------------------------------------------------
+let lookback = 7d;
+let slaHours = 48;                     // 2 business days approximated; weekends reviewed manually
+let gates = LogicAppWorkflowRuntime
+| where TimeGenerated > ago(lookback)
+| where ActionName == "Human_approval_gate" or ActionName startswith "Wait_for_approval_";
+let started = gates
+| where OperationName =~ "Microsoft.Logic/workflows/workflowActionStarted"
+| project WorkflowName, RunId, ActionName, StartedAt = TimeGenerated;
+let completed = gates
+| where OperationName =~ "Microsoft.Logic/workflows/workflowActionCompleted"
+| project RunId, ActionName, EndedAt = TimeGenerated, Status;
+started
+| join kind=leftouter completed on RunId, ActionName
+| extend waitedHours = datetime_diff('hour', coalesce(EndedAt, now()), StartedAt)
+| extend state = case(isempty(Status), "pending",
+                      Status =~ "TimedOut", "expired",
+                      Status =~ "Succeeded", "decided",
+                      Status)
+| where (state == "pending" and waitedHours > slaHours) or state == "expired"
+| project WorkflowName, RunId, ActionName, StartedAt, state, waitedHours
+| order by waitedHours desc

@@ -1,0 +1,96 @@
+{
+  "_comment": "Approval routing of record (team/TEAM_MODEL.md §12; tiers A/B/C, requester exclusion, owner SoD). Consumed by the approval flow behind the workflows' approvalWebhookUrl (Power Automate or Function). The flow MUST: (1) resolve the tier from 'kind' in the subscribe body — for REPORT_DELIVERY from 'reportType' via tier_by_reportType; (2) verify the approver's token UPN is a member of every group in 'approver_groups' (Graph checkMemberGroups); (3) reject when approver == requestedBy (requestedBy is a token claim set by the workflow — delta D-W1/D-W2 — never body text); (4) apply the tier's fallback / requester_is_owner_fallback rule and stamp its ruleId; (5) persist the 'record.fields' before POSTing {decision, approver} to callbackUrl. Group names are Entra ID security groups (team/TEAM_MODEL.md §6); ids and UPNs are placeholders.",
+  "principals": {
+    "owner": "{upn:francisco.gomes}",
+    "deputy": "{upn:deputy-approver}",
+    "line_manager": "{upn:line-manager}"
+  },
+  "groups": {
+    "report_approvers": { "name": "sg-infosec-foundry-report-approvers", "object_id": "{objectId:sg-infosec-foundry-report-approvers}" },
+    "senior_approvers": { "name": "sg-infosec-foundry-senior-approvers", "object_id": "{objectId:sg-infosec-foundry-senior-approvers}" },
+    "owner": { "name": "sg-infosec-foundry-owner", "object_id": "{objectId:sg-infosec-foundry-owner}" }
+  },
+  "tiers": {
+    "A": {
+      "label": "peer four-eyes",
+      "approver_groups": ["report_approvers"],
+      "self_approval": false,
+      "min_approvals": 1,
+      "gate_timeout": "P3D",
+      "scheduled_runs": { "approver_groups": ["report_approvers"], "ruleId": "tierA-scheduled-any-report-approver" },
+      "fallback": null
+    },
+    "B": {
+      "label": "senior four-eyes (owner or deputy)",
+      "approver_groups": ["senior_approvers"],
+      "self_approval": false,
+      "min_approvals": 1,
+      "gate_timeout": "P3D",
+      "fallback": {
+        "after_business_days": 2,
+        "approver_groups": ["report_approvers"],
+        "exclude": ["requestedBy"],
+        "notify": ["{upn:francisco.gomes}"],
+        "ruleId": "tierB-fallback-peer-after-2bd",
+        "log_as": "TIER_B_FALLBACK_EXCEPTION"
+      }
+    },
+    "C": {
+      "label": "owner-only change approval",
+      "approver_groups": ["owner"],
+      "self_approval": false,
+      "requester_is_owner_fallback": {
+        "approver_groups": ["senior_approvers"],
+        "exclude": ["requestedBy"],
+        "ruleId": "tierC-owner-item-deputy-approves",
+        "note": "TEMPLATE_UPDATE: deputy approves after the visual-diff review; PLATFORM_CHANGE: deputy is the required CODEOWNERS reviewer, the owner merges and approves the production environment as accountable; MEMORY_DELETE: deputy approves when the owner is the note author"
+      },
+      "min_approvals": 1,
+      "gate_timeout": "P7D",
+      "fallback": null
+    }
+  },
+  "kinds": {
+    "REPORT_DELIVERY": {
+      "tier_by_reportType": {
+        "DeepSearch": "A",
+        "AIDeepSearch": "A",
+        "EvidenceAnalysis": "A",
+        "SOCSummary": "A",
+        "PentestSummary": "A",
+        "ThreatIntelBrief": "A",
+        "Transcript": "A",
+        "Advisory": "A",
+        "InfoSecTPA-DPO": "B",
+        "CyberForum": "B",
+        "CISOGlobal": "B",
+        "CISOExecSummary": "B",
+
+      "IntakeTriage": "A",
+      "ContractReview": "B",
+      "DORARegister": "B",
+      "ConcentrationRisk": "B",
+      "MonitoringRadar": "A",
+      "IncidentAssessment": "B",
+      "ExitAssurance": "B",
+      "RemediationRegister": "A",
+      "ISMSAuditPack": "B",
+      "RegChangeWatch": "A"
+      },
+      "unknown_reportType": "B",
+      "pipelines": ["deepsearch-report", "ai-deepsearch-report", "scheduled-deepsearch", "tpa-evidence-analysis", "soc-report-summary", "pentest-report-summary", "cyber-forum-brief", "transcript-summary", "advisory-file-delivery", "dpia-dpo-report", "onetrust-assessment-intake", "cyber-forum-pptx", "ciso-global-pptx", "ciso-exec-summary", "supplier-intake-triage", "contract-security-review", "dora-register-of-information", "concentration-risk-analysis", "continuous-monitoring-radar", "supplier-incident-assessment", "exit-offboarding-assurance", "findings-remediation-register", "isms-audit-pack", "regulatory-change-watch"]
+    },
+    "JIRA_CREATE":     { "tier": "A", "requirement": "-", "pipelines": ["defender-incident-brief", "scheduled-deepsearch"] },
+    "IAF_SUBMIT":      { "tier": "A", "requirement": "-", "pipelines": ["jira-finding-sync"] },
+    "TEAMS_POST":      { "tier": "A", "requirement": "-", "pipelines": ["teams-post-approved"] },
+    "TEMPLATE_UPDATE": { "tier": "C", "requirement": "j", "pipelines": ["template-update-approval"] },
+    "PLATFORM_CHANGE": { "tier": "C", "requirement": "-", "pipelines": ["github:production-environment"] },
+    "MEMORY_DELETE":   { "tier": "C", "requirement": "-", "pipelines": ["scripts/memory_store.py delete"] }
+  },
+  "record": {
+    "store": "SharePoint list {list:ApprovalDecisions} on the InfoSec Assurance site (site members: Read; the approval flow's connection: write); filed under Governance/Approvals/",
+    "fields": ["kind", "reportType", "tier", "ruleId", "correlationId", "requestedBy", "approver", "approverObjectId", "reviewedBy", "decision", "timestamp", "reportPath"],
+    "retention": "P1Y minimum (DORA Art. 28 evidence); aligned to the ISMS record schedule",
+    "quality_sampling": "quarterly: 10 % of Tier A decisions and 100 % of Tier B fallbacks compared with the stored deliverable (team/TEAM_MODEL.md §12.1; QUARTERLY_ACCESS_REVIEW item 13)"
+  }
+}

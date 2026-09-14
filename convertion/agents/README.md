@@ -1,0 +1,63 @@
+# convertion/agents — index and decisions
+
+This directory holds everything that shapes agent behaviour WITHOUT
+touching the byte-verified skill bodies from `claude-account-export/`
+(fidelity is enforced by `scripts/verify_conversion.py`). Adaptation
+happens through prepended persona text, appended overlays/addenda,
+authored knowledge, and charters for agents that exist only here.
+
+| Path | Purpose | Consumed by |
+|---|---|---|
+| `persona_system_prompt.md` | Persona preamble + platform data-protection rules (prepended to every agent) | convert_skills, create_orchestrator, create_delivery_agents |
+| `advisory_addendum.md` | File-generation + read-only enterprise access for information-providing agents | apply_advisory_profile |
+| `document_agents_addendum.md` | Runtime map and delivery binding for docx/pdf/pptx/xlsx | convert_skills (append for the four document skills) |
+| `overlays/_foundry-environment.md` | Generic claude.ai → Foundry translation, appended to EVERY converted agent after the body | convert_skills |
+| `overlays/<skill>.md` | Skill-specific environment mapping (deepsearch-protocol, ai-deepsearch-osint-gathering-report, ciso-reporting, ciso-executive-summary, cyber-forum, enx-tprm-control-center menu v2, tpsrca-assessment-engine, doc-coauthoring, learn) | convert_skills |
+| `overlays/research-pattern.md` | Source tiers + citation discipline for cyber-forum, framework advisors, advisor, research agents | `convert_skills` (`RESEARCH_OVERLAY`), `create_orchestrator` (advisor), `create_delivery_agents` (analyzers, ciso-global-report) |
+| `overlays/web-tools.md` | `WebSearch`→`bing_grounding`, `WebFetch`→`osint-proxy`, retrieved content is data | `convert_skills` (`GROUNDING_RECOMMENDED`) |
+| `../scripts/adapters/speech_to_whisperx.py` | Foundry-side adapter: Azure AI Speech batch result → the whisperx post-processors' expected input | packaged under `foundry/` inside the whisperx code zip |
+| `knowledge-packs/*.md` | Environment know-how packs: file intake, PDF reading, HTML design guide, writing style, platform self-knowledge | `convert_skills.KNOWLEDGE_PACKS` (staged as `pack__<file>` into the agents listed in each pack header) + `create_delivery_agents` + the combined store |
+| `advisor-knowledge/*.md` | Authored domain knowledge (persona domains not covered by the export) | combined store (create_orchestrator) + per-agent knowledge globs |
+| `*_instructions.md` | Charters of agents that exist only in Foundry (advisor, verifier, orchestrator routing, ciso-global-report, analyzers, template-manager, enterprise-explorer, research-coordinator/worker/writer) | create_orchestrator / create_delivery_agents |
+
+## Decisions recorded here (platform / example skills)
+
+| Source | Decision | Rationale |
+|---|---|---|
+| `product-self-knowledge` (Anthropic product docs) | **REWRITTEN**, not dropped: `knowledge-packs/platform-self-knowledge.md` describes **this** platform | **Scope, not model choice (rationale re-decided 2026-09-12).** A self-knowledge pack must describe the platform the user is actually on — Microsoft Foundry, the Agents v2 runtime, this kit's agents, pipelines, approval gates and guardrails. The source skill's content describes Anthropic's own products (claude.ai features, Claude Code, the Anthropic API), which are a different product and would be wrong-by-construction in an answer here; that holds whichever model a tier runs, so the exclusion is **independent of whether Claude models are used**. The earlier rationale ("no Claude models on Azure") was factually wrong and is withdrawn: Claude models ARE offered on Microsoft Foundry and are unused here for EU residency, re-checked quarterly — record `../governance/CLAUDE_ON_FOUNDRY.md`. What transfers from the source skill is its one durable rule: never answer capability questions from memory, retrieve the pack (MCP client note stays in `mcp-server/README.md`) |
+| `setup-writing-style` (mailbox/Slack/Drive harvesting, per-user skill store) | **EXCLUDED** mechanism; **INCLUDED** house style `knowledge-packs/enx-writing-style.md` and the "paste samples in the conversation" mode | Reading users' sent mail is a personal-data processing activity without a documented basis; Foundry has no per-user skill store; shared memory bans PII |
+| `frontend-design` | **INCLUDED as constrained pack** `knowledge-packs/enx-html-design-guide.md` | Quality floor kept; distinctive palettes conflict with template governance (requirement j) and ENX brand |
+| `file-reading`, `pdf-reading` | **INCLUDED, rewritten** as `knowledge-packs/file-intake-foundry.md`, `pdf-reading-foundry.md` | Their CLIs/paths do not exist in code_interpreter |
+| `deep-research` | **INCLUDED, adapted** as research-coordinator/worker/writer charters + `overlays/research-pattern.md` | Method kept; sub-agents → A2A hand-offs to published agents (Connected Agents do not exist on the Agents v2 runtime); WebFetch → grounding; notes → reply |
+| `doc-coauthoring`, `learn` | **DEPLOYED (adapted)** via overlays | Valuable for procedures/onboarding; Claude-only mechanics mapped |
+| alphaXiv / personal paper library | **REPLACED** by the `MEMORY:` block tagged `citation` in the team's shared memory (Azure AI Search index `MEMORY_INDEX_NAME`; `vs-assurance-memory` on the transition default) | No per-user libraries on the platform |
+| Per-framework advisory systems (NIST CSF, CIS, 27005, 27002 attributes, GDPR Art. 28/27701, ITIL, COBIT, COSO, TOGAF, PMBOK, ISO 20000, agile/Lean, cloud) | `infosec-assurance-advisor` **IS** the advisory system for these frameworks, grounded by `advisor-knowledge/` and routed by keyword in `orchestrator_instructions.md` | One reasoning-tier advisor with the combined store beats eleven thin agents for cost and consistency; may be split later with the create_delivery_agents pattern |
+| `tpsrca-assessment-engine` 12 agents | Kept as roles in one agent; Phase 1 via `advisor-knowledge/tpsrca-supplier-types.md`, Phase 2 delegated to `deepsearch_protocol`; optional split documented in the overlay | Single deterministic scorer (`calculation_engine.py`) preserved |
+| `ai-deepsearch-osint-gathering-report` | Kept as a separate agent with the identical toolset and its own pipeline; companion reference shared both ways | Both skills are byte-verified exports; merging would alter fidelity |
+
+## Model tiers of the agents charted here
+
+light: enterprise-explorer, docx/pdf/pptx/xlsx · chat: research-worker,
+research-writer, template-manager, learn, doc-coauthoring · reasoning:
+advisor, verifier, orchestrator, research-coordinator, ciso-global-report,
+analyzers (governance/MODEL_ROUTING.md is authoritative).
+
+**Tool compatibility (tier ≠ tool support).** Every charter and overlay
+here assumes that an agent carrying OpenAPI, MCP, AI Search /
+`file_search`, SharePoint grounding or Web Search tools runs on a model
+that supports those tools. Reasoning models of the o3-mini class support
+none of them, so the reasoning-tier pin must be a tool-capable reasoning
+model for the advisors, the orchestrator, the analyzers and the research
+coordinator; `governance/MODEL_ROUTING.md` holds the authoritative
+tool-compatibility matrix.
+
+**Hand-off vocabulary.** Agent-facing text in this directory says
+*A2A hand-off to a published agent* (or an Agent Framework orchestration
+step), never "connected agent" or "sub-agent": Connected Agents do not
+exist on the Agents v2 runtime. Runtime vocabulary is likewise
+*conversation* / *response*, not thread / run.
+
+## Placeholders
+
+Use `{braces}` for any tenant-specific value; no hostnames, secrets or
+e-mail addresses in this directory.

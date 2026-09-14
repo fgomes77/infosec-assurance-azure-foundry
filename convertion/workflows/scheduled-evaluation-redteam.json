@@ -1,0 +1,381 @@
+{
+  "_comment": "Scheduled evaluation + red-team scan (finding C18; enterprise/series/08-guardrails-observability-evaluation.md §4 E2/E5). Weekly, read-only: it re-runs the golden-set evaluation for every production agent reference it is given and starts one AI Red Teaming Agent scan, then posts the scores and the report links to the accountable owner on Teams. It NEVER promotes a candidate, changes an agent, re-deploys a model or writes to any system of record - promotion stays a human Tier C decision (operations/CHANGE_MANAGEMENT.md, enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md). Continuous evaluation (10 % sampling into App Insights) and the human-evaluation template are configured on the platform per agent (step 08 §4 E3/E4), not here. Targets are pinned `<agent-name>:<version>` references from build/agent-versions.json (finding C19), so a score is always attributable to the version that served traffic. The evaluation and red-team REST surfaces are preview (api-version 2025-11-15-preview): confirm the exact request shape against the Foundry reference on the execution day and record the verified shape in the step-08 sign-off. AI Red Teaming Agent cloud runs execute in Sweden Central (EU).",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "evaluationApiVersion": {
+        "type": "string",
+        "defaultValue": "2025-11-15-preview",
+        "_comment": "Preview data-plane version for evaluations / red-team runs (the GA conversations/responses surface uses FOUNDRY_API_VERSION = v1; the two are deliberately separate parameters)."
+      },
+      "evaluationTargets": {
+        "type": "array",
+        "defaultValue": [
+          "{agent-name}:{agent-version}"
+        ],
+        "_comment": "Pinned `<agent-name>:<version>` references of the agents whose baseline is re-run (step 08 E2 set: dora, cyber-forum, infosec-assurance-advisor, ciso-global-report). Filled from build/agent-versions.json at deployment time."
+      },
+      "goldenSetDatasetId": {
+        "type": "string",
+        "defaultValue": "{golden-set-dataset-id}",
+        "_comment": "Foundry dataset built from operations/evaluation/golden-set.json (EVAL_GOLDEN_SET_PATH, setup/.env)."
+      },
+      "evaluatorNames": {
+        "type": "array",
+        "defaultValue": [
+          "groundedness",
+          "relevance",
+          "task_adherence",
+          "tool_call_accuracy",
+          "indirect_attack",
+          "protected_material"
+        ],
+        "_comment": "Same evaluator set as the baseline run (step 08 §4 E2), so scores are comparable across weeks."
+      },
+      "accuracyFloor": {
+        "type": "float",
+        "defaultValue": 0.8,
+        "_comment": "Accuracy floor of governance/MODEL_ROUTING.md; a score below it is flagged in the Teams notice for the owner - the workflow itself changes nothing."
+      },
+      "redTeamTargets": {
+        "type": "array",
+        "defaultValue": [
+          "{agent-name}:{agent-version}"
+        ],
+        "_comment": "Agents scanned by the AI Red Teaming Agent (step 08 E5: cyber-forum, deepsearch-protocol). Preview feature."
+      },
+      "redTeamRiskCategories": {
+        "type": "array",
+        "defaultValue": [
+          "ProhibitedActions",
+          "SensitiveDataLeakage",
+          "TaskAdherence",
+          "IndirectAttack"
+        ],
+        "_comment": "Agentic categories of step 08 E5: any write attempt, internal markers leaving in web queries, task adherence, XPIA in retrieved supplier evidence (finding C14)."
+      },
+      "ownerUpn": {
+        "type": "string",
+        "defaultValue": "{upn:francisco.gomes}",
+        "_comment": "Accountable owner - the only person who may promote a change on the back of these results."
+      },
+      "teamsWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{teams-incoming-webhook-url}"
+      }
+    },
+    "triggers": {
+      "Weekly_evaluation_window": {
+        "type": "Recurrence",
+        "inputs": {
+          "frequency": "Week",
+          "interval": 1,
+          "timeZone": "UTC",
+          "schedule": {
+            "weekDays": [
+              "Monday"
+            ],
+            "hours": [
+              6
+            ],
+            "minutes": [
+              0
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Init_results": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "results",
+              "type": "array",
+              "value": []
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Init_redteam": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "redteam",
+              "type": "array",
+              "value": []
+            }
+          ]
+        },
+        "runAfter": {
+          "Init_results": [
+            "Succeeded"
+          ]
+        }
+      },
+      "For_each_evaluation_target": {
+        "type": "Foreach",
+        "foreach": "@parameters('evaluationTargets')",
+        "runAfter": {
+          "Init_redteam": [
+            "Succeeded"
+          ]
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "repetitions": 1
+          }
+        },
+        "actions": {
+          "Start_evaluation": {
+            "_comment": "Golden-set evaluation of ONE pinned agent version (step 08 §4 E2). Read-only: an evaluation run never changes the agent.",
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('foundryEndpoint')}/evaluations?api-version=@{parameters('evaluationApiVersion')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              },
+              "body": {
+                "displayName": "scheduled-@{replace(items('For_each_evaluation_target'),':','-')}-@{formatDateTime(utcNow(),'yyyy-MM-dd')}",
+                "target": "@if(contains(items('For_each_evaluation_target'), ':'), createObject('type','agent_reference','name', first(split(items('For_each_evaluation_target'), ':')), 'version', last(split(items('For_each_evaluation_target'), ':'))), createObject('type','agent_reference','name', items('For_each_evaluation_target')))",
+                "data": {
+                  "type": "dataset",
+                  "id": "@{parameters('goldenSetDatasetId')}"
+                },
+                "evaluators": "@parameters('evaluatorNames')",
+                "metadata": {
+                  "source": "scheduled-evaluation-redteam",
+                  "runId": "@{workflow().run.name}"
+                }
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT10S"
+              }
+            },
+            "runAfter": {}
+          },
+          "Until_evaluation_completes": {
+            "type": "Until",
+            "expression": "@contains(createArray('completed','failed','canceled','cancelled','timeout'), toLower(coalesce(body('Get_evaluation_status')?['status'],'')))",
+            "limit": {
+              "count": 120,
+              "timeout": "PT2H"
+            },
+            "runAfter": {
+              "Start_evaluation": [
+                "Succeeded"
+              ]
+            },
+            "actions": {
+              "Delay_60s": {
+                "type": "Wait",
+                "inputs": {
+                  "interval": {
+                    "count": 60,
+                    "unit": "Second"
+                  }
+                },
+                "runAfter": {}
+              },
+              "Get_evaluation_status": {
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "@{parameters('foundryEndpoint')}/evaluations/@{body('Start_evaluation')?['id']}?api-version=@{parameters('evaluationApiVersion')}",
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://ai.azure.com"
+                  }
+                },
+                "runAfter": {
+                  "Delay_60s": [
+                    "Succeeded"
+                  ]
+                }
+              }
+            }
+          },
+          "Append_evaluation_result": {
+            "type": "AppendToArrayVariable",
+            "inputs": {
+              "name": "results",
+              "value": {
+                "agentRef": "@{items('For_each_evaluation_target')}",
+                "evaluationId": "@{body('Start_evaluation')?['id']}",
+                "status": "@{body('Get_evaluation_status')?['status']}",
+                "metrics": "@{string(coalesce(body('Get_evaluation_status')?['result'], body('Get_evaluation_status')?['metrics'], createObject()))}",
+                "reportUrl": "@{coalesce(body('Get_evaluation_status')?['reportUrl'], '')}"
+              }
+            },
+            "runAfter": {
+              "Until_evaluation_completes": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "For_each_redteam_target": {
+        "type": "Foreach",
+        "foreach": "@parameters('redTeamTargets')",
+        "runAfter": {
+          "For_each_evaluation_target": [
+            "Succeeded",
+            "Failed"
+          ]
+        },
+        "runtimeConfiguration": {
+          "concurrency": {
+            "repetitions": 1
+          }
+        },
+        "actions": {
+          "Start_red_team_scan": {
+            "_comment": "AI Red Teaming Agent scan (preview, step 08 §4 E5). Findings are read by the owner and become Tier C changes - never applied here.",
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('foundryEndpoint')}/redTeams?api-version=@{parameters('evaluationApiVersion')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              },
+              "body": {
+                "displayName": "redteam-@{replace(items('For_each_redteam_target'),':','-')}-@{formatDateTime(utcNow(),'yyyy-MM-dd')}",
+                "target": "@if(contains(items('For_each_redteam_target'), ':'), createObject('type','agent_reference','name', first(split(items('For_each_redteam_target'), ':')), 'version', last(split(items('For_each_redteam_target'), ':'))), createObject('type','agent_reference','name', items('For_each_redteam_target')))",
+                "riskCategories": "@parameters('redTeamRiskCategories')",
+                "metadata": {
+                  "source": "scheduled-evaluation-redteam",
+                  "runId": "@{workflow().run.name}"
+                }
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT10S"
+              }
+            },
+            "runAfter": {}
+          },
+          "Until_scan_completes": {
+            "type": "Until",
+            "expression": "@contains(createArray('completed','failed','canceled','cancelled','timeout'), toLower(coalesce(body('Get_scan_status')?['status'],'')))",
+            "limit": {
+              "count": 180,
+              "timeout": "PT3H"
+            },
+            "runAfter": {
+              "Start_red_team_scan": [
+                "Succeeded"
+              ]
+            },
+            "actions": {
+              "Delay_60s_scan": {
+                "type": "Wait",
+                "inputs": {
+                  "interval": {
+                    "count": 60,
+                    "unit": "Second"
+                  }
+                },
+                "runAfter": {}
+              },
+              "Get_scan_status": {
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "@{parameters('foundryEndpoint')}/redTeams/@{body('Start_red_team_scan')?['id']}?api-version=@{parameters('evaluationApiVersion')}",
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://ai.azure.com"
+                  }
+                },
+                "runAfter": {
+                  "Delay_60s_scan": [
+                    "Succeeded"
+                  ]
+                }
+              }
+            }
+          },
+          "Append_scan_result": {
+            "type": "AppendToArrayVariable",
+            "inputs": {
+              "name": "redteam",
+              "value": {
+                "agentRef": "@{items('For_each_redteam_target')}",
+                "scanId": "@{body('Start_red_team_scan')?['id']}",
+                "status": "@{body('Get_scan_status')?['status']}",
+                "reportUrl": "@{coalesce(body('Get_scan_status')?['reportUrl'], '')}"
+              }
+            },
+            "runAfter": {
+              "Until_scan_completes": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Any_run_not_completed": {
+        "_comment": "Flag for the owner: any evaluation or scan that did not reach 'completed'. Scores below the accuracy floor are read from the metrics payload by the owner (the floor differs per evaluator; governance/MODEL_ROUTING.md).",
+        "type": "Compose",
+        "inputs": "@or(not(equals(length(filter(variables('results'), equals(toLower(coalesce(item()?['status'],'')), 'completed'))), length(variables('results')))), not(equals(length(filter(variables('redteam'), equals(toLower(coalesce(item()?['status'],'')), 'completed'))), length(variables('redteam')))))",
+        "runAfter": {
+          "For_each_redteam_target": [
+            "Succeeded",
+            "Failed"
+          ]
+        }
+      },
+      "Notify_owner": {
+        "_comment": "Notification only - no approval gate (no submission of record; governance/HUMAN_APPROVAL.md).",
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "@parameters('teamsWebhookUrl')",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "authentication": {
+            "type": "ManagedServiceIdentity",
+            "audience": "https://ai.azure.com"
+          },
+          "body": {
+            "text": "🧪 Weekly evaluation + red-team scan (@{formatDateTime(utcNow(),'yyyy-MM-dd')}) for @{parameters('ownerUpn')}\n\nEvaluations (accuracy floor @{parameters('accuracyFloor')}): @{string(variables('results'))}\n\nRed-team scans: @{string(variables('redteam'))}\n\n@{if(outputs('Any_run_not_completed'), '⚠ at least one run did not complete - check Build > Evaluations in the portal.', 'All runs completed.')}\n\nNothing was promoted, changed or stored: acting on these results is a Tier C change owned by @{parameters('ownerUpn')} (operations/CHANGE_MANAGEMENT.md)."
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {
+          "Any_run_not_completed": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

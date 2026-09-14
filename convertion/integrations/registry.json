@@ -1,38 +1,930 @@
 {
-  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows.",
+  "_comment": "Integration registry: connections available to agents, and which agent gets which tools/model tier. Consumed by scripts/attach_integrations.py after create_agents.py has run. Connection auth material lives in Azure Key Vault / Foundry connections - never in this file. HUMAN APPROVAL POLICY (governance/HUMAN_APPROVAL.md): OpenAPI tools are attached READ-ONLY (non-GET operations stripped) unless a connection is listed in that agent's optional 'write_connections' array - the default for every agent is none; submissions of record happen only through the approval-gated workflows. READ-ONLY RULE OF RECORD: attach_integrations.py keeps GET operations plus any operation carrying the OpenAPI vendor extension 'x-enx-read-only: true' (idempotent query POSTs: Jira JQL search, Jira Assets AQL, Defender advanced hunting, SharePoint /search/query); every other non-GET verb is stripped. MCP tools are allow-listed by name and must carry readOnlyHint=true in the gateway's tools/list (see mcp/enx-gateway.json). Connection provisioning (IaC/script) and least-privilege scopes: connections/ and README.md. Consumer connectors of the previous environment (Gmail, Google Drive, GitHub, Firecrawl, Slack, ...) and their ENX replacements/exclusions: CONNECTOR_DECISIONS.md. IDENTITY (finding C7): every connection declares, in its 'identity' field, which principal actually calls the target system; the agent-level identity model (Entra Agent ID, agent blueprint, Conditional Access, re-applied role assignments) is in '_identity_model' below and inventoried in team/ACCESS_REGISTER.md. MODEL/TOOL COMPATIBILITY (finding C4): 'model_tiers._tool_compatibility' is the matrix of record - an agent may only be pinned to a tier whose model supports every tool type it carries; the reasoning deployment is a tool-capable model, never o3-mini. CONNECTION FLAGS: a connection carrying \"enabled\": false is provisioned/inventoried but NOT attached to any agent (today: sharepoint-grounding, finding C9); connections/create_connections.sh skips it. 'guardrail_policy' per agent (D-EB7 / finding C14) names the RAI policy assigned at AGENT level: 'infosec-security-analysis' (default) or 'infosec-web-facing', which adds indirect-attack (XPIA / cross-prompt-injection) detection on the prompt and is REQUIRED for every agent that consumes untrusted retrieved content - web-search, osint-proxy, sharepoint-graph, sharepoint-grounding, confluence-cloud or enx-gateway-mcp. Both policies are created by infra/main.bicep on the account; scripts/verify_kit.py fails the kit when an agent carrying one of those tools is not on 'infosec-web-facing'. The assignment itself is made at agent creation / in the portal (enterprise/portal/agent-checklist.md) - the pinned SDK does not expose it on update_agent.",
   "connections": {
-    "jira-cloud":        { "type": "openapi", "spec": "integrations/openapi/jira-cloud.yaml",        "foundry_connection": "conn-jira-cloud" },
-    "jira-assets-cmdb":  { "type": "openapi", "spec": "integrations/openapi/jira-assets-cmdb.yaml",  "foundry_connection": "conn-jira-assets" },
-    "onetrust":          { "type": "openapi", "spec": "integrations/openapi/onetrust.yaml",          "foundry_connection": "conn-onetrust" },
-    "securityscorecard": { "type": "openapi", "spec": "integrations/openapi/securityscorecard.yaml", "foundry_connection": "conn-securityscorecard" },
-    "defender-graph":    { "type": "openapi", "spec": "integrations/openapi/defender-graph.yaml",    "foundry_connection": "conn-defender-graph" },
-    "sharepoint-graph":  { "type": "openapi", "spec": "integrations/openapi/sharepoint-graph.yaml",  "foundry_connection": "conn-sharepoint-graph" },
-    "iaf-api":           { "type": "openapi", "spec": "integrations/openapi/iaf-api.yaml",           "foundry_connection": "conn-iaf-api" },
-    "enx-gateway-mcp":   { "type": "mcp",     "config": "integrations/mcp/enx-gateway.json" },
-    "web-search":        { "type": "bing_grounding", "foundry_connection": "bing-grounding" }
+    "followup-scheduler": {
+      "type": "openapi",
+      "spec": "integrations/openapi/followup-scheduler.yaml",
+      "foundry_connection": null,
+      "enabled": false,
+      "identity": "none (platform surface): the Logic Apps shared-access signature is part of FOLLOWUP_SCHEDULER_URL, held in Key Vault and read by mcp-server/server.py; no Foundry connection is created",
+      "_comment": "Request contract of workflows/scheduled-followup.json (one-shot re-open of an existing conversation - the send_later replacement). DELIBERATELY enabled=false: its only operation is a POST, and the Layer-1 read-only rule strips non-GET operations before a spec reaches an agent, so an attached tool would carry zero operations and look able to schedule while being inert. enabled=false makes attach_integrations.py FAIL the deploy if anyone lists it on an agent. The team schedules follow-ups through the MCP tool `schedule_followup` (mcp-server/server.py), where a named human is the caller and requestedBy comes from the token. Scheduling a run is a documented non-submission (governance/HUMAN_APPROVAL.md)."
+    },
+    "jira-cloud": {
+      "type": "openapi",
+      "spec": "integrations/openapi/jira-cloud.yaml",
+      "foundry_connection": "conn-jira-cloud",
+      "identity": "project_connection_custom_keys (conn-jira-cloud; browse-only Jira service account - a named non-human identity in team/ACCESS_REGISTER.md)",
+      "_comment": "Jira Cloud, read-only (searchIssuesJql, getIssue). Finding and remediation state for supplier and internal issues. searchIssuesJql is a POST kept by the READ_ONLY_POST_OPS allow-list because JQL search is Jira's only query surface; it writes nothing."
+    },
+    "jira-assets-cmdb": {
+      "type": "openapi",
+      "spec": "integrations/openapi/jira-assets-cmdb.yaml",
+      "foundry_connection": "conn-jira-assets",
+      "identity": "project_connection_custom_keys (conn-jira-assets; Assets read + AQL only)",
+      "_comment": "Jira Assets (CMDB), read-only (aqlSearchObjects, getObject, listObjectSchemas). Service ownership, dependencies and the impacted-entity picture behind requirement d. AQL search is an allow-listed query POST."
+    },
+    "onetrust": {
+      "type": "openapi",
+      "spec": "integrations/openapi/onetrust.yaml",
+      "foundry_connection": "conn-onetrust",
+      "identity": "project_connection_custom_keys (conn-onetrust; OneTrust viewer role)",
+      "_comment": "OneTrust, read-only (listAssessments, getAssessment, exportAssessmentPdf, listInventoryVendors). The source for requirements b, c and d: completed assessments and the vendor inventory. The PDF export is a read of an artefact OneTrust already produced."
+    },
+    "securityscorecard": {
+      "type": "openapi",
+      "spec": "integrations/openapi/securityscorecard.yaml",
+      "foundry_connection": "conn-securityscorecard",
+      "identity": "project_connection_custom_keys (conn-securityscorecard; read token)",
+      "_comment": "SecurityScorecard, read-only (getCompanySummary, getCompanyFactors, getCompanyHistory, getPortfolios). External rating evidence for the OSINT assessments — one input among several, never the verdict on its own."
+    },
+    "defender-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/defender-graph.yaml",
+      "foundry_connection": "conn-defender-graph",
+      "identity": "project_managed_identity (app-only Graph; SecurityIncident/SecurityAlert/ThreatHunting .Read.All)",
+      "_comment": "Microsoft Defender via Graph security, read-only (listIncidents, getIncident, listAlerts, runHuntingQuery, listSecureScores). Incident context for briefs and the supplier-relevance question 'did this touch us?'. runHuntingQuery is an allow-listed KQL query POST."
+    },
+    "sharepoint-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/sharepoint-graph.yaml",
+      "foundry_connection": "conn-sharepoint-graph",
+      "identity": "project_managed_identity (app-only Graph; Sites.Selected read grant on the one InfoSec Assurance site)",
+      "_comment": "SharePoint through Microsoft Graph, read-only (listDrives, listChildren, listChildrenByPath, getItemByPath, driveSearch, small-file download). The evidence library for requirement d2 and prior reports for context. Writing is NOT here: only the delivery Function's managed identity writes, after approval. searchContent is an allow-listed query POST."
+    },
+    "iaf-api": {
+      "type": "openapi",
+      "spec": "integrations/openapi/iaf-api.yaml",
+      "foundry_connection": "conn-iaf-api",
+      "identity": "project_connection_custom_keys (conn-iaf-api; X-API-Key, read scopes)",
+      "_comment": "The internal assurance API (IAF), read-only for the agents (listSupplierAssessments, getAssessment, getControlCatalogue, getSupplierRiskProfile). submitFinding exists in the spec and is STRIPPED at attach time: findings reach IAF through the approved pipeline, never from an agent."
+    },
+    "confluence-cloud": {
+      "type": "openapi",
+      "spec": "integrations/openapi/confluence-cloud.yaml",
+      "foundry_connection": "conn-confluence",
+      "identity": "project_connection_custom_keys (conn-confluence; read:content, read:space)",
+      "_comment": "Euronext Confluence Cloud, read-only (searchContent, getPage, listChildPages, listAttachments, listSpaces). The advisory and forum agents read policy, standard and procedure pages so an answer reflects what Euronext has actually written down rather than the model's general knowledge. GET-only spec — nothing to strip."
+    },
+    "enx-gateway-mcp": {
+      "type": "mcp",
+      "config": "integrations/mcp/enx-gateway.json",
+      "foundry_connection": "conn-enx-gateway",
+      "identity": "project_connection_custom_keys (conn-enx-gateway; bearer held in the connection, NOT in this repo and no longer passed as a run-time header - finding C10)",
+      "_comment": "The internal ENX gateway MCP server. Read-only tools only (readOnlyHint), bearer held in Key Vault behind the project connection — never in a header, a workflow body or this file. Gives the agents the internal tooling reach requirement i asks for."
+    },
+    "web-search": {
+      "type": "bing_grounding",
+      "foundry_connection": "bing-grounding",
+      "identity": "project_connection_api_key (bing-grounding, provisioned by infra/main.bicep); the outbound query itself is unauthenticated and leaves the tenant - finding C13",
+      "_comment": "RESIDUAL RISK, ACCEPTED (finding C13): Grounding with Bing / Web Search sends the query to a global Microsoft service OUTSIDE the Azure compliance boundary - the Azure Data Protection Addendum does NOT apply and EU residency is not guaranteed for the query text. Compensating controls: queries are sanitised before the call (no Euronext data, no supplier-confidential text, no personal data - governance/DATA_PROTECTION_GUARDRAILS.md section 1), the detective KQL egress alert fires on unsanitised patterns (operations/), and page reads go through osint-proxy instead. Acceptance owner: Francisco Gustavo Gomes (accountable owner) - recorded in the RoPA and in the DORA Art. 28 register; re-reviewed at every standing platform-currency review (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md). Domain-restricted alternative to evaluate in test before GA adoption: Bing Custom Search / Web Search with a domain allow-list (preview) - https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/bing-tools (GA, 2026-08-27)."
+    },
+    "entra-iam-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/entra-iam-graph.yaml",
+      "foundry_connection": "conn-entra-iam",
+      "identity": "project_managed_identity (app-only Graph; User/Group/Application.Read.All, AccessReview.Read.All)",
+      "_comment": "Entra ID via Graph, read-only (listUsers, listGroups, listGroupMembers, listDirectoryRoles, listRoleMembers, listServicePrincipals, listAccessReviews). Identity and access context for assessments and access reviews — directory reads only, never a directory change."
+    },
+    "osint-proxy": {
+      "type": "openapi",
+      "spec": "integrations/openapi/osint-proxy.yaml",
+      "foundry_connection": "conn-osint-proxy",
+      "identity": "project_connection_custom_keys (conn-osint-proxy; delivery Function key, fetch_public_page only)",
+      "_comment": "Sanitised public-page fetch (delivery Function endpoint GET /api/fetch_public_page): public-host allow-list, outbound DLP on the URL, size cap, HTML->text. Replaces claude.ai web_fetch/Firecrawl page reads for OSINT (DeepSearch streams 2A-2G, tpsrca evidence validator URL accessibility). Not a generic HTTP tool - governance/DATA_PROTECTION_GUARDRAILS.md section 1."
+    },
+    "passive-recon": {
+      "type": "openapi",
+      "spec": "integrations/openapi/passive-recon.yaml",
+      "foundry_connection": "conn-osint-proxy",
+      "identity": "project_connection_custom_keys (conn-osint-proxy; the same delivery Function key as osint-proxy, passive_recon only)",
+      "_comment": "Strictly passive DNS/TLS/security-header fingerprint of a PUBLIC supplier domain (delivery Function endpoint GET /api/passive_recon). Replaces the DeepSearch bash recon block (curl -sIL, openssl s_client, dig) for stream 2D. One TLS handshake, one root GET, DNS lookups - no scan, no crawl, no probe: ActiveScanningAllowed is always No on this platform and the assessment must say so. Same urlpolicy.check_host gate, audit and rate limit as osint-proxy. GET-only, so attach_integrations.py attaches it whole and the read-only rule needs no exception."
+    },
+    "exchange-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/exchange-graph.yaml",
+      "foundry_connection": "conn-exchange-graph",
+      "identity": "project_managed_identity (app-only Graph Mail.Read, narrowed by an Exchange application access policy to the one assurance shared mailbox)",
+      "_comment": "Gmail connector replacement: read-only Graph mail surface on the ONE assurance shared mailbox (Exchange application access policy). Sending happens only inside approval-gated workflows."
+    },
+    "teams-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/teams-graph.yaml",
+      "foundry_connection": "conn-teams-graph",
+      "identity": "delegated_obo (OAuth2 authorization-code on behalf of the signed-in assurance user; never app-only)",
+      "_comment": "Slack connector replacement: read-only Teams chats/channels (delegated, on-behalf-of the calling user)."
+    },
+    "m365-personal-graph": {
+      "type": "openapi",
+      "spec": "integrations/openapi/m365-personal-graph.yaml",
+      "foundry_connection": "conn-m365-personal",
+      "identity": "delegated_obo (OAuth2 authorization-code on behalf of the signed-in user; /me scope only)",
+      "_comment": "Gmail/Google Calendar (personal) replacement for the example skills: /me calendar + mail, delegated OBO only, never app-only."
+    },
+    "azure-devops": {
+      "type": "openapi",
+      "spec": "integrations/openapi/azure-devops.yaml",
+      "foundry_connection": "conn-azure-devops",
+      "identity": "project_connection_custom_keys (conn-azure-devops; Project Reader service principal)",
+      "_comment": "GitHub connector replacement: read-only Azure DevOps / GitHub Enterprise Git surface (repos, items, PRs, pipeline runs, code search). No agent can create/merge PRs or push - by design (CONNECTOR_DECISIONS.md)."
+    },
+    "sharepoint-grounding": {
+      "type": "sharepoint_grounding",
+      "foundry_connection": "conn-sharepoint-grounding",
+      "enabled": false,
+      "status": "preview",
+      "identity": "delegated_obo (the signed-in assurance user's own SharePoint permissions; no app-only path - finding C9)",
+      "_comment": "Finding C9: the native SharePoint grounding tool (preview) grounds INTERACTIVE advisory answers in the InfoSec Assurance site, on-behalf-of the signed-in user (OBO only - it cannot run app-only, so it is unusable from the scheduled Logic Apps). Registered here so the connection is provisioned and inventoried, but enabled=false: it is NOT in any agent's 'tools' list and create_connections.sh skips disabled entries. Pipelines and every unattended read keep the sharepoint-graph OpenAPI tool (project managed identity, Sites.Selected) and deliveries keep the delivery Function. Enable only after (a) the tool reaches GA, (b) the licence/entitlement decision in enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md, (c) attach_integrations.py gains a 'sharepoint_grounding' branch (shared delta) - today an unknown tool type is silently dropped by build_tools(). Doc: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/sharepoint (preview, 2026-09-02)."
+    },
+    "evidence-cache": {
+      "type": "openapi",
+      "spec": "integrations/openapi/evidence-cache.yaml",
+      "foundry_connection": "conn-evidence-cache",
+      "identity": "project_connection_custom_keys (conn-evidence-cache; the same delivery Function key, evidence_cache GET only)",
+      "_comment": "Delta re-analysis for requirement d2 (delivery Function GET /api/evidence_cache). Returns the facts a previously APPROVED run extracted from an evidence file whose SharePoint eTag has not changed, so a reassessment reads only what actually moved — the heaviest recurring run in the platform becomes a delta. GET-only: the write side is a POST called by the pipeline after the verifier passes and a human approves, so no draft extraction can enter the cache. Time-dependent status (VALID / EXPIRING / EXPIRED) is never cached and is always recomputed at the report date."
+    },
+    "eur-lex": {
+      "type": "openapi",
+      "spec": "integrations/openapi/eur-lex.yaml",
+      "foundry_connection": "conn-eur-lex",
+      "auth": "anonymous",
+      "identity": "none - public unauthenticated read endpoint; the Foundry connection carries no secret (nvd-cve: an optional NVD rate-limit key only, held in Key Vault)",
+      "_comment": "EUR-Lex / CELLAR (Publications Office of the EU) - the authentic text and legal metadata of EU instruments by CELEX, plus the CDM SPARQL endpoint for 'what changed / when does it apply'. PUBLIC and unauthenticated: auth=anonymous, so no key exists to leak. Egress is a CELEX id, a language code or a SPARQL query over public legal metadata - the sanitisation rule of DATA_PROTECTION_GUARDRAILS.md section 1 applies to the query text like any web search. Source of record for every regulatory citation (integrations/knowledge-sources.json, tier 1; agents/knowledge-packs/authoritative-sources.md)."
+    },
+    "nvd-cve": {
+      "type": "openapi",
+      "spec": "integrations/openapi/nvd-cve.yaml",
+      "foundry_connection": "conn-nvd-cve",
+      "auth": "anonymous",
+      "identity": "none - public unauthenticated read endpoint; the Foundry connection carries no secret (nvd-cve: an optional NVD rate-limit key only, held in Key Vault)",
+      "_comment": "NIST NVD CVE API 2.0 - the published CVSS vector, CWE and configurations of record for any CVE cited in a pentest, vulnerability report or supplier advisory. Public; an NVD API key is optional (rate limit only) and lives in the connection / Key Vault, never here. Only public identifiers leave: a CVE id, a CPE, a date window, a public product term - never a Euronext asset or an assessment id."
+    },
+    "cisa-kev": {
+      "type": "openapi",
+      "spec": "integrations/openapi/cisa-kev.yaml",
+      "foundry_connection": "conn-cisa-kev",
+      "auth": "anonymous",
+      "identity": "none - public unauthenticated read endpoint; the Foundry connection carries no secret (nvd-cve: an optional NVD rate-limit key only, held in Key Vault)",
+      "_comment": "CISA Known Exploited Vulnerabilities catalogue - the citable fact that a vulnerability is exploited in the wild, with CISA's own due date and ransomware-use flag. Public JSON feed, auth=anonymous, no query parameters at all, so nothing about Euronext can leave in the request. Absence from the catalogue is never evidence of non-exploitation."
+    },
+    "first-epss": {
+      "type": "openapi",
+      "spec": "integrations/openapi/first-epss.yaml",
+      "foundry_connection": "conn-first-epss",
+      "auth": "anonymous",
+      "identity": "none - public unauthenticated read endpoint; the Foundry connection carries no secret (nvd-cve: an optional NVD rate-limit key only, held in Key Vault)",
+      "_comment": "FIRST EPSS - probability of exploitation in the next 30 days, used WITH CVSS (severity) and KEV (observed exploitation) to order remediation. Public, auth=anonymous. A probability, never a severity: it may raise priority, it never lowers a severity that CVSS or KEV justifies, and the score is always reported with the date it was read."
+    },
+    "research-ledger": {
+      "type": "openapi",
+      "spec": "integrations/openapi/research-ledger.yaml",
+      "foundry_connection": "conn-osint-proxy",
+      "identity": "project_connection_custom_keys (conn-osint-proxy; the same delivery Function key as osint-proxy, research_ledger GET only)",
+      "_comment": "The supplier research ledger (delivery Function GET /api/research_ledger): every search, fetch and authority lookup already made about a supplier, with its date, its citation and the action that caused it. Read BEFORE searching - a fresh record is quoted instead of re-fetched, which is where a reassessment saves its time and tokens; a stale one is re-fetched. GET-only, so no agent can write to it: the Function records the fetches it serves, and the pipeline writes the rest after approval (workflows/report-delivery-pipeline.json Store_research_ledger). The human-readable form of the same records is Reports/<Supplier>/_Knowledge/research-ledger.md. A time-dependent status is never reused from it - only the observation behind it."
+    }
+  },
+  "model_tiers": {
+    "_comment": "Token-economy routing (governance/MODEL_ROUTING.md). Deployment NAMES come from setup/.env (LIGHT_MODEL_DEPLOYMENT_NAME, MODEL_DEPLOYMENT_NAME, REASONING_MODEL_DEPLOYMENT_NAME) and the deployments themselves from infra/main.bicep. FINDING C4 - the reasoning deployment is NO LONGER o3-mini: o3-mini supports none of the OpenAPI, MCP, Azure AI Search, SharePoint or Web Search tools, while every reasoning agent below carries that read-only surface, so a model pinned to o3-mini would silently answer without ever calling its tools (defeating requirements g/h/i). The tier contract (light/chat/reasoning) is unchanged; only the reasoning deployment of record moves. See _deployment_of_record and _tool_compatibility. Changing a tier model is a Tier-C change (operations/CHANGE_MANAGEMENT.md): re-validate the report agents against the comparison set and promote a new agent version (finding C19) before it serves traffic.",
+    "light": "structured extraction, rendering hand-off, routing, folder/file bookkeeping",
+    "chat": "standard report generation against fixed templates",
+    "reasoning": "OSINT research, risk scoring, evidence/SOC/pentest analysis, regulatory advisory",
+    "_deployment_of_record": {
+      "light": "gpt-4o-mini",
+      "chat": "gpt-4o",
+      "reasoning": "o4-mini",
+      "_note": "Values of record for infra/main.bicep (lightModelName / modelName / reasoningModelName) and setup/.env.example. Alternate reasoning candidate if o4-mini is not offered in the chosen EU Data Zone region: gpt-5-mini (then gpt-4.1). Confirm the OpenAPI + MCP + Web Search columns for the chosen model in the tool-support table ON THE DAY of deployment and record the row in the step-02 sign-off (enterprise/series/02-foundry-account-project-models.md). Every deployment is version-pinned with versionUpgradeOption NoAutoUpgrade (finding C6)."
+    },
+    "_tool_compatibility": {
+      "_comment": "Finding C4 tool-compatibility matrix. RULE: an agent may only be pinned to a tier whose model supports EVERY tool type that agent carries in 'agents' below (plus file_search / code_interpreter added by create_agents.py and apply_advisory_profile.py). 'confirm' = not decided by this kit, read the source table on the day. Re-read the table at every model change and at the standing platform-currency review (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md).",
+      "source": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#tool-support-by-region-and-model (GA, read 2026-09-07)",
+      "tool_types_used_here": {
+        "openapi": "registry connections of type 'openapi' (the 12 read-only specs)",
+        "mcp": "enx-gateway-mcp",
+        "bing_grounding": "web-search",
+        "sharepoint_grounding": "sharepoint-grounding (registered, disabled - finding C9)",
+        "file_search": "per-agent vector store (create_agents.py)",
+        "code_interpreter": "advisory profile + document agents",
+        "azure_ai_search": "durable memory / combined knowledge base (finding C3) - not attached to any agent in this registry yet"
+      },
+      "models": {
+        "o3-mini": {
+          "openapi": "no",
+          "mcp": "no",
+          "bing_grounding": "no",
+          "sharepoint_grounding": "no",
+          "azure_ai_search": "no",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "REJECTED for the reasoning tier (finding C4) - keep it out of setup/.env and infra/main.bicep"
+        },
+        "o4-mini": {
+          "openapi": "yes",
+          "mcp": "yes",
+          "bing_grounding": "yes",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "yes",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "TIER OF RECORD for 'reasoning' - reasoning family, EU Data Zone"
+        },
+        "gpt-5-mini": {
+          "openapi": "yes",
+          "mcp": "yes",
+          "bing_grounding": "yes",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "yes",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "alternate for 'reasoning' if o4-mini is unavailable in region"
+        },
+        "gpt-4o": {
+          "openapi": "yes",
+          "mcp": "yes",
+          "bing_grounding": "yes",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "yes",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "'chat' tier - carries sharepoint-graph/onetrust/jira reads on the report agents"
+        },
+        "gpt-4o-mini": {
+          "openapi": "yes",
+          "mcp": "confirm",
+          "bing_grounding": "confirm",
+          "sharepoint_grounding": "confirm",
+          "azure_ai_search": "no",
+          "file_search": "yes",
+          "code_interpreter": "yes",
+          "verdict": "'light' tier - OK for the document agents (sharepoint-graph only) and the toolless router; NEVER attach azure_ai_search (finding C3 knowledge base) or the MCP gateway to a light-tier agent"
+        }
+      },
+      "tier_audit_2026_09_12": "Every agent below re-checked against this matrix: reasoning agents carry openapi+mcp+bing_grounding and are now on a model marked 'yes' for all three; chat agents carry openapi only (gpt-4o: yes); light agents carry openapi only or no tools (gpt-4o-mini: yes) and none carries mcp, bing_grounding or azure_ai_search. No agent is pinned to a model that cannot carry its tools."
+    }
   },
   "agents": {
-    "deepsearch-protocol":                  { "tools": ["web-search", "securityscorecard", "iaf-api", "enx-gateway-mcp"], "model_tier": "reasoning" },
-    "ai-deepsearch-osint-gathering-report": { "tools": ["web-search", "securityscorecard"], "model_tier": "reasoning" },
-    "cyber-forum":                          { "tools": ["web-search", "defender-graph", "jira-cloud", "enx-gateway-mcp"], "model_tier": "reasoning" },
-    "dpia":                                 { "tools": ["onetrust", "sharepoint-graph", "iaf-api"], "model_tier": "chat" },
-    "onetrust-form-b":                      { "tools": ["onetrust", "sharepoint-graph"], "model_tier": "chat" },
-    "ciso-reporting":                       { "tools": ["onetrust", "sharepoint-graph", "jira-cloud"], "model_tier": "chat" },
-    "ciso-executive-summary":               { "tools": ["onetrust", "sharepoint-graph"], "model_tier": "chat" },
-    "enx-tprm-control-center":              { "tools": ["enx-gateway-mcp"], "model_tier": "chat" },
-    "dora":                                 { "tools": ["web-search", "jira-assets-cmdb", "iaf-api"], "model_tier": "reasoning" },
-    "nis2":                                 { "tools": ["web-search"], "model_tier": "reasoning" },
-    "eu-ai-act":                            { "tools": ["web-search"], "model_tier": "reasoning" },
-    "iso27001":                             { "tools": ["web-search", "sharepoint-graph"], "model_tier": "reasoning" },
-    "iso42001":                             { "tools": ["web-search", "sharepoint-graph"], "model_tier": "reasoning" },
-    "tpsrca-assessment-engine":             { "tools": ["securityscorecard", "iaf-api", "jira-assets-cmdb"], "model_tier": "reasoning" },
-    "tprm-slide-generator":                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pptx-executive-summary-ciso":          { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pdf-full-coverage-analyzer":           { "tools": [], "model_tier": "reasoning" },
-    "whisperx-transcribe-diarize":          { "tools": [], "model_tier": "chat" },
-    "docx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pdf":                                  { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "pptx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" },
-    "xlsx":                                 { "tools": ["sharepoint-graph"], "model_tier": "chat" }
+    "deepsearch-protocol": {
+      "tools": [
+        "web-search",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy",
+        "passive-recon",
+        "jira-assets-cmdb",
+        "defender-graph",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Tools aligned with workflows/pipelines.json 'deepsearch-report' notes (SecurityScorecard, IAF, ENX gateway, Defender Graph, Jira Assets CMDB - all read-only) plus osint-proxy for PHASE 2 page reads (Trust Center, privacy/DPA, subprocessor lists, IAF CertSearch)."
+    },
+    "ai-deepsearch-osint-gathering-report": {
+      "tools": [
+        "web-search",
+        "securityscorecard",
+        "osint-proxy",
+        "passive-recon",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "cyber-forum": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "osint-proxy",
+        "azure-devops",
+        "eur-lex",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "dpia": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph",
+        "iaf-api"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "onetrust-form-b": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "ciso-reporting": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph",
+        "jira-cloud"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "ciso-executive-summary": {
+      "tools": [
+        "onetrust",
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "enx-tprm-control-center": {
+      "tools": [],
+      "model_tier": "light",
+      "guardrail_policy": "infosec-security-analysis",
+      "_comment": "Router only ('must stay cheap'): no enterprise tools, light tier, no advisory addendum. It dispatches to the worker agents via connected-agent tools created by create_orchestrator.py / create_agents.py; the workers carry the tools."
+    },
+    "dora": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "eur-lex"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "nis2": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "eur-lex"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "eu-ai-act": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "eur-lex"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "iso27001": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "eur-lex"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "iso42001": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "eur-lex"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "tpsrca-assessment-engine": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "osint-proxy",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Agent 3 Evidence Validator: URL accessibility/content checks via osint-proxy (HEAD/GET on public URLs). When the tool is unavailable or the host is not allow-listed, Accessibility = 'not verified' (score 0.5) and the URL is listed under validated_sources with status 'unverified' - never silently defaulted."
+    },
+    "tpsrca-calc": {
+      "tools": [],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis",
+      "_comment": "Optional TPSRCA role split (scripts/create_tpsrca_subagents.py): roles 4-8, owns calculation_engine.py in code_interpreter. No tools at all - every number comes from the score object it is handed and from the engine; nothing is looked up, so no web/OSINT surface and the security-analysis guardrail applies. Deployed only when the split is wanted; tpsrca-assessment-engine keeps role 1 and ROUTEs to it."
+    },
+    "tpsrca-analysis": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Optional TPSRCA role split: roles 2, 3 and 9-11. Keeps osint-proxy because role 3 (Evidence Validator) performs URL accessibility checks - the parent's _comment rule carries over verbatim: when the tool is unavailable or the host is not allow-listed, Accessibility = 'not verified' (score 0.5) and the URL is listed under validated_sources with status 'unverified', never silently defaulted. Because it reaches public URLs it carries the web-facing guardrail policy, not the security-analysis one."
+    },
+    "tpsrca-report": {
+      "tools": [],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-security-analysis",
+      "_comment": "Optional TPSRCA role split: role 12. Assembles the TPSRCA report from the score object produced by tpsrca-calc and the analysis from tpsrca-analysis, both passed in by tpsrca-assessment-engine. It writes prose against a fixed contract and never recomputes a score or looks anything up, so chat tier with no tools."
+    },
+    "tprm-slide-generator": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "pptx-executive-summary-ciso": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "pdf-full-coverage-analyzer": {
+      "tools": [],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis"
+    },
+    "whisperx-transcribe-diarize": {
+      "tools": [],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-security-analysis"
+    },
+    "docx": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "pdf": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "pptx": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "xlsx": {
+      "tools": [
+        "sharepoint-graph"
+      ],
+      "model_tier": "light",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "ciso-global-report": {
+      "tools": [
+        "onetrust",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "tpa-evidence-analyzer": {
+      "tools": [
+        "sharepoint-graph",
+        "exchange-graph",
+        "evidence-cache",
+        "eur-lex",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "soc-report-analyzer": {
+      "tools": [
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "pentest-report-analyzer": {
+      "tools": [
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Carried no tools until the authoritative-source layer: the report was the only input. It now reads nvd-cve / cisa-kev / first-epss so a tester's severity label can be checked against the published CVSS vector, CISA's exploitation status and the EPSS probability instead of being taken on trust. Those responses are untrusted retrieved content, so the agent moves to the infosec-web-facing guardrail policy (XPIA detection) - the same rule verify_kit.py enforces for every agent that consumes fetched content."
+    },
+    "template-manager": {
+      "tools": [
+        "sharepoint-graph",
+        "azure-devops"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing"
+    },
+    "infosec-assurance-advisor": {
+      "tools": [
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "sharepoint-graph",
+        "onetrust",
+        "defender-graph",
+        "entra-iam-graph",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "web-search",
+        "osint-proxy",
+        "exchange-graph",
+        "azure-devops",
+        "eur-lex",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement i: full enterprise read surface, READ-ONLY (non-GET stripped; no write_connections). Web search only after query sanitisation per governance/DATA_PROTECTION_GUARDRAILS.md."
+    },
+    "doc-coauthoring": {
+      "tools": [
+        "sharepoint-graph",
+        "confluence-cloud"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing",
+      "example": true
+    },
+    "internal-comms": {
+      "tools": [
+        "teams-graph",
+        "m365-personal-graph",
+        "sharepoint-graph"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing",
+      "example": true,
+      "_comment": "Slack/Gmail/Google Calendar context gathering -> Teams + Outlook via delegated OBO reads."
+    },
+    "learn": {
+      "tools": [
+        "web-search"
+      ],
+      "model_tier": "chat",
+      "guardrail_policy": "infosec-web-facing",
+      "example": true
+    },
+    "mcp-builder": {
+      "tools": [],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-security-analysis",
+      "example": true,
+      "_comment": "Knowledge-only: authors MCP servers as code; no enterprise tools."
+    },
+    "morning": {
+      "tools": [
+        "m365-personal-graph",
+        "teams-graph"
+      ],
+      "model_tier": "light",
+      "guardrail_policy": "infosec-security-analysis",
+      "example": true,
+      "_comment": "Routine replaced by workflows/morning-brief.json (Logic App gathers calendar/mail/chats and calls the agent); the agent itself only formats. Delegated OBO when invoked interactively."
+    },
+    "supplier-intake-triage": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "jira-cloud",
+        "confluence-cloud",
+        "onetrust",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "evidence-cache",
+        "web-search",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement k (intake gate). Reads the TPA evidence tree and the CMDB to ground entity/contract-owner and to detect an assessment that already exists; OneTrust for a registered assessment; web-search for public supplier context on public terms only."
+    },
+    "contract-security-review": {
+      "tools": [
+        "sharepoint-graph",
+        "confluence-cloud",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "onetrust",
+        "enx-gateway-mcp",
+        "eur-lex",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement l (contract clause review). No web tool by design: contract text is Euronext Confidential and never grounds a public search."
+    },
+    "dora-register-builder": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "onetrust",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "evidence-cache",
+        "eur-lex",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement m (DORA Art. 28(3) Register of Information). Sources are internal only - register content is Confidential and must never reach a web-facing tool."
+    },
+    "concentration-risk-analyzer": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy",
+        "web-search",
+        "evidence-cache",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement n (DORA Art. 29 concentration + fourth-party chain). osint-proxy/web-search read PUBLIC sub-processor and Trust Center pages on public terms only - no ENX identifier ever enters a query (guardrails 1)."
+    },
+    "continuous-monitoring-radar": {
+      "tools": [
+        "sharepoint-graph",
+        "evidence-cache",
+        "securityscorecard",
+        "iaf-api",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "enx-gateway-mcp",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement o (ongoing monitoring, DORA Art. 28(1)(b) / ISO 27001 A.5.22). evidence-cache supplies already-extracted emission dates and validity periods; every time-dependent status is recomputed against the as-at date, never reused. nvd-cve / cisa-kev / first-epss let the radar carry a vulnerability lane that is sourced rather than recalled."
+    },
+    "supplier-incident-assessor": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-cloud",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "defender-graph",
+        "onetrust",
+        "securityscorecard",
+        "iaf-api",
+        "enx-gateway-mcp",
+        "osint-proxy",
+        "web-search",
+        "eur-lex",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement p (supplier incident impact + DORA Art. 19 / NIS2 Art. 23 / GDPR Art. 33 notification clocks). defender-graph checks for ENX-side indicators; public advisories are read on public terms only."
+    },
+    "exit-offboarding-assurance": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-assets-cmdb",
+        "jira-cloud",
+        "confluence-cloud",
+        "entra-iam-graph",
+        "enx-gateway-mcp",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement q (DORA Art. 28(8) exit strategies + offboarding assurance). entra-iam-graph evidences supplier access revocation read-only."
+    },
+    "findings-remediation-register": {
+      "tools": [
+        "sharepoint-graph",
+        "jira-cloud",
+        "iaf-api",
+        "jira-assets-cmdb",
+        "confluence-cloud",
+        "enx-gateway-mcp",
+        "evidence-cache",
+        "nvd-cve",
+        "cisa-kev",
+        "first-epss",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement r (findings, remediation and risk-acceptance register with expiry). jira-cloud and iaf-api are the tracking systems of record; the register never changes a status without their evidence. nvd-cve / cisa-kev / first-epss justify a severity or a due-date escalation with the published vector, the exploitation status and its date."
+    },
+    "isms-audit-pack": {
+      "tools": [
+        "confluence-cloud",
+        "sharepoint-graph",
+        "jira-cloud",
+        "iaf-api",
+        "jira-assets-cmdb",
+        "enx-gateway-mcp"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement s (ISO/IEC 27001:2022 cl. 6.1.3/9.2/9.3 packs + audit evidence index). Confluence holds the ISMS policies, prior audits and minutes."
+    },
+    "regulatory-change-watch": {
+      "tools": [
+        "web-search",
+        "osint-proxy",
+        "confluence-cloud",
+        "sharepoint-graph",
+        "enx-gateway-mcp",
+        "eur-lex",
+        "research-ledger"
+      ],
+      "model_tier": "reasoning",
+      "guardrail_policy": "infosec-web-facing",
+      "_comment": "Requirement t (regulatory and standards horizon scanning). Public official sources only; internal grounding for impact comes from Confluence/SharePoint and never leaves for the web."
+    }
+  },
+  "advisory_read_only_toolset": {
+    "_comment": "Requirement g/h/i: every information-providing (advisory/knowledge) system carries the full Euronext READ surface — Confluence, Jira, CMDB, SharePoint, OneTrust, Defender (security monitoring), Entra IAM, SecurityScorecard (risk monitoring), IAF (governance/compliance/AET findings), the ENX gateway MCP and sanitised web search. All READ-ONLY: non-GET operations are stripped at attach time and no write_connections grant exists. Applied by scripts/apply_advisory_profile.py; enforced by scripts/audit_coverage.py, which fails the build if an agent listed here does not carry the core toolset — a declared reach the deployment does not have reads as access that exists, which is worse than no declaration.",
+    "core": [
+      "confluence-cloud",
+      "jira-cloud",
+      "jira-assets-cmdb",
+      "sharepoint-graph",
+      "onetrust",
+      "defender-graph",
+      "entra-iam-graph",
+      "securityscorecard",
+      "iaf-api",
+      "enx-gateway-mcp",
+      "web-search"
+    ],
+    "_supplier_facing_note": "osint-proxy reads PUBLIC supplier pages (Trust Center, DPA, subprocessor lists). It belongs to the agents that assess a named third party, not to a framework advisor answering an ISO 27001 or DORA question — those already have sanitised web search for public material, and a narrower tool surface is both cheaper and easier to defend. The five framework advisors therefore carry the core eleven and nothing more, deliberately.",
+    "supplier_facing": {
+      "cyber-forum": [
+        "osint-proxy",
+        "azure-devops"
+      ],
+      "tpsrca-assessment-engine": [
+        "osint-proxy"
+      ],
+      "infosec-assurance-advisor": [
+        "osint-proxy",
+        "exchange-graph",
+        "azure-devops"
+      ]
+    },
+    "agents": [
+      "iso27001",
+      "iso42001",
+      "dora",
+      "nis2",
+      "eu-ai-act",
+      "cyber-forum",
+      "tpsrca-assessment-engine",
+      "infosec-assurance-advisor"
+    ],
+    "authoritative_sources": "integrations/knowledge-sources.json is the source-of-record registry: what to read per subject, its tier and its citation format. eur-lex / nvd-cve / cisa-kev / first-epss are its 'api:' access modes; osint-proxy serves the 'page:' mode against the allow-list generated from the same file (scripts/sync_url_allowlist.py). Every agent listed here carries the knowledge pack agents/knowledge-packs/authoritative-sources.md."
+  },
+  "interactive_advisory_tools": {
+    "_comment": "Finding C9. The native SharePoint grounding tool (preview) runs ON BEHALF OF the signed-in user, returns permission-trimmed citations and is capped (per-user request rate; small result count per query). It is therefore attached ONLY to agents used interactively by a named human, and NEVER to pipeline agents, the delivery Function path, or agents published to Teams / M365 Copilot. Exhaustive and batch SharePoint reads (TPA evidence scans, report intake) keep the application-identity `sharepoint-graph` OpenAPI tool. Requires the five users to hold the licence the tool demands; `agents` stays EMPTY until that is confirmed AND the connection is enabled (connections.sharepoint-grounding.enabled is false today, so attach_integrations.py refuses to attach it). Source: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/sharepoint (preview, 2026-08-21).",
+    "tools": [
+      "sharepoint-grounding"
+    ],
+    "agents": [],
+    "excluded_agents": [
+      "output-verifier",
+      "dpia",
+      "ciso-reporting",
+      "ciso-executive-summary",
+      "ciso-global-report",
+      "tpa-evidence-analyzer",
+      "soc-report-analyzer",
+      "pentest-report-analyzer",
+      "tprm-slide-generator",
+      "pptx-executive-summary-ciso",
+      "onetrust-form-b",
+      "docx",
+      "pdf",
+      "pptx",
+      "xlsx",
+      "enterprise-explorer"
+    ]
+  },
+  "example_agents": {
+    "_comment": "Agents converted only with convert_skills.py --include-examples. attach_integrations.py must FAIL (not skip) for any live agent that has no registry entry unless it is named in unmanaged_ok.",
+    "agents": [
+      "doc-coauthoring",
+      "internal-comms",
+      "learn",
+      "mcp-builder",
+      "morning"
+    ],
+    "unmanaged_ok": [
+      "output-verifier"
+    ]
+  },
+  "_identity_model": {
+    "_comment": "Finding C7 (Entra Agent ID). Each connection above records the identity that actually calls the target system in its 'identity' field: project_managed_identity (app-only Graph, no secret), project_connection_custom_keys (secret held in the named Foundry connection, sourced from Key Vault - never in this repo), delegated_obo (on behalf of the signed-in assurance user) or project_connection_api_key. On top of those, the agents themselves are principals: the project's agent identity and each published agent's distinct Entra Agent ID are inventoried in team/ACCESS_REGISTER.md, data-plane read roles are assigned to the agent identity, MCP/A2A connections use AgenticIdentityToken, and a Conditional Access policy is applied to the agent blueprint. Role assignments must be RE-APPLIED after every publish and reviewed in operations/access-governance/QUARTERLY_ACCESS_REVIEW.md. Docs: https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-identity (GA, 2026-08-25); https://learn.microsoft.com/en-us/entra/agent-id/whats-new-agent-id (GA, 2026-05-01).",
+    "connection_identity_values": [
+      "project_managed_identity",
+      "project_connection_custom_keys",
+      "project_connection_api_key",
+      "delegated_obo"
+    ]
+  },
+  "agent_versions": {
+    "_comment": "Promoted immutable agent versions of record (<name>:<version>). Written by deploy.sh / scripts/_foundry_runtime.py into build/agent-versions.json (git-ignored) and recorded on approved template changes by scripts/update_templates.py (enterprise/UPDATE_AND_UPGRADE_REVIEW_POLICY.md R5, finding C19). Pipelines, the Copilot wrapper and the MCP server reference `<name>:<version>`, never an unversioned id. This key is documentation of the contract - the ledger itself is build/agent-versions.json, which the release pipeline publishes as ISMS evidence."
   }
 }

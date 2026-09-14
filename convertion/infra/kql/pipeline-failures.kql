@@ -1,0 +1,7 @@
+// Logic Apps pipelines (report delivery, intake, template approval) that failed
+// or timed out in the last hour; approval gates expiring are Suspended > 3 d.
+AzureDiagnostics
+| where TimeGenerated > ago(1h)
+| where ResourceProvider == "MICROSOFT.WEB" and Category == "WorkflowRuntime"
+| where status_s in ("Failed", "TimedOut")
+| project TimeGenerated, workflowName_s, status_s, error_message_s, resource_runId_s

@@ -1,0 +1,33 @@
+// ---------------------------------------------------------------------------
+// verifier-fail-rate.kql — output-verifier FAIL rate per delivery pipeline
+// Control: ARCHITECTURE.md "Evaluation and success metrics" (first-pass PASS rate);
+//          governance/MODEL_ROUTING.md rule 7 (tier tuning input);
+//          ISO 42001 A.6.2.6 / A.8.4 (AI system performance monitoring);
+//          ISO 27001:2022 A.8.16; EU AI Act Art. 26(5) (deployer monitoring).
+// Scope:   Log Analytics workspace — table LogicAppWorkflowRuntime (Logic Apps
+//          Standard diagnostic category WorkflowRuntime; MONITORING.md §2).
+// Signal:  in workflows/report-delivery-pipeline.json the action
+//          `Notify_verifier_fail` runs only on FAIL and `Human_approval_gate` only on
+//          PASS, so the two action completions give the verdict split per workflow
+//          without parsing agent output.
+// Alert:   rows > 0 when failRate > 30 % with >= 5 verdicts in 24 h
+//          (alerts.bicep rule `verifier-fail-rate`, severity 2). A rising rate on
+//          one agent means its knowledge or instructions drifted -> RUNBOOK FM-08.
+// Dashboard: drop the final `where` to chart the rate for every pipeline.
+// ---------------------------------------------------------------------------
+let lookback = 24h;
+let failRateThreshold = 0.30;
+let minVerdicts = 5;
+LogicAppWorkflowRuntime
+| where TimeGenerated > ago(lookback)
+| where OperationName =~ "Microsoft.Logic/workflows/workflowActionCompleted"
+| where ActionName in ("Notify_verifier_fail", "Human_approval_gate")
+| summarize fails  = countif(ActionName == "Notify_verifier_fail"),
+            passes = countif(ActionName == "Human_approval_gate"),
+            lastFailRun = maxif(RunId, ActionName == "Notify_verifier_fail")
+          by WorkflowName
+| extend verdicts = fails + passes
+| extend failRate = iff(verdicts > 0, todouble(fails) / todouble(verdicts), 0.0)
+| project WorkflowName, verdicts, passes, fails, failRate = round(failRate, 2), lastFailRun
+| where verdicts >= minVerdicts and failRate > failRateThreshold
+| order by failRate desc

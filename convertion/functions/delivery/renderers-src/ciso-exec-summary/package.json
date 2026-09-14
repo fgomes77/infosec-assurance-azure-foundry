@@ -1,0 +1,8 @@
+{
+  "name": "ciso-exec-summary-renderer",
+  "private": true,
+  "description": "Strategic Risk Intelligence Dashboard -> A3 PDF + 6-slide PPTX (delivery Function) - dependencies of the byte-verified generate_pptx_template.js",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

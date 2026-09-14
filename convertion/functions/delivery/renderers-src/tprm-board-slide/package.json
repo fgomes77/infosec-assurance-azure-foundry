@@ -1,0 +1,8 @@
+{
+  "name": "tprm-board-slide-renderer",
+  "private": true,
+  "description": "TPRM Executive Summary board slide renderer (delivery Function) - dependencies of the byte-verified generate_slide.js",
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}

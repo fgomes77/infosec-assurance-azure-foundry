@@ -1,0 +1,37 @@
+// Prompt-cache hit rate per agent — the free half of the token bill.
+//
+// A cached prefix is billed at a fraction of an uncached one, so an agent
+// whose instructions are stable should show most of its INPUT tokens as
+// cached after the first few calls of a day. A hit rate that falls is a
+// symptom, not a cost line: something volatile (a date, a run id, a supplier
+// name) has entered the instructions and is breaking the prefix — the rule
+// in integrations/inference-profiles.json `caching`, guarded offline by
+// scripts/tests/test_inference_profiles.py.
+//
+// Review: monthly, with the tier-tuning loop (governance/MODEL_ROUTING.md
+// §Token-economy rules 7; operations/RUNBOOK.md M2).
+// Target: cache_hit_rate >= 0.6 for every agent with >= 20 calls in the window.
+// Controls: ISO 27001:2022 A.8.6 (capacity), DORA Art. 9(2) (resource use).
+//
+// The attribute names follow the OpenTelemetry GenAI semantic conventions
+// emitted by the Foundry Agent Service into Application Insights; adjust the
+// two extend() lines if a future SDK renames them (one place, not six).
+AppDependencies
+| where TimeGenerated > ago(30d)
+| where Type has "gen_ai" or Name has "chat" or Name has "responses"
+| extend agent        = tostring(Properties["gen_ai.agent.name"])
+| extend model        = tostring(Properties["gen_ai.request.model"])
+| extend input_tokens = toreal(Properties["gen_ai.usage.input_tokens"])
+| extend cached       = toreal(Properties["gen_ai.usage.cached_input_tokens"])
+| where isnotempty(agent) and input_tokens > 0
+| summarize
+    calls          = count(),
+    input_tokens   = sum(input_tokens),
+    cached_tokens  = sum(cached),
+    cache_hit_rate = round(sum(cached) / sum(input_tokens), 3)
+  by agent, model, bin(TimeGenerated, 1d)
+| where calls >= 20
+| extend status = case(cache_hit_rate >= 0.6, "ok",
+                       cache_hit_rate >= 0.3, "investigate",
+                                              "prefix broken")
+| order by cache_hit_rate asc, input_tokens desc

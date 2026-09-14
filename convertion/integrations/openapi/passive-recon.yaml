@@ -1,0 +1,139 @@
+# Purpose: strictly PASSIVE technical fingerprint of a public supplier domain -
+#   the replacement for the DeepSearch bash recon block (curl -sIL, openssl
+#   s_client, dig) used by deepsearch-protocol PHASE 2 stream 2D (Technical
+#   Infrastructure) and by ai-deepsearch-osint-gathering-report. Served by the
+#   delivery Function (functions/delivery, GET /api/passive_recon).
+#
+# What "passive" means here, and it is enforced in code, not by convention:
+#   ONE TLS handshake, ONE HTTPS GET of the root document, and DNS lookups.
+#   No port scan, no crawl, no directory enumeration, no vulnerability probe,
+#   no authenticated request. `ActiveScanningAllowed` is always **No** on this
+#   platform, and the assessment must say so. The same urlpolicy.check_host()
+#   gate as osint-proxy applies: public hosts only, no internal domain
+#   suffixes, no private/link-local IP ranges, outbound DLP on the value, App
+#   Insights audit of every call, and a per-domain rate limit.
+#
+# GET-only by construction. Every operation here is a GET, so
+# scripts/attach_integrations.py attaches it whole without stripping anything -
+# the read-only rule of governance/HUMAN_APPROVAL.md Layer 1 needs no
+# exception for this spec (contrast integrations/openapi/pdf-coverage: that
+# surface is POST-only and is therefore pipeline-invoked, never attached).
+#
+# Auth: Foundry connection conn-osint-proxy (custom key = delivery Function key
+#   from Key Vault) or managed identity; never in this file.
+# Residency: the Function runs in the EU region; the targets are public
+#   supplier hosts, so only the public domain name leaves the boundary.
+openapi: 3.0.3
+info:
+  title: ENX passive recon - public DNS/TLS/header fingerprint
+  description: >-
+    Read-only, strictly passive technical fingerprint of one public supplier
+    domain: DNS records (A, AAAA, MX, NS, TXT, SPF, DMARC, CAA), the TLS
+    certificate as presented, and the security headers of the root document.
+    Nothing is scanned and nothing is crawled. Cite `retrievedAt` with every
+    finding; when a record is absent, report it as absent rather than
+    inferring it.
+  version: "1.0"
+servers:
+  - url: https://{delivery-function}.azurewebsites.net/api
+security:
+  - functionKey: []
+paths:
+  /passive_recon:
+    get:
+      operationId: passiveRecon
+      summary: Passive DNS, TLS and security-header fingerprint of one public domain
+      description: >-
+        Resolve the domain, read the certificate presented on the TLS
+        handshake, and fetch the root document once to read its security
+        headers. Use it for the Technical Infrastructure section of an OSINT
+        assessment. An empty list for a record type means the lookup
+        succeeded and found nothing; a `note` field means the lookup could
+        not be performed - never present either as evidence of a
+        misconfiguration without saying which it was.
+      parameters:
+        - name: domain
+          in: query
+          required: true
+          description: >-
+            The supplier's public domain, e.g. "supplier.example". Host only -
+            no scheme, no path, no port. Internal Euronext hosts, IP literals
+            and private ranges are refused with 403.
+          schema:
+            type: string
+            maxLength: 253
+        - name: supplier
+          in: query
+          required: false
+          schema: { type: string }
+          description: >-
+            Supplier this fingerprint is research FOR. When present, the
+            Function records the observation in that supplier's research
+            ledger so a re-run reads it instead of repeating the lookups.
+        - name: service
+          in: query
+          required: false
+          schema: { type: string }
+        - name: originatingAction
+          in: query
+          required: false
+          schema: { type: string }
+          description: What caused this call, in a few public words.
+        - name: runId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: Passive fingerprint of the domain.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain: { type: string }
+                  retrievedAt: { type: string, format: date-time }
+                  passive: { type: boolean, description: Always true - this endpoint cannot perform an active scan. }
+                  dns:
+                    type: object
+                    description: Resolved records. Absent record types come back as empty arrays; `note` marks a lookup that could not run.
+                    properties:
+                      A: { type: array, items: { type: string } }
+                      AAAA: { type: array, items: { type: string } }
+                      MX: { type: array, items: { type: string } }
+                      NS: { type: array, items: { type: string } }
+                      TXT: { type: array, items: { type: string } }
+                      SPF: { type: array, items: { type: string } }
+                      DMARC: { type: array, items: { type: string } }
+                      CAA: { type: array, items: { type: string } }
+                      note: { type: string }
+                  tls:
+                    type: object
+                    description: The certificate as presented on one handshake.
+                    properties:
+                      subject: { type: string }
+                      issuer: { type: string }
+                      notBefore: { type: string }
+                      notAfter: { type: string }
+                      subjectAltNames: { type: array, items: { type: string } }
+                      protocol: { type: string }
+                      cipher: { type: string }
+                      error: { type: string, description: Present when the handshake failed; report the failure, do not infer a weakness from it. }
+                  headers:
+                    type: object
+                    additionalProperties: { type: string }
+                    description: Response headers of the single root-document GET (HSTS, CSP, X-Frame-Options, Referrer-Policy, server banner).
+                  status: { type: integer }
+        "403":
+          description: Host not allow-listed, internal host or IP literal, or an internal marker detected in the value.
+        "422":
+          description: The domain could not be resolved or reached. Record "not retrievable" - never guess.
+        "429":
+          description: Per-domain rate limit. Retry later; do not loop.
+components:
+  securitySchemes:
+    functionKey:
+      type: apiKey
+      in: header
+      name: x-functions-key
+      description: Delivery Function key held in Key Vault and bound to the Foundry connection conn-osint-proxy.

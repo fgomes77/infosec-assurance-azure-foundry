@@ -1,0 +1,9 @@
+{
+  "runtime": "python",
+  "entry": "render.py",
+  "argv": ["{data}", "{out}"],
+  "formats": ["docx"],
+  "outputs": "single",
+  "schema": "docx_generic.schema.json",
+  "source": "adapter for claude-account-export/skills/docx (python-docx create path); house style per agents/document_agents_addendum.md"
+}

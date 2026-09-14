@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "deepsearch_dashboard",
+  "description": "Placeholder contract of templates/assets/deepsearch-dashboard.html (DeepSearch OSINT dashboard v17.02.11, requirement g). The deepsearch-protocol / ai-deepsearch-osint-gathering-report agents fill these {{PLACEHOLDERS}} and nothing else - never the structure, section ids, palette or script. The filled document is delivered as format 'html', so the delivery Function applies gates.deepsearch_dashboard (nine section ids, chart.umd.min.js, spiderChart, downloadReport, no unfilled {{...}}, file > 20 KB) rather than this schema; the template-manager and the preview path validate the placeholder set here. Every key below must be present - an unfilled placeholder fails the gate.",
+  "type": "object",
+  "required": [
+    "ASSESSMENT_DATE_UTC",
+    "ASSESSMENT_RESULT",
+    "CLASSIFICATION",
+    "DORA_CRITICALITY",
+    "EVIDENCE_BASIS_STATEMENT",
+    "GENERATED_TIMESTAMP_UTC",
+    "OVERALL_CONFIDENCE",
+    "OVERALL_RISK_CLASS",
+    "OVERALL_RISK_GLYPH",
+    "OVERALL_RISK_LEVEL",
+    "PRIMARY_DOMAIN",
+    "PROTOCOL_VERSION",
+    "REPORT_TITLE",
+    "ROWS_AI_GOVERNANCE",
+    "ROWS_CONFIDENCE",
+    "ROWS_CONTROLS",
+    "ROWS_CORPORATE",
+    "ROWS_INCIDENTS",
+    "ROWS_INTEGRATIONS",
+    "ROWS_SECURITY_POSTURE",
+    "ROWS_TECHNICAL",
+    "ROWS_TOP_MITIGATIONS",
+    "ROWS_TOP_RISKS",
+    "ROWS_VULNERABILITIES",
+    "SERVICE_TYPE",
+    "SPIDER_AXIS_LABELS",
+    "SPIDER_JUSTIFICATION_NOTE",
+    "SPIDER_SCORES",
+    "SUPPLIER_NAME",
+    "SUPPLIER_SLUG"
+  ],
+  "properties": {
+    "ASSESSMENT_DATE_UTC": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "ASSESSMENT_RESULT": {
+      "type": "string",
+      "minLength": 1
+    },
+    "CLASSIFICATION": {
+      "type": "string",
+      "default": "Confidential",
+      "description": "enx-theme.json classification.default_label."
+    },
+    "DORA_CRITICALITY": {
+      "type": "string",
+      "description": "e.g. 'In scope - supports a critical or important function' / 'Out of scope'."
+    },
+    "EVIDENCE_BASIS_STATEMENT": {
+      "type": "string",
+      "minLength": 1
+    },
+    "GENERATED_TIMESTAMP_UTC": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "OVERALL_CONFIDENCE": {
+      "type": "string",
+      "enum": [
+        "HIGH",
+        "MEDIUM",
+        "LOW"
+      ]
+    },
+    "OVERALL_RISK_CLASS": {
+      "type": "string",
+      "enum": [
+        "risk-critical",
+        "risk-high",
+        "risk-medium",
+        "risk-low",
+        "risk-not-found"
+      ],
+      "description": "CSS class from templates/enx-theme.json risk_colours."
+    },
+    "OVERALL_RISK_GLYPH": {
+      "type": "string",
+      "pattern": "^&#x[0-9A-Fa-f]+;$",
+      "description": "HTML entity only - never a literal Unicode glyph (enx-theme.json risk_glyphs, PHASE 4B rule 3)."
+    },
+    "OVERALL_RISK_LEVEL": {
+      "type": "string",
+      "enum": [
+        "CRITICAL",
+        "HIGH",
+        "MEDIUM",
+        "LOW",
+        "NOT FOUND"
+      ]
+    },
+    "PRIMARY_DOMAIN": {
+      "type": "string",
+      "minLength": 1
+    },
+    "PROTOCOL_VERSION": {
+      "type": "string",
+      "const": "17.02.11",
+      "description": "Template of record version; bumping it is a template change (templates/README.md)."
+    },
+    "REPORT_TITLE": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SERVICE_TYPE": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SPIDER_AXIS_LABELS": {
+      "type": "string",
+      "pattern": "^[^|]+(\\|[^|]+){5}$",
+      "description": "Exactly six pipe-separated axis labels (enx-theme.json charts.radar_axes = 6)."
+    },
+    "SPIDER_JUSTIFICATION_NOTE": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SPIDER_SCORES": {
+      "type": "string",
+      "pattern": "^[1-5](\\.\\d)?(\\|[1-5](\\.\\d)?){5}$",
+      "description": "Six pipe-separated scores on the 1 (low) - 5 (high) axis scale, in the same order as SPIDER_AXIS_LABELS."
+    },
+    "SUPPLIER_NAME": {
+      "type": "string",
+      "minLength": 1
+    },
+    "SUPPLIER_SLUG": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Lower-case slug used in the download file name."
+    },
+    "ROWS_AI_GOVERNANCE": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_CONFIDENCE": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_CONTROLS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_CORPORATE": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_INCIDENTS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_INTEGRATIONS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_SECURITY_POSTURE": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_TECHNICAL": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_TOP_MITIGATIONS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_TOP_RISKS": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    },
+    "ROWS_VULNERABILITIES": {
+      "type": "string",
+      "description": "Pre-rendered <tr>...</tr> rows for this section's table. HTML entities only for glyphs; no <script>, no external references (the PHASE 5 gate rejects both)."
+    }
+  }
+}

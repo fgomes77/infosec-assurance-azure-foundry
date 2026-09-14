@@ -1,0 +1,46 @@
+// ---------------------------------------------------------------------------
+// egress-detection.kql — Bing grounding queries carrying Euronext-internal markers
+// Control: governance/DATA_PROTECTION_GUARDRAILS.md §1 (detective layer);
+//          ISO 27001:2022 A.8.12 (data leakage prevention), A.8.16 (monitoring);
+//          DORA Art. 9(3)(b); NIS2 Art. 21(2)(b); ISO 42001 A.6.2.6.
+// Scope:   Log Analytics workspace {baseName}-logs (workspace-based App Insights
+//          {baseName}-appi -> table AppDependencies; the App Insights blade shows the
+//          same rows as `dependencies` / `customDimensions`).
+// Signal:  a Foundry tool span for the `bing-grounding` connection whose input text
+//          contains an internal marker. A hit opens a review ticket (RUNBOOK §4 FM-03);
+//          the run is not killed — the pattern is fixed forward (instruction or list).
+// Alert:   rows > 0, evaluated every 15 min over 1 h (operations/alerts.bicep,
+//          rule `egress-internal-marker`, severity 1).
+// Tuning:  tool-input capture requires content recording on the tracing exporter
+//          (AZURE_TRACING_GEN_AI_CONTENT_RECORDING_ENABLED=true); attribute names
+//          follow the GenAI semantic conventions used by the pinned SDK — verify with
+//          RUNBOOK §2 check H9 after each SDK bump.
+// ---------------------------------------------------------------------------
+let lookback = 1h;
+// Markers: prefixes/suffixes that only exist inside Euronext. Keep in sync with the
+// instruction-layer rule appended by scripts/attach_integrations.py.
+let internalMarkers = dynamic(["ENX-", "{internal-domain-suffix}", "{project-codename}", "{internal-ip-prefix}"]);
+// Identifier formats of systems of record (OneTrust assessment, TPA, IAF finding ids).
+let assessmentIdRegex = @"\b(OT|TPA|IAF|INFOSEC)-\d{3,}\b";
+// Employee-directory names: replace the datatable with _GetWatchlist('InfoSecFoundryInternalMarkers')
+// when Microsoft Sentinel is attached to the workspace.
+let employeeNames = toscalar(datatable(name:string)["{name:watchlist-entry-1}", "{name:watchlist-entry-2}"] | summarize make_list(name));
+AppDependencies
+| where TimeGenerated > ago(lookback)
+| extend toolName   = tostring(Properties["gen_ai.tool.name"]),
+         agentName  = tostring(Properties["gen_ai.agent.name"]),
+         threadId   = tostring(Properties["gen_ai.thread.id"]),
+         runId      = tostring(Properties["gen_ai.thread.run.id"]),
+         toolInput  = tostring(Properties["gen_ai.tool.call.arguments"]),
+         eventText  = tostring(Properties["gen_ai.event.content"])
+| where toolName has "bing" or Name has "bing" or Name has "web_search"
+| extend query = coalesce(toolInput, eventText, Data)
+| where isnotempty(query)
+| extend hitMarker       = query has_any (internalMarkers),
+         hitAssessmentId = query matches regex assessmentIdRegex,
+         hitName         = query has_any (employeeNames)
+| where hitMarker or hitAssessmentId or hitName
+| project TimeGenerated, agentName, threadId, runId, toolName,
+          querySample = substring(query, 0, 300),
+          hitMarker, hitAssessmentId, hitName, OperationId, AppRoleName
+| order by TimeGenerated desc

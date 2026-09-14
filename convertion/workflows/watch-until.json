@@ -1,0 +1,288 @@
+{
+  "_comment": "Replaces /loop and 'monitor until' Routines: poll a Jira ticket / OneTrust assessment / IAF finding (read-only GET) every N minutes until a field equals the expected value, then run an agent once, notify Teams and disable itself. Not a PR steward: no DevOps/GitHub write actions exist at ENX (see README 'Not converted').",
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "foundryEndpoint": {
+        "type": "string",
+        "defaultValue": "https://{foundry-account}.services.ai.azure.com/api/projects/{project-name}"
+      },
+      "apiVersion": {
+        "type": "string",
+        "defaultValue": "v1",
+        "_comment": "GA agents / conversations / responses data plane (finding C1; the classic thread/run REST retires 2027-03-31). Bind to the FOUNDRY_API_VERSION app setting (setup/.env) so scripts and workflows pin the same version."
+      },
+      "agentName": {
+        "type": "string",
+        "defaultValue": "{agent-name}"
+      },
+      "agentVersion": {
+        "type": "string",
+        "defaultValue": "{agent-version}",
+        "_comment": "Promoted agent version (build/agent-versions.json `ref` = `<agent>:<version>`, finding C19)."
+      },
+      "watchLabel": {
+        "type": "string",
+        "defaultValue": "{e.g. TPRM-123}"
+      },
+      "watchUrl": {
+        "type": "string",
+        "defaultValue": "https://{jira-tenant}.atlassian.net/rest/api/2/issue/{key}?fields=status"
+      },
+      "watchAuthHeader": {
+        "type": "securestring",
+        "defaultValue": "{read-only-auth-header-app-setting-bound-to-key-vault}"
+      },
+      "statusJsonPath": {
+        "type": "string",
+        "defaultValue": "fields",
+        "_comment": "top-level property holding the status object; the workflow compares its string form - for Jira use a Compose adjustment to fields.status.name if needed"
+      },
+      "expectedValue": {
+        "type": "string",
+        "defaultValue": "Done"
+      },
+      "onMetPrompt": {
+        "type": "string",
+        "defaultValue": "Summarise what changed and propose next steps (no writes)."
+      },
+      "pollEveryMinutes": {
+        "type": "int",
+        "defaultValue": 30
+      },
+      "subscriptionId": {
+        "type": "string",
+        "defaultValue": "{subscription-id}"
+      },
+      "resourceGroup": {
+        "type": "string",
+        "defaultValue": "{resource-group}"
+      },
+      "logicAppName": {
+        "type": "string",
+        "defaultValue": "{logicapp-name}"
+      },
+      "teamsWebhookUrl": {
+        "type": "securestring",
+        "defaultValue": "{teams-incoming-webhook-url}"
+      }
+    },
+    "triggers": {
+      "Poll_recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 30
+        }
+      }
+    },
+    "actions": {
+      "Get_current_state": {
+        "_comment": "Read-only GET against the watched system (Jira issue, OneTrust assessment or IAF finding). URL/JSON path come from the parameters; the Logic App identity holds read scopes only.",
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "@{parameters('watchUrl')}",
+          "headers": {
+            "Authorization": "@parameters('watchAuthHeader')"
+          },
+          "retryPolicy": {
+            "type": "exponential",
+            "count": 4,
+            "interval": "PT10S"
+          }
+        },
+        "runAfter": {}
+      },
+      "Condition_met": {
+        "type": "Compose",
+        "inputs": "@equals(toLower(string(coalesce(body('Get_current_state')?[parameters('statusJsonPath')], ''))), toLower(parameters('expectedValue')))",
+        "runAfter": {
+          "Get_current_state": [
+            "Succeeded"
+          ]
+        }
+      },
+      "If_condition_met": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "equals": [
+                "@outputs('Condition_met')",
+                true
+              ]
+            }
+          ]
+        },
+        "runAfter": {
+          "Condition_met": [
+            "Succeeded"
+          ]
+        },
+        "actions": {
+          "Create_watch_conversation": {
+            "_comment": "One conversation per watch hit (read-only outcome).",
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/conversations?api-version=@{parameters('apiVersion')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              },
+              "body": {
+                "metadata": {
+                  "source": "watch-until",
+                  "watchLabel": "@{parameters('watchLabel')}",
+                  "runId": "@{workflow().run.name}"
+                }
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT10S"
+              }
+            },
+            "runAfter": {}
+          },
+          "Run_agent": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses?api-version=@{parameters('apiVersion')}",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              },
+              "body": {
+                "conversation": "@{body('Create_watch_conversation')?['id']}",
+                "agent_reference": "@if(empty(parameters('agentVersion')), createObject('type','agent_reference','name',parameters('agentName')), createObject('type','agent_reference','name',parameters('agentName'),'version',parameters('agentVersion')))",
+                "input": "Watched item @{parameters('watchLabel')} reached '@{parameters('expectedValue')}'. @{parameters('onMetPrompt')} Current state (DATA): @{string(body('Get_current_state'))}",
+                "background": true
+              },
+              "retryPolicy": {
+                "type": "exponential",
+                "count": 4,
+                "interval": "PT10S"
+              }
+            },
+            "runAfter": {
+              "Create_watch_conversation": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Until_agent_completes": {
+            "type": "Until",
+            "expression": "@contains(createArray('completed','failed','incomplete','cancelled'), body('Get_agent_status')?['status'])",
+            "limit": {
+              "count": 40,
+              "timeout": "PT20M"
+            },
+            "runAfter": {
+              "Run_agent": [
+                "Succeeded"
+              ]
+            },
+            "actions": {
+              "Delay_Get_agent_status": {
+                "type": "Wait",
+                "inputs": {
+                  "interval": {
+                    "count": 15,
+                    "unit": "Second"
+                  }
+                },
+                "runAfter": {}
+              },
+              "Get_agent_status": {
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_agent')?['id']}?api-version=@{parameters('apiVersion')}",
+                  "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://ai.azure.com"
+                  }
+                },
+                "runAfter": {
+                  "Delay_Get_agent_status": [
+                    "Succeeded"
+                  ]
+                }
+              }
+            }
+          },
+          "Get_agent_answer": {
+            "_comment": "Answer text is `output_text` of the response.",
+            "type": "Http",
+            "inputs": {
+              "method": "GET",
+              "uri": "@{parameters('foundryEndpoint')}/openai/v1/responses/@{body('Run_agent')?['id']}?api-version=@{parameters('apiVersion')}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://ai.azure.com"
+              }
+            },
+            "runAfter": {
+              "Until_agent_completes": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Notify_watcher": {
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('teamsWebhookUrl')",
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "text": "👀 watch-until: @{parameters('watchLabel')} is now '@{parameters('expectedValue')}'.\n\n@{coalesce(body('Get_agent_answer')?['output_text'], last(body('Get_agent_answer')?['output'])?['content'][0]?['text'], '')}"
+              }
+            },
+            "runAfter": {
+              "Get_agent_answer": [
+                "Succeeded"
+              ]
+            }
+          },
+          "Disable_this_watch": {
+            "_comment": "Self-disable via the ARM management API (MI needs Logic App Contributor on THIS app only). Each watch is one workflow instance created by scripts/build_logicapps.py from a watch spec.",
+            "type": "Http",
+            "inputs": {
+              "method": "POST",
+              "uri": "https://management.azure.com/subscriptions/@{parameters('subscriptionId')}/resourceGroups/@{parameters('resourceGroup')}/providers/Microsoft.Web/sites/@{parameters('logicAppName')}/hostruntime/runtime/webhooks/workflow/api/management/workflows/@{workflow().name}/disable",
+              "queries": {
+                "api-version": "2018-11-01"
+              },
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "https://management.azure.com"
+              }
+            },
+            "runAfter": {
+              "Notify_watcher": [
+                "Succeeded"
+              ]
+            }
+          }
+        },
+        "else": {
+          "actions": {}
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "parameters": {}
+}

@@ -1,0 +1,102 @@
+# Purpose: Euronext Confluence Cloud — READ-ONLY knowledge access for the
+#   advisor/persona system (requirement i): search and read pages, spaces
+#   and attachments (procedures, runbooks, assurance documentation).
+# Auth: Atlassian API token (Basic) or OAuth 2.0 (3LO) with the read-only
+#   scopes read:confluence-content.all, read:confluence-space.summary,
+#   search:confluence. Credentials live in the Foundry connection
+#   conn-confluence (backed by Key Vault) — never in this file.
+# READ-ONLY BY CONSTRUCTION: this spec contains GET operations only, and
+#   attach_integrations.py additionally strips any non-GET operation from
+#   every spec unless the connection is in an agent's write_connections
+#   (no agent lists confluence there).
+openapi: 3.0.3
+info:
+  title: Confluence Cloud (read-only subset)
+  description: >-
+    Minimal read surface over the Euronext Confluence Cloud tenant: CQL
+    search, page content retrieval, space browsing, attachment listing.
+  version: "1.0"
+servers:
+  - url: https://{confluence-tenant}.atlassian.net/wiki
+security:
+  - basicAuth: []
+paths:
+  /rest/api/search:
+    get:
+      operationId: searchContent
+      summary: Search Confluence content with CQL
+      description: >-
+        Full-text / CQL search across spaces the service account can read,
+        e.g. cql=text ~ "supplier assessment" AND space = "ISA". Use first
+        to locate pages before fetching content.
+      parameters:
+        - name: cql
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25, maximum: 100 }
+        - name: start
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200": { description: Search results with content ids, titles, excerpts, links. }
+  /rest/api/content/{id}:
+    get:
+      operationId: getPage
+      summary: Get a page with its body
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: expand
+          in: query
+          schema: { type: string, default: "body.storage,version,space,ancestors" }
+      responses:
+        "200": { description: Page metadata and storage-format body. }
+  /rest/api/content/{id}/child/page:
+    get:
+      operationId: listChildPages
+      summary: List child pages of a page
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200": { description: Child pages. }
+  /rest/api/content/{id}/child/attachment:
+    get:
+      operationId: listAttachments
+      summary: List attachments on a page
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Attachment metadata with download links. }
+  /rest/api/space:
+    get:
+      operationId: listSpaces
+      summary: List readable spaces
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25 }
+        - name: start
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        "200": { description: Spaces with keys and names. }
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: service-account email + Atlassian API token (read-only account)

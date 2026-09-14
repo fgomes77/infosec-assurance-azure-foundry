@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TPSRCA Assessment &mdash; {{SUPPLIER_NAME}}</title>
+<!--
+  TEMPLATE OF RECORD - templates/registry.json id "tpsrca-report" (v1.0, last_approved: null).
+  Primary HTML of the TPSRCA assessment pack (HTML + Risk Register XLSX + Gap Tracker XLSX
+  + Executive Brief PPTX + Evidence Pack ZIP). Consumer: tpsrca-assessment-engine.
+  The "tpsrca-html-template" skill referenced by the engine's Agent 12 is NOT in the
+  claude-account-export, so this template reuses the DeepSearch dark-teal tokens
+  (templates/enx-theme.json, SSOT section 5a) and is filled from the engine's
+  output contract claude-account-export/skills/tpsrca-assessment-engine/references/output_schema.json.
+  Section ids below map 1:1 to that schema's top-level keys; the agent fills the
+  {{PLACEHOLDERS}} only and never edits structure, ids, palette or script.
+  STATUS: not yet approved - renderer functions/delivery/renderers-src/tpsrca-report/render.py
+  and the multi-file "tpsrca-assessment" pipeline are still pending
+  (templates/registry.json renderer_pending / pipeline_pending). Approval is an owner
+  act recorded by scripts/update_templates.py.
+-->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0a1a1f; --surface:#0f2429; --raised:#123036;
+    --hdr-from:#003530; --hdr-to:#005048;
+    --primary:#008D7F; --secondary:#5ce0d2; --highlight:#00B5A3;
+    --text:#fff; --muted:#b9d4d0; --border:rgba(92,224,210,.25);
+    --th:#00463f; --alt:rgba(255,255,255,.03);
+    --critical:#d64545; --high:#e06c3c; --medium:#e0b23c; --low:#3cb371; --nf:#8fa3a1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:13px/1.45 Verdana,Geneva,'DejaVu Sans',sans-serif;padding:0 16px 48px}
+  .wrap{max-width:1800px;margin:0 auto}
+  header.top{background:linear-gradient(135deg,var(--hdr-from),var(--hdr-to));
+             border-radius:10px;padding:20px 24px;margin:16px 0}
+  header.top h1{margin:0 0 6px;font-size:20px}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 24px;color:var(--muted);font-size:12px}
+  .meta b{color:var(--text)}
+  .cols{display:flex;flex-wrap:wrap;gap:16px}
+  .left{flex:1 1 520px;min-width:0}
+  .right{flex:0 0 420px;max-width:100%}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+  .kpi{background:rgba(0,141,127,.14);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .kpi .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+  .kpi .v{font-size:28px;font-weight:700;margin-top:4px}
+  .risk-critical{color:var(--critical)} .risk-high{color:var(--high)}
+  .risk-medium{color:var(--medium)} .risk-low{color:var(--low)} .risk-nf{color:var(--nf)}
+  nav.pills{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;
+            justify-content:center;background:var(--bg);padding:14px 0;margin-top:16px}
+  nav.pills button{background:var(--raised);color:var(--text);border:1px solid var(--border);
+            border-radius:999px;padding:9px 16px;font:inherit;font-size:12px;cursor:pointer}
+  nav.pills button[aria-expanded="true"]{background:var(--primary);border-color:var(--highlight)}
+  section.panel{margin-top:16px}
+  section.panel[hidden]{display:none!important}
+  .panel h2{margin:0 0 10px;font-size:16px;color:var(--secondary)}
+  .panel .close{float:right;background:transparent;border:1px solid var(--border);
+                color:var(--muted);border-radius:6px;cursor:pointer;font:inherit;padding:2px 9px}
+  .tbl{width:100%;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:12px;min-width:720px}
+  th,td{border:1px solid var(--border);padding:8px 10px;vertical-align:top;text-align:left}
+  th{background:var(--th);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  tbody tr:nth-child(even){background:var(--alt)}
+  a{color:var(--secondary)}
+  .pack{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+  .pack span{border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;color:var(--muted)}
+  footer{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;
+         margin-top:28px;padding-top:14px;border-top:1px solid var(--border);
+         color:var(--muted);font-size:11px}
+  #downloadReport{background:var(--primary);color:#fff;border:0;border-radius:8px;
+                  padding:10px 18px;font:inherit;cursor:pointer}
+  @media (max-width:900px){.right{flex:1 1 100%}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Third-Party Supplier Risk &amp; Compliance Assessment &mdash; {{SUPPLIER_NAME}}</h1>
+  <div class="meta">
+    <span><b>Assessment id:</b> {{ASSESSMENT_ID}}</span>
+    <span><b>Supplier URL:</b> {{SUPPLIER_URL}}</span>
+    <span><b>Date:</b> {{ASSESSMENT_DATE}}</span>
+    <span><b>Engine version:</b> {{ASSESSMENT_VERSION}}</span>
+    <span><b>Classification tier:</b> {{CLASSIFICATION_TIER}}</span>
+    <span><b>Scope:</b> {{ASSESSMENT_SCOPE}}</span>
+  </div>
+</header>
+
+<div class="cols">
+  <div class="left card">
+    <h2 style="margin:0 0 12px;font-size:16px;color:var(--secondary)">Executive summary</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="k">Composite score</div><div class="v">{{COMPOSITE_SCORE}}</div></div>
+      <div class="kpi"><div class="k">Rating</div>
+        <div class="v {{RATING_CLASS}}">{{RATING}} {{STARS}}</div></div>
+      <div class="kpi"><div class="k">Approval status</div><div class="v">{{APPROVAL_STATUS}}</div></div>
+      <div class="kpi"><div class="k">Data confidence</div><div class="v">{{CONFIDENCE_LEVEL}}</div></div>
+      <div class="kpi"><div class="k">Critical / high risks</div>
+        <div class="v risk-high">{{CRITICAL_RISKS_COUNT}} / {{HIGH_RISKS_COUNT}}</div></div>
+      <div class="kpi"><div class="k">Gaps / priority actions</div>
+        <div class="v">{{GAPS_COUNT}} / {{PRIORITY_ACTIONS_COUNT}}</div></div>
+    </div>
+    <p style="color:var(--muted);margin:14px 0 0">{{KEY_FINDINGS}}</p>
+    <div class="pack">
+      <span>Pack: HTML (this file)</span>
+      <span>Risk Register &mdash; {{XLSX_RISK_REGISTER_NAME}}</span>
+      <span>Gap Tracker &mdash; {{XLSX_GAP_TRACKER_NAME}}</span>
+      <span>Executive Brief &mdash; {{PPTX_BRIEF_NAME}}</span>
+      <span>Evidence Pack &mdash; {{ZIP_EVIDENCE_NAME}}</span>
+    </div>
+  </div>
+
+  <div class="right card">
+    <h2 style="margin:0 0 12px;font-size:16px;color:var(--secondary)">Framework scores</h2>
+    <canvas id="frameworkChart" height="330"
+      data-axis-labels="{{FRAMEWORK_AXIS_LABELS}}"
+      data-scores="{{FRAMEWORK_SCORES}}"></canvas>
+    <p style="color:var(--muted);font-size:11px;margin:10px 0 0">
+      {{FRAMEWORK_SCORE_NOTE}}</p>
+  </div>
+</div>
+
+<nav class="pills" aria-label="Assessment sections">
+  <button data-target="confidence"   aria-expanded="false">Data Confidence</button>
+  <button data-target="evidence"     aria-expanded="false">Evidence Validation</button>
+  <button data-target="inherent"     aria-expanded="false">Inherent Risks</button>
+  <button data-target="controls"     aria-expanded="false">Control Effectiveness</button>
+  <button data-target="residual"     aria-expanded="false">Residual Risks</button>
+  <button data-target="frameworks"   aria-expanded="false">Framework Compliance</button>
+  <button data-target="gaps"         aria-expanded="false">Gap Analysis</button>
+  <button data-target="trend"        aria-expanded="false">Trend Analysis</button>
+  <button data-target="recommend"    aria-expanded="false">Recommendations</button>
+  <button data-target="calculations" aria-expanded="false">Calculations</button>
+</nav>
+
+<section class="panel card" id="confidence" hidden>
+  <button class="close" data-close="confidence">&times;</button>
+  <h2>Data confidence &mdash; overall {{CONFIDENCE_OVERALL_SCORE}} ({{CONFIDENCE_LEVEL}})</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Component</th><th>Score</th><th>Evidence</th><th>Confidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_CONFIDENCE}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="evidence" hidden>
+  <button class="close" data-close="evidence">&times;</button>
+  <h2>Evidence validation &mdash; {{VALIDATED_SOURCES}}/{{TOTAL_SOURCES}} sources validated</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Source</th><th>Claim supported</th><th>URL</th><th>Reliability</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_EVIDENCE}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="inherent" hidden>
+  <button class="close" data-close="inherent">&times;</button>
+  <h2>Inherent risks &mdash; {{TOTAL_RISKS}} risks, exposure {{TOTAL_EXPOSURE}}</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Risk id</th><th>Category / description</th><th>Likelihood &times; impact</th><th>Score</th><th>Evidence</th>
+  </tr></thead><tbody>{{ROWS_INHERENT_RISKS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="controls" hidden>
+  <button class="close" data-close="controls">&times;</button>
+  <h2>Control effectiveness &mdash; {{OVERALL_EFFECTIVENESS}} across {{TOTAL_CONTROLS}} controls</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Control</th><th>Status</th><th>Effectiveness</th><th>Evidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_CONTROLS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="residual" hidden>
+  <button class="close" data-close="residual">&times;</button>
+  <h2>Residual risks</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Risk id</th><th>Inherent</th><th>Control offset</th><th>Residual</th><th>Treatment / owner</th>
+  </tr></thead><tbody>{{ROWS_RESIDUAL_RISKS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="frameworks" hidden>
+  <button class="close" data-close="frameworks">&times;</button>
+  <h2>Framework compliance scores</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Framework</th><th>Score</th><th>Coverage</th><th>Evidence</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_FRAMEWORKS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="gaps" hidden>
+  <button class="close" data-close="gaps">&times;</button>
+  <h2>Gap analysis &mdash; {{GAPS_COUNT}} gaps</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Gap id</th><th>Requirement</th><th>Current state</th><th>Severity</th><th>Remediation / owner</th>
+  </tr></thead><tbody>{{ROWS_GAPS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="trend" hidden>
+  <button class="close" data-close="trend">&times;</button>
+  <h2>Trend analysis</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Metric</th><th>Previous</th><th>Current</th><th>Direction</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_TREND}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="recommend" hidden>
+  <button class="close" data-close="recommend">&times;</button>
+  <h2>Recommendations &mdash; {{PRIORITY_ACTIONS_COUNT}} priority actions</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Priority</th><th>Recommendation</th><th>Addresses</th><th>Owner</th><th>Target date</th>
+  </tr></thead><tbody>{{ROWS_RECOMMENDATIONS}}</tbody></table></div>
+</section>
+
+<section class="panel card" id="calculations" hidden>
+  <button class="close" data-close="calculations">&times;</button>
+  <h2>Calculations summary (auditable)</h2>
+  <div class="tbl"><table><thead><tr>
+    <th>Quantity</th><th>Formula</th><th>Inputs</th><th>Result</th><th>Notes</th>
+  </tr></thead><tbody>{{ROWS_CALCULATIONS}}</tbody></table></div>
+</section>
+
+<footer>
+  <button id="downloadReport" type="button">&#x2B07; Download Report</button>
+  <span>Generated {{GENERATED_TIMESTAMP_UTC}} &middot; Engine {{ASSESSMENT_VERSION}}</span>
+  <span>Euronext &mdash; Information Security Assurance &mdash; {{CLASSIFICATION}}</span>
+</footer>
+
+</div>
+<script>
+(function () {
+  "use strict";
+  var pills = Array.prototype.slice.call(document.querySelectorAll('nav.pills button'));
+  function collapseAll() {
+    pills.forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    Array.prototype.forEach.call(document.querySelectorAll('section.panel'),
+      function (s) { s.hidden = true; });
+  }
+  function open(id) {
+    var panel = document.getElementById(id);
+    if (!panel) { return; }
+    var wasOpen = !panel.hidden;
+    collapseAll();
+    if (wasOpen) { return; }
+    panel.hidden = false;
+    pills.forEach(function (b) {
+      if (b.getAttribute('data-target') === id) { b.setAttribute('aria-expanded', 'true'); }
+    });
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  pills.forEach(function (b) {
+    b.addEventListener('click', function () { open(b.getAttribute('data-target')); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function (b) {
+    b.addEventListener('click', collapseAll);
+  });
+
+  var canvas = document.getElementById('frameworkChart');
+  if (canvas && window.Chart) {
+    var labels = (canvas.getAttribute('data-axis-labels') || '').split('|');
+    var scores = (canvas.getAttribute('data-scores') || '').split('|').map(Number);
+    if (labels.length && scores.length === labels.length && !scores.some(isNaN)) {
+      new Chart(canvas.getContext('2d'), {
+        type: 'radar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Framework compliance (0-100)',
+            data: scores,
+            borderColor: '#5ce0d2',
+            backgroundColor: 'rgba(0,141,127,.35)',
+            pointBackgroundColor: '#00B5A3'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { labels: { color: '#fff', font: { size: 11 } } } },
+          scales: {
+            r: {
+              min: 0, max: 100, ticks: { stepSize: 20, color: '#b9d4d0', backdropColor: 'transparent' },
+              grid: { color: 'rgba(92,224,210,.25)' },
+              angleLines: { color: 'rgba(92,224,210,.25)' },
+              pointLabels: { color: '#fff', font: { size: 11 } }
+            }
+          }
+        }
+      });
+    }
+  }
+
+  var dl = document.getElementById('downloadReport');
+  if (dl) {
+    dl.addEventListener('click', function () {
+      var blob = new Blob(['<!doctype html>\n' + document.documentElement.outerHTML],
+                          { type: 'text/html;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'TPSRCA_{{SUPPLIER_SLUG}}_assessment.html';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a); URL.revokeObjectURL(a.href);
+    });
+  }
+}());
+</script>
+</body>
+</html>

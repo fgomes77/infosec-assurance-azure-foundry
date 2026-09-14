@@ -1,0 +1,67 @@
+{
+  "_sample_note": "SYNTHETIC sample dataset - no Euronext data. Supplier, service, scores and findings are invented for template preview, regression and /api/preview.",
+  "title": "Managed file transfer — advisory readout",
+  "subtitle": "Northwind Cloud Services BV · Managed SFTP Gateway",
+  "reportDate": "2026-09-10",
+  "classification": "Euronext Internal",
+  "slides": [
+    {
+      "title": "Why we looked",
+      "bullets": [
+        "Two advisories on managed file-transfer agents in the last quarter.",
+        "Service is in DORA scope as supporting an important function.",
+        "Assessment 9001 closed with two open treatment plans."
+      ],
+      "notes": "Keep to two minutes; the detail is in the advisory note."
+    },
+    {
+      "title": "Posture at a glance",
+      "table": {
+        "columns": [
+          "Domain",
+          "Residual",
+          "Trend"
+        ],
+        "rows": [
+          [
+            "Cybersecurity",
+            5.2,
+            "flat"
+          ],
+          [
+            "Data Management",
+            3.2,
+            "improving"
+          ],
+          [
+            "IT",
+            2.8,
+            "flat"
+          ],
+          [
+            "Business Continuity",
+            4.1,
+            "worsening"
+          ],
+          [
+            "Third-Parties",
+            3.5,
+            "flat"
+          ]
+        ]
+      }
+    },
+    {
+      "title": "What we are asking for",
+      "bullets": [
+        "Patch evidence for the two advisories (owner: supplier).",
+        "SOC log integration completed this quarter (owner: SOC).",
+        "Art. 30 addendum signed before go-live (owner: TPRM)."
+      ]
+    }
+  ],
+  "sources": [
+    "OneTrust assessment 9001 (sample)",
+    "Public CVE records"
+  ]
+}

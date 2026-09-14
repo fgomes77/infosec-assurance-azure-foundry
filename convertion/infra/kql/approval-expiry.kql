@@ -1,0 +1,7 @@
+// Approval gates (HUMAN_APPROVAL.md) waiting longer than 3 days.
+AzureDiagnostics
+| where TimeGenerated > ago(7d)
+| where ResourceProvider == "MICROSOFT.WEB" and Category == "WorkflowRuntime"
+| where status_s == "Waiting" and resource_actionName_s startswith "Wait_for_approval_"
+| summarize started = min(TimeGenerated) by resource_runId_s, workflowName_s, resource_actionName_s
+| where started < ago(3d)
