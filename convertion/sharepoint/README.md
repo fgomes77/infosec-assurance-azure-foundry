@@ -82,10 +82,20 @@ Both lists live on the same site and are written **exclusively by the
 delivery Function's managed identity, after the human approval gate** — no
 Logic App connector and no agent can write to them.
 
+These columns are **generated from the code that writes them**. The table
+below is the readable form of `scripts/provision_sharepoint_lists.py`, which
+creates the lists idempotently (`--site-id`, safe to re-run: an existing list
+is reused, only missing columns are added, nothing is renamed or deleted) and
+whose `--check` mode fails CI when a column the Function writes is not
+provisioned, or an upsert key is not indexed. Do not edit the names here by
+hand: the previous hand-kept table said `SupplierName`/`ServiceName` for the
+first two lists while the Function writes `Supplier`/`Service`, and a site
+built to it would have taken a Graph 400 on every portfolio and history write.
+
 | List | Columns |
 |---|---|
-| `TPRM Portfolio` | `SupplierName`, `ServiceName`, `TPAStatus` (`Ongoing` \| `Complete`), `LastDeepSearchUrl`, `LastCisoDeckUrl`, `UpdatedBy`, `UpdatedAt` — upserted on `SupplierName`+`ServiceName` by `POST /api/portfolio_update` |
-| `TPSRCA History` | `SupplierName`, `ServiceName`, `AssessmentDate`, `Composite`, `ReportType`, `ReportUrl`, `RunId` — append-only via `POST /api/history_append` |
+| `TPRM Portfolio` | `Supplier`, `Service` (both indexed), `TPAStatus` (`Ongoing` \| `Complete`), `LastReportType`, `LastReportUrl`, `LastRunId`, `ApprovedBy`, `UpdatedAt` — upserted on `Supplier`+`Service` by `POST /api/portfolio_update` |
+| `TPSRCA History` | `Supplier`, `Service` (both indexed), `AssessmentDate`, `Composite` (number), `ReportType`, `ReportUrl`, `RunId` — **append-only** via `POST /api/history_append`: each assessment is its own row, so a trend cannot be rewritten |
 | `TPA Evidence Cache` | `CacheKey` (`<driveId>\|<itemId>`, indexed), `DriveId`, `ItemId`, `ETag`, `FileName`, `Facts` (multi-line text: the extracted JSON), `ExtractorRef`, `RunId`, `StoredAt` — upserted on `CacheKey` by `POST /api/evidence_cache` **after approval only**; read by the analyzer through the read-only `GET /api/evidence_cache` |
 | `Supplier Research Ledger` | `RecordKey` (hash of supplier+service+source+question, indexed), `Supplier`, `Service`, `SourceId`, `Tool`, `Tier`, `Query`, `Topic`, `Url`, `Title`, `Citation`, `Facts` (multi-line text: what the source returned), `ObservedAt`, `OriginatingAction`, `RunId` — upserted on `RecordKey` by `POST /api/research_ledger` (the Function's own fetches record themselves; agent-emitted `researchRecords[]` are written **after approval**); read by every research agent through the read-only `GET /api/research_ledger` |
 
@@ -141,8 +151,11 @@ internal marker, which the Function refuses to store at all, so the ledger
 cannot become the way an identifier the egress rule kept out gets back in.
 
 The `Supplier Watchlist` list (read by `workflows/scheduled-deepsearch.json`)
-carries `SupplierName`, **`ServiceName`** (text) and **`Active`** (Yes/No) in
-addition to its existing columns; the Logic App reads it and never writes it.
+carries `SupplierName` (indexed), **`ServiceName`**, `SupplierDomain` and
+**`Active`** (Yes/No); the Logic App reads it and never writes it. It is
+provisioned by the same script, so its name is spelled one way everywhere —
+it was previously `SupplierWatchlist` in the implementation series and
+`Supplier Watchlist` here.
 
 ## File naming
 

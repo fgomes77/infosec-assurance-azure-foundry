@@ -34,9 +34,16 @@ folders `Reports`, `Reports/DPO`, `Reports/Advisory`, `Templates`,
 library settings: versioning on (50 major), default sensitivity label
 `{label:confidential-internal}` → unique permissions on `Reports/`,
 `Reports/DPO/`, `Templates/`, `Governance/` per
-`team/sharepoint-permissions.md` §1–2. Create the lists `TPRM Portfolio`
-and `TPSRCA History` (used by `/api/portfolio_update`, `/api/history_append`)
-and the `SupplierWatchlist` list (`workflows/scheduled-deepsearch.json`).
+`team/sharepoint-permissions.md` §1–2. The **five lists are created by
+script, not by hand** — `scripts/provision_sharepoint_lists.py` (step 3
+below): `TPRM Portfolio` and `TPSRCA History` (`/api/portfolio_update`,
+`/api/history_append`), `TPA Evidence Cache` (`/api/evidence_cache`, the
+delta re-analysis of requirement d2), `Supplier Research Ledger`
+(`/api/research_ledger`, the per-supplier record of every search) and
+`Supplier Watchlist` (read by `workflows/scheduled-deepsearch.json`). The
+script owns their columns and their indexes because the Function's writes
+depend on the exact names; a hand-built list whose columns differ takes a
+Graph 400 on the first write, in production.
 **Azure portal.** Function App `{baseName}-fn-delivery` → *Identity* →
 system-assigned on (object id → `{mi:infosec-delivery-fn}`) → *Deployment
 center* → image `{registry}.azurecr.io/infosec-delivery:{tag}` → *Configuration*:
@@ -68,6 +75,12 @@ az rest --method POST --url "https://graph.microsoft.com/v1.0/sites/{siteId}/per
   "roles": ["write"], "grantedToIdentities": [ { "application": { "id": "{appId:infosec-delivery-fn}", "displayName": "infosec-delivery-fn" } } ] }'
 az rest --method POST --url "https://graph.microsoft.com/v1.0/sites/{siteId}/permissions" --body '{
   "roles": ["read"],  "grantedToIdentities": [ { "application": { "id": "{appId:infosecfoundry-proj-mi}", "displayName": "infosecfoundry-proj" } } ] }'
+
+# lists (idempotent: reuses an existing list, adds only missing columns)
+cd convertion/scripts
+python3 provision_sharepoint_lists.py --dry-run                      # the plan, offline
+python3 provision_sharepoint_lists.py --site-id {siteId}             # needs Sites.Manage
+python3 provision_sharepoint_lists.py --check                        # the CI gate
 
 # Function: image + renderers
 cd convertion/scripts && python3 convert_skills.py && python3 verify_conversion.py && python3 stage_renderers.py   # renderers/ from the verified build

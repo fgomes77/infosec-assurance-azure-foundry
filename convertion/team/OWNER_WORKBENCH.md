@@ -55,6 +55,7 @@ the gate it must pass. `Tier A` self-service · `Tier B` peer-approved ·
 | Model tier | registry `model_tiers` + infra params | `enterprise/upgrade/check_model_lifecycle.py --dry-run` | six-phase migration (policy R3) | C |
 | Durable knowledge | `agents/advisor-knowledge/` or a memory note | `memory_store.py --list` | `memory_store.py --add …` | A |
 | Web source of record | `integrations/knowledge-sources.json` (the source, its tier, its citation rule) | `sync_url_allowlist.py && check_knowledge_sources.py` | `attach_integrations.py --only <agent>` for an `api:` source; the allow-list ships with the delivery Function | B — it widens outbound reach |
+| SharePoint list columns | `scripts/provision_sharepoint_lists.py` (the spec IS the list) | `provision_sharepoint_lists.py --check` | `--site-id <id>` (idempotent; needs Sites.Manage) | B |
 
 Two rules hold across all of them. **Never edit `build/` or
 `claude-account-export/`** — one is generated, the other is the byte-verified
